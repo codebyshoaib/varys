@@ -13,6 +13,7 @@ import os
 import sys
 import json
 import re
+import subprocess
 from pathlib import Path
 
 def get_wing_and_room(file_path: str) -> tuple[str | None, str | None]:
@@ -85,6 +86,14 @@ def get_wing_and_room(file_path: str) -> tuple[str | None, str | None]:
 
     return None, None
 
+def run_cmd(cmd: list[str], cwd: str = None) -> tuple[bool, str]:
+    """Execute shell command; return (success, output)."""
+    try:
+        result = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
+        return result.returncode == 0, result.stdout + result.stderr
+    except Exception as e:
+        return False, str(e)
+
 def get_file_summary(file_path: str, max_lines: int = 10) -> str:
     """
     Get a brief summary of file content (first N lines + metadata).
@@ -108,10 +117,10 @@ def get_file_summary(file_path: str, max_lines: int = 10) -> str:
 
 def sync_to_mempalace(file_path: str) -> bool:
     """
-    Sync vault file to MemPalace.
+    Sync vault file to MemPalace via CLI.
 
-    Current: Logs the sync intent with wing/room mapping.
-    TODO: Call MemPalace MCP upsert tool for actual semantic indexing.
+    Calls: mempalace mine vault to re-index all vault files.
+    This is efficient because mempalace is idempotent (only updates changed files).
     """
     wing, room = get_wing_and_room(file_path)
 
@@ -133,10 +142,23 @@ def sync_to_mempalace(file_path: str) -> bool:
         print(f"  Wing: '{wing}' | Room: '{room}'", file=sys.stderr)
         print(f"  Size: {size_kb:.1f} KB", file=sys.stderr)
 
-        # TODO: Call MemPalace MCP tools:
-        # mempalace_upsert(wing=wing, room=room, content=content, filepath=str(abs_path))
+        # Call MemPalace CLI to mine vault (idempotent, only updates changed files)
+        workspace_root = Path(__file__).parent.parent.parent
+        palace_path = workspace_root / "mempalace"
+        vault_path = workspace_root / "vault"
 
-        return True
+        success, output = run_cmd(
+            ["mempalace", "--palace", str(palace_path), "mine", str(vault_path)],
+            cwd=str(workspace_root)
+        )
+
+        if success:
+            print(f"[post-tool-use] Indexed to MemPalace: {wing}/{room}", file=sys.stderr)
+            return True
+        else:
+            print(f"[post-tool-use] MemPalace indexing warning: {output}", file=sys.stderr)
+            return False
+
     except Exception as e:
         print(f"[post-tool-use] Error syncing {file_path}: {e}", file=sys.stderr)
         return False

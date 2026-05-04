@@ -94,19 +94,29 @@ def update_standup(workspace_root: Path) -> bool:
 
 def mempalace_sync(workspace_root: Path) -> bool:
     """
-    Sync changed vault files to MemPalace.
+    Sync all vault files to MemPalace via CLI.
+    Uses 'sweep' to catch any files missed by post-tool-use hooks.
     """
     try:
         vault_dir = workspace_root / "vault"
+        palace_dir = workspace_root / "mempalace"
+
         if not vault_dir.exists():
             return True
 
-        # TODO: Call MemPalace MCP to upsert all vault files
-        # For now, just log intent
-        print(f"[stop] TODO: Sync vault to MemPalace semantic memory", file=sys.stderr)
-        print(f"[stop]   Directory: {vault_dir}", file=sys.stderr)
+        # Run mempalace sweep to catch any missed files
+        success, output = run_cmd(
+            ["mempalace", "--palace", str(palace_dir), "sweep", str(vault_dir)],
+            cwd=str(workspace_root)
+        )
 
-        return True
+        if success:
+            print(f"[stop] MemPalace sweep completed", file=sys.stderr)
+            return True
+        else:
+            print(f"[stop] MemPalace sweep warning: {output}", file=sys.stderr)
+            return False
+
     except Exception as e:
         print(f"[stop] MemPalace sync error: {e}", file=sys.stderr)
         return False

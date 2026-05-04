@@ -11,7 +11,16 @@ import os
 import re
 import sys
 import json
+import subprocess
 from pathlib import Path
+
+def run_cmd(cmd: list[str], cwd: str = None) -> tuple[bool, str]:
+    """Execute shell command; return (success, output)."""
+    try:
+        result = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
+        return result.returncode == 0, result.stdout + result.stderr
+    except Exception as e:
+        return False, str(e)
 
 def detect_project(cwd: str) -> str | None:
     """
@@ -124,13 +133,23 @@ def main():
 
         print(f"[project-detect] Detected project: {project}", file=sys.stderr)
         print(f"[project-detect] Related projects: {', '.join(related) if related else 'none'}", file=sys.stderr)
-        print(f"[project-detect] Context: {json.dumps(context)}", file=sys.stderr)
 
-        # TODO: Call MemPalace MCP to:
-        # 1. Activate this project's wing
-        # 2. Load last 3 session summaries
-        # 3. Surface related projects context
-        print(f"[project-detect] TODO: Integrate with MemPalace MCP for semantic memory", file=sys.stderr)
+        # Search MemPalace for project context
+        workspace_root = Path(cwd).parents[1]  # Navigate to personal-agent-v2 root
+        palace_path = workspace_root / "mempalace"
+
+        # Search for project-specific files in MemPalace
+        success, search_output = run_cmd(
+            ["mempalace", "--palace", str(palace_path), "search", project],
+            cwd=str(workspace_root)
+        )
+
+        if success:
+            print(f"[project-detect] MemPalace context loaded: {project}", file=sys.stderr)
+            if related:
+                print(f"[project-detect] Related projects available: {', '.join(related)}", file=sys.stderr)
+        else:
+            print(f"[project-detect] MemPalace search note: {search_output[:100]}", file=sys.stderr)
     else:
         print(f"[project-detect] No project detected at: {cwd}", file=sys.stderr)
         print(f"[project-detect] Loading workspace context instead", file=sys.stderr)
