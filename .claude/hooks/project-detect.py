@@ -8,6 +8,7 @@ Surfaces last 3 session summaries + related projects from related.md.
 """
 
 import os
+import re
 import sys
 import json
 from pathlib import Path
@@ -15,6 +16,7 @@ from pathlib import Path
 def detect_project(cwd: str) -> str | None:
     """
     Match current working directory to known project.
+    Handles both direct paths and symlinks via resolve().
 
     Known projects:
     - /home/oye/Documents/taleemabad-core → "taleemabad-core"
@@ -24,12 +26,13 @@ def detect_project(cwd: str) -> str | None:
     cwd_path = Path(cwd).resolve()
 
     projects = {
-        Path("/home/oye/Documents/taleemabad-core"): "taleemabad-core",
-        Path("/home/oye/Documents/free_work/personal-agent/repos/taleemabad-cms"): "taleemabad-cms",
-        Path("/home/oye/Documents/taleemabad-auth"): "taleemabad-auth",
-        Path("/home/oye/Documents/free_work/portfolio-website"): "portfolio-website",
-        Path("/home/oye/Documents/free_work/portfolio-data"): "portfolio-data",
-        Path("/home/oye/Documents/free_work/personal-agent-v2"): "personal-agent-v2",
+        Path("/home/oye/Documents/taleemabad-core").resolve(): "taleemabad-core",
+        Path("/home/oye/Documents/free_work/personal-agent/repos/taleemabad-cms").resolve(): "taleemabad-cms",
+        Path("/home/oye/Documents/free_work/personal-agent-v2/repos/taleemabad-cms").resolve(): "taleemabad-cms",
+        Path("/home/oye/Documents/taleemabad-auth").resolve(): "taleemabad-auth",
+        Path("/home/oye/Documents/free_work/portfolio-website").resolve(): "portfolio-website",
+        Path("/home/oye/Documents/free_work/portfolio-data").resolve(): "portfolio-data",
+        Path("/home/oye/Documents/free_work/personal-agent-v2").resolve(): "personal-agent-v2",
     }
 
     # Check if cwd is within a known project
@@ -45,6 +48,9 @@ def detect_project(cwd: str) -> str | None:
 def load_related_projects(workspace_root: Path, project_name: str) -> list[str]:
     """
     Read related.md for the project to find sibling projects.
+
+    Parses wikilinks: [[projects/name]] and [[projects/name | display text]]
+    Returns list of project names.
     """
     related_file = workspace_root / "vault" / "projects" / project_name / "related.md"
 
@@ -54,21 +60,45 @@ def load_related_projects(workspace_root: Path, project_name: str) -> list[str]:
     try:
         content = related_file.read_text(encoding="utf-8")
 
-        # Extract wikilinks: [[projects/name]]
+        # Extract wikilinks: [[projects/name]] or [[projects/name | display text]]
+        # Regex: \[\[projects/([a-z0-9\-]+)(?:\s*\|\s*[^\]]+)?\]\]
+        pattern = r"\[\[projects/([a-z0-9\-]+)(?:\s*\|\s*[^\]]+)?\]\]"
+        matches = re.findall(pattern, content)
+
+        # Remove duplicates while preserving order
+        seen = set()
         related = []
-        for line in content.split("\n"):
-            if "[[projects/" in line:
-                # Extract project name from wikilink
-                start = line.find("[[projects/") + len("[[projects/")
-                end = line.find("]]", start)
-                if start > 0 and end > start:
-                    related_name = line[start:end].split("/")[0]
-                    related.append(related_name)
+        for name in matches:
+            if name not in seen:
+                related.append(name)
+                seen.add(name)
 
         return related
     except Exception as e:
         print(f"[project-detect] Error reading related.md: {e}", file=sys.stderr)
         return []
+
+def get_project_info(workspace_root: Path, project_name: str) -> dict:
+    """
+    Load project metadata from project.md
+    """
+    project_file = workspace_root / "vault" / "projects" / project_name / "project.md"
+
+    if not project_file.exists():
+        return {"name": project_name}
+
+    try:
+        content = project_file.read_text(encoding="utf-8")
+        # Extract title from YAML frontmatter
+        if "---" in content:
+            lines = content.split("\n")
+            for line in lines[1:]:
+                if line.startswith("name:"):
+                    name = line.replace("name:", "").strip()
+                    return {"name": name, "path": str(project_file.parent)}
+        return {"name": project_name}
+    except:
+        return {"name": project_name}
 
 def main():
     """Hook entry point."""
@@ -78,25 +108,32 @@ def main():
     project = detect_project(cwd)
 
     if project:
-        print(f"[project-detect] Detected project: {project}", file=sys.stderr)
+        # Get project info
+        project_info = get_project_info(workspace_root, project)
 
         # Load related projects
         related = load_related_projects(workspace_root, project)
 
-        # Output context for Claude (would integrate with MemPalace MCP)
+        # Build context for Claude
         context = {
             "project": project,
+            "project_info": project_info,
             "related": related,
+            "workspace_root": str(workspace_root),
         }
 
-        # In a real implementation, would call MemPalace MCP to:
+        print(f"[project-detect] Detected project: {project}", file=sys.stderr)
+        print(f"[project-detect] Related projects: {', '.join(related) if related else 'none'}", file=sys.stderr)
+        print(f"[project-detect] Context: {json.dumps(context)}", file=sys.stderr)
+
+        # TODO: Call MemPalace MCP to:
         # 1. Activate this project's wing
         # 2. Load last 3 session summaries
         # 3. Surface related projects context
-
-        print(f"[project-detect] Context: {json.dumps(context)}", file=sys.stderr)
+        print(f"[project-detect] TODO: Integrate with MemPalace MCP for semantic memory", file=sys.stderr)
     else:
-        print(f"[project-detect] No project detected; loading workspace context", file=sys.stderr)
+        print(f"[project-detect] No project detected at: {cwd}", file=sys.stderr)
+        print(f"[project-detect] Loading workspace context instead", file=sys.stderr)
 
     return 0
 
