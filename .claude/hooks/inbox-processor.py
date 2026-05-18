@@ -28,6 +28,7 @@ LOG_FILE = Path("/tmp/kamil-inbox-processor.log")
 
 NOTION_BRAIN_PAGE_ID = "364d8747b3b1813d8ac8c248800f0a4d"
 KAMAL_SLACK_ID = "U0AV1DX3WSE"
+SLACK_BOT_TOKEN = "xoxb-10555248928483-11156263996292-JhPN5mVADDwp4iyqce19rj6Q"
 
 # Known project paths → project name
 PROJECT_PATHS = {
