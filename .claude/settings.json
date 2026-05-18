@@ -1,28 +1,42 @@
 {
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /home/oye/Documents/free_work/personal-agent-v2/.claude/hooks/session-start.py",
+            "timeout": 15,
+            "statusMessage": "Loading Notion brain..."
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /home/oye/Documents/free_work/personal-agent-v2/.claude/hooks/stop-notion.py",
+            "timeout": 15,
+            "statusMessage": "Writing Work Log to Notion..."
+          },
+          {
+            "type": "command",
+            "command": "python3 /home/oye/Documents/free_work/personal-agent-v2/.claude/hooks/stop.py",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  },
   "mcpServers": {
     "mempalace": {
       "command": "mempalace",
       "args": ["serve", "--palace", "/home/oye/Documents/free_work/personal-agent-v2/mempalace"],
-      "description": "Semantic memory: 29 MCP tools for reading/writing Claude's memory wings"
-    },
-    "auto-browser": {
-      "command": "docker",
-      "args": ["compose", "-f", "/home/oye/Documents/free_work/auto-browser/docker-compose.yml", "run", "--rm", "mcp-bridge"],
-      "description": "Browser automation for E2E testing and web tasks",
-      "disabled": true,
-      "notes": "Enable after auto-browser is set up locally"
+      "description": "Semantic memory — kept as fallback"
     }
-  },
-  "plugins": {
-    "karpathy-skills": {
-      "source": "oyekamal/andrej-karpathy-skills",
-      "enabled": true,
-      "description": "Global karpathy-skills plugin for coding discipline"
-    }
-  },
-  "hooks": {
-    "post-tool-use": ".claude/hooks/post-tool-use.py",
-    "stop": ".claude/hooks/stop.py",
-    "pre-session": ".claude/hooks/project-detect.py"
   }
 }

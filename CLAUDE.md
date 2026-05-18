@@ -1,23 +1,16 @@
 # Personal Agent v2
 
-This is Kamal's personal assistant workspace v2. Clean rebuild with Obsidian + MemPalace hybrid memory, hook-driven architecture, auto-project context detection, and karpathy-skills discipline.
+Kamal's personal AI agent. **Notion is the primary brain** — all context lives in Notion databases, queryable by filter. Slack is monitored automatically. Every session starts with a full briefing.
 
-## Key Differences from v1
-
-- **Obsidian + MemPalace hybrid**: Vault is human-readable source of truth; MemPalace indexes it for Claude's semantic retrieval
-- **Auto-project detection**: `$PWD` → loads project wing automatically; no manual context switching
-- **Hook-driven sync**: post-tool-use syncs writes to MemPalace; stop hook auto-commits and refreshes STANDUP.md
-- **Zero missing memory files**: All 19 memory files exist and are linked from MEMORY.md
-- **Inter-project graphs**: Projects declare relationships (taleemabad-core ↔ taleemabad-cms); Claude surfaces related context automatically
-- **Karpathy-skills globally**: Surgical changes, simplicity-first, goal-driven execution — enforced everywhere
-
-## Architecture
+## Architecture (v2.1 — Notion-first)
 
 ```
-vault/              → Obsidian source of truth (you browse, edit, see graphs)
-mempalace/          → Claude's semantic memory (auto-indexed by hooks)
-.claude/hooks/      → Post-tool-use, stop, project-detect (the nervous system)
-repos/              → Symlinks to actual project paths
+Notion (brain)      → 6 databases: My PRs, Team People, Slack Inbox, Work Log, Projects, Harness
+Slack (feed)        → slack-poller.py reads channels every 30min → writes to Notion Inbox
+SessionStart hook   → queries Notion → briefs Claude with open PRs + inbox + last session
+Stop hook           → writes Work Log entry to Notion
+vault/              → legacy Obsidian (kept for history, no longer primary)
+mempalace/          → legacy semantic index (kept as fallback)
 ```
 
 ## Auto-Start Behavior
