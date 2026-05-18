@@ -102,6 +102,11 @@ def process(client: SocketModeClient, req: SocketModeRequest):
     import re
     text = re.sub(r"<@[A-Z0-9]+>", "", text).strip()
 
+    # Only respond to Kamal — log everyone else silently
+    if user != KAMAL_USER_ID:
+        log(f"IGNORED (not Kamal): user={user} channel={channel} text={text[:60]!r}")
+        return
+
     print(f"[kamil-listener] Kamal says: {text[:60]}", flush=True)
 
     # Show typing indicator
