@@ -104,10 +104,30 @@ Rules:
 """
 
 
+MAX_RETRIES = 3
+
+
+def get_retry_count(inbox_file: Path) -> int:
+    retry_file = inbox_file.with_suffix(".retries")
+    if not retry_file.exists():
+        return 0
+    try:
+        return int(retry_file.read_text().strip())
+    except Exception:
+        return 0
+
+
+def increment_retry(inbox_file: Path):
+    retry_file = inbox_file.with_suffix(".retries")
+    count = get_retry_count(inbox_file) + 1
+    retry_file.write_text(str(count))
+    return count
+
+
 def process_message(inbox_file: Path) -> bool:
     """Process one inbox message. Returns True on success."""
     try:
-        data = json.loads(inbox_file.read_text())
+        data = json.loads(inbox_file.read_text(encoding="utf-8"))
     except json.JSONDecodeError as e:
         log(f"ERROR: malformed JSON in {inbox_file.name}: {e}")
         mark_error(inbox_file)
@@ -121,25 +141,41 @@ def process_message(inbox_file: Path) -> bool:
 
     log(f"Processing: {inbox_file.name} — '{text[:60]}'")
 
+    retries = get_retry_count(inbox_file)
+    if retries >= MAX_RETRIES:
+        log(f"ERROR: max retries ({MAX_RETRIES}) exceeded for {inbox_file.name}, marking error")
+        mark_error(inbox_file)
+        return False
+
     prompt = build_prompt(data)
 
     # Load NVM so claude is available
     nvm_source = 'export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"'
 
-    cmd = f'{nvm_source} && claude --dangerously-skip-permissions --print -p {json.dumps(prompt)}'
+    cmd = f'{nvm_source} && claude --dangerously-skip-permissions --print -p "$KAMIL_PROMPT"'
 
-    result = subprocess.run(
-        ["bash", "-c", cmd],
-        capture_output=True,
-        text=True,
-        cwd=str(KAMIL_DIR),
-        timeout=300,  # 5 min max per message
-    )
+    env = os.environ.copy()
+    env["KAMIL_PROMPT"] = prompt
+
+    try:
+        result = subprocess.run(
+            ["bash", "-c", cmd],
+            capture_output=True,
+            text=True,
+            cwd=str(KAMIL_DIR),
+            timeout=300,
+            env=env,
+        )
+    except subprocess.TimeoutExpired:
+        log(f"ERROR: claude timed out for {inbox_file.name}")
+        mark_error(inbox_file)
+        return False
 
     if result.returncode != 0:
         log(f"ERROR: claude exited {result.returncode} for {inbox_file.name}")
         log(f"stderr: {result.stderr[:200]}")
-        # Leave as unprocessed for retry (don't mark done/error)
+        retries = increment_retry(inbox_file)
+        log(f"Retry {retries}/{MAX_RETRIES} for {inbox_file.name}")
         return False
 
     log(f"OK: processed {inbox_file.name}")
