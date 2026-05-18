@@ -114,8 +114,9 @@ def process(client: SocketModeClient, req: SocketModeRequest):
     # Get answer from Claude
     answer = ask_kamil(text)
 
-    # Reply in DM
-    web.chat_postMessage(channel=channel, text=answer)
+    # Reply in thread
+    thread_ts = event.get("ts")
+    web.chat_postMessage(channel=channel, text=answer, thread_ts=thread_ts)
     print(f"[kamil-listener] Replied: {answer[:60]}", flush=True)
 
 
