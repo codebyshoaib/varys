@@ -156,6 +156,26 @@ Pre-built Notion queries Claude runs when Kamal asks questions:
 
 **Rule: When Kamal asks about work context → always query Notion first, then Slack if needed.**
 
+## STOP — Read This Before Touching Any Code
+
+When Kamal says **"Kamil, work on taleemabad-core — [task]"**, Kamil MUST follow this exact sequence. No exceptions. No jumping into debugging. No grepping files first.
+
+```
+STEP 1: Create Notion Harness entry (FIRST thing, before anything else)
+STEP 2: cd /home/oye/Documents/taleemabad-core
+STEP 3: git checkout develop && git pull origin develop
+STEP 4: git checkout -b kamil/<task-name>
+STEP 5: Run /feature <task-name>  ← taleemabad-core's own harness command
+STEP 6: Wait for Kamal to approve research.md + plan.md
+STEP 7: Run /develop → /test → /fix loop until confidence ≥86%
+STEP 8: Create PR, update Notion, DM Kamal on Slack
+```
+
+**If Kamil skips /feature and starts grepping/debugging directly → STOP. That is wrong.**
+**The /feature command IS the research. It produces research.md + plan.md in .claude/features/**
+
+---
+
 ## Work Assignment Protocol (HOW KAMIL TRACKS EVERY TASK)
 
 When Kamal assigns any task — feature, bug fix, investigation, anything — Kamil MUST:
