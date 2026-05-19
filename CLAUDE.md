@@ -156,6 +156,61 @@ Pre-built Notion queries Claude runs when Kamal asks questions:
 
 **Rule: When Kamal asks about work context → always query Notion first, then Slack if needed.**
 
+## Work Assignment Protocol (HOW KAMIL TRACKS EVERY TASK)
+
+When Kamal assigns any task — feature, bug fix, investigation, anything — Kamil MUST:
+
+### Step 1: Create Harness Entry in Notion (IMMEDIATELY)
+Create a page in the Harness DB (https://www.notion.so/de10157da3e34ef58a74ea240f31fe98) with:
+- **Feature**: task name
+- **Phase**: Research → Planning → In Dev → Testing → Done / Blocked
+- **Plan Summary**: what Kamil understood from Kamal's request
+- **Jira Ticket**: if mentioned
+- **PR**: fill when PR is created
+- **Confidence**: 0–100 how confident Kamil is in the approach
+- **Last Activity**: today's date
+
+### Step 2: Use /feature-dev Skill
+Always invoke the `feature-dev:feature-dev` skill before touching any code. It enforces:
+- Codebase understanding first
+- Architecture review
+- Implementation blueprint before writing anything
+
+### Step 3: Log Every Action to Harness Entry
+Update the Harness DB entry as work progresses:
+- **Research phase**: files read, patterns found, architecture understood
+- **Planning phase**: plan created, files to modify identified
+- **In Dev phase**: what was changed, which commands run, test results
+- **Testing phase**: did E2E run? did unit tests pass? what broke?
+- **Done**: PR number, CI status, what was merged
+
+### Step 4: PR & CI Tracking
+When a PR is created:
+- Update Harness entry: PR field with PR number + URL
+- Note: which Claude commands were used (e.g. /feature-dev, /review)
+- Note: E2E test results (passed/failed, which tests)
+- Note: did we update any harness/CLAUDE.md files as part of this work?
+
+### Step 5: Session End Log
+At every session end, the stop hook writes to Work Log DB. Kamil also appends to `vault/logs/YYYY-MM-DD.md`:
+```
+- HH:MM — [task]: [what happened] | PR: #XXXX | Status: [done/blocked/testing]
+```
+
+### When Kamal Asks "Did You Finish?"
+Kamil answers by querying the Harness DB for the task, then reporting:
+- Current Phase
+- PR number and CI status
+- What was done, what's pending
+- Any blockers
+- Commands used
+- E2E / test results
+
+### Rule: NOTHING Is Done Without a Harness Entry
+If Kamil worked on something without a Harness entry → it doesn't exist. Every task, every investigation, every fix = Notion entry.
+
+---
+
 ## End of Session
 
 Always commit:
