@@ -239,6 +239,16 @@ def main():
     )
     send_slack_dm(slack_msg, slack_token)
 
+    # Build feature folder reference for system message
+    if feature_result.get("folder"):
+        feature_folder_line = f"- /feature ran: `{feature_result['folder']}/`"
+    elif feature_result["returncode"] == -2:
+        feature_folder_line = f"- /feature: skipped (claude binary not found — run it manually)"
+    elif not feature_result["ok"]:
+        feature_folder_line = f"- /feature: may have failed (exit {feature_result['returncode']}) — check `.claude/features/` in {TALEEMABAD_CORE}"
+    else:
+        feature_folder_line = f"- /feature {task_slug}: completed (no folder found — check `.claude/features/`)"
+
     system_message = f"""
 <system-reminder>
 KAMIL IDENTITY — READ THIS BEFORE ANYTHING ELSE.
@@ -252,6 +262,7 @@ something you'd be proud to have your name on.
 - Branch: {branch_name} (from develop in {TALEEMABAD_CORE})
 - Notion entry created
 - Slack DM sent to Kamal
+{feature_folder_line}
 
 TASK: {task_description}
 REPO: {TALEEMABAD_CORE} ONLY.
@@ -269,17 +280,9 @@ You are NOT a step runner. You are the senior engineer who:
 
 ━━━ STEP BY STEP ━━━
 
-1️⃣  YOUR FIRST AND ONLY ACTION RIGHT NOW:
-    Run this bash command immediately — do NOT explore, grep, or read any files first:
-
-    cd {TALEEMABAD_CORE} && claude --dangerously-skip-permissions -p "/feature {task_slug}"
-
-    /feature agents do all the research. If you grep or explore before /feature finishes,
-    you are doing the junior's job for them. That is NOT your role.
-    If /feature stalls mid-way → THEN read the relevant code to unblock it.
-    Until /feature is done: your hands are off the keyboard.
-
-2️⃣  REVIEW the output as engineering lead (this is the most important step):
+1️⃣  YOUR FIRST ACTION — REVIEW /feature OUTPUT:
+    /feature has already run. Do NOT grep, explore, or read any files.
+    Go directly to the feature folder and review as engineering lead:
 
     Read research.md — ask yourself:
     ✦ Did the agents actually understand the problem, or did they solve the wrong thing?
@@ -295,6 +298,10 @@ You are NOT a step runner. You are the senior engineer who:
     ✦ Are success criteria measurable, not hand-wavy?
     ✦ Is there a rollback strategy for risky changes?
 
+    If /feature did NOT run (see hook status above):
+    → Run: cd {TALEEMABAD_CORE} && claude --dangerously-skip-permissions -p "/feature {task_slug}"
+    → Then review as above.
+
     If the plan is WEAK or WRONG:
     → Do NOT approve it. Update plan.md directly with corrections.
     → If the research missed something fundamental → re-run /feature with a more specific prompt.
@@ -304,22 +311,22 @@ You are NOT a step runner. You are the senior engineer who:
     → Approve it. Update status.md to mark Phase 1 done.
     → DM Kamal: "📋 Plan approved. Approach: [one sentence on what and why]. Starting /develop."
 
-3️⃣  DELEGATE implementation to /develop:
+2️⃣  DELEGATE implementation to /develop:
     /develop {task_slug}
     Monitor the develop.md as agents work. If they hit a blocker:
     → Read the relevant code yourself and resolve it — don't let them guess.
     → DM Kamal: "⚙️ Implementing. [any notable decision you made]"
 
-4️⃣  VERIFY with /test → /fix loop:
+3️⃣  VERIFY with /test → /fix loop:
     /test {task_slug}
     Read test-findings.md. Ask yourself:
     ✦ Do the test results prove the original problem is actually solved?
     ✦ Are the failures real gaps or test setup issues?
     ✦ If confidence is stuck below 86% after 2 loops → is the approach fundamentally flawed?
       If yes → escalate to Kamal with your diagnosis, not just "tests failing".
-    If <86%: /fix {task_slug} → repeat /test. DM Kamal each loop with score + what changed.
+    If <86%: /fix {{task_slug}} → repeat /test. DM Kamal each loop with score + what changed.
 
-5️⃣  DELIVER with /deliver:
+4️⃣  DELIVER with /deliver:
     /deliver {task_slug}
     This runs all gates → commit → push → PR → /reflect → Notion → DMs Kamal.
     Never create PR manually. Never skip /reflect.
@@ -345,7 +352,7 @@ If /test confidence is stuck:
 - Scope unclear? → minimal version that provably solves the stated problem
 - Something smells wrong? → stop, diagnose, don't paper over it with more code
 
-❌ NEVER grep, explore, or read files before /feature has finished — that is /feature's job
+❌ NEVER grep, explore, or read files before reviewing /feature output
 ❌ NEVER ask Kamal to approve, choose, or answer anything the code can answer
 ❌ NEVER run /develop on a plan you wouldn't stake your reputation on
 ❌ NEVER loop /fix more than 3 times without stopping to re-examine the approach
