@@ -170,26 +170,49 @@ Create a page in the Harness DB (https://www.notion.so/de10157da3e34ef58a74ea240
 - **Confidence**: 0–100 how confident Kamil is in the approach
 - **Last Activity**: today's date
 
-### Step 2: Use /feature-dev Skill
-Always invoke the `feature-dev:feature-dev` skill before touching any code. It enforces:
-- Codebase understanding first
-- Architecture review
-- Implementation blueprint before writing anything
+### Step 2: Follow taleemabad-core's Own Harness (NOT Kamil's generic flow)
+taleemabad-core has its own CLAUDE.md with a full quality-first development harness. Kamil must follow it exactly. The commands are:
+
+```
+/feature <name>   → Research + plan (outputs research.md, plan.md in .claude/features/YYYY-MM-DD-<name>/)
+/develop <name>   → Implement approved plan (parallel agents, dynamic by skill)
+/test <name>      → Run validation + confidence scoring (must reach ≥86%)
+/fix <name>       → Fix bugs from /test, loop until ≥86%
+/bdd-writer       → Write Gherkin BDD specs after feature is done
+```
+
+Feature folder created at: `taleemabad-core/.claude/features/YYYY-MM-DD-<name>/`
+- `research.md` — 10-section deep research
+- `plan.md` — 7-phase detailed plan with exact file paths + line numbers
+- `develop.md` — shared coordination doc
+- `bugs.md` — all bugs found + status
+- `test-results.md` — E2E + unit test results
+- `confidence.md` — confidence score breakdown
+- `status.md` — rolling date-stamped log
+
+**Quality gates (non-negotiable):**
+- Test coverage ≥85%
+- Confidence score ≥86%
+- Linter score ≥95%
+- Multi-tenancy: every model/endpoint tenant-scoped
+- Soft-delete: all deletes use `is_active=False`
+- Migrations: reversible, tested locally
 
 ### Step 3: Log Every Action to Harness Entry
-Update the Harness DB entry as work progresses:
-- **Research phase**: files read, patterns found, architecture understood
-- **Planning phase**: plan created, files to modify identified
-- **In Dev phase**: what was changed, which commands run, test results
-- **Testing phase**: did E2E run? did unit tests pass? what broke?
-- **Done**: PR number, CI status, what was merged
+Update the Notion Harness DB entry as work progresses:
+- **Research phase**: `/feature` run, research.md + plan.md created, awaiting Kamal approval
+- **Planning phase**: plan approved by Kamal, ready for `/develop`
+- **In Dev phase**: `/develop` running, which agents spawned, blockers
+- **Testing phase**: `/test` results — confidence score, coverage %, what broke
+- **Done**: PR number, CI status, confidence score, what was merged
 
 ### Step 4: PR & CI Tracking
 When a PR is created:
 - Update Harness entry: PR field with PR number + URL
-- Note: which Claude commands were used (e.g. /feature-dev, /review)
-- Note: E2E test results (passed/failed, which tests)
-- Note: did we update any harness/CLAUDE.md files as part of this work?
+- Note: taleemabad-core commands used (/feature, /develop, /test, /fix)
+- Note: confidence score achieved
+- Note: E2E test results (passed/failed)
+- Note: did we update any .claude/rules/ or CLAUDE.md files?
 
 ### Step 5: Session End Log
 At every session end, the stop hook writes to Work Log DB. Kamil also appends to `vault/logs/YYYY-MM-DD.md`:
@@ -207,12 +230,14 @@ Kamil answers by querying the Harness DB for the task, then reporting:
 - E2E / test results
 
 ### Git Workflow (MANDATORY for every task)
-1. `git checkout develop && git pull origin develop` — always start fresh from develop
-2. `git checkout -b kamil/<task-name>` — clean branch, never work on develop
-3. Invoke `/feature-dev` skill — research, plan, implement
-4. Run taleemabad-core harness (tests, E2E) before declaring done
-5. Create PR against develop
-6. Send Slack DM to Kamal (U0AV1DX3WSE) with: PR link, what was done, test results
+1. `cd /home/oye/Documents/taleemabad-core`
+2. `git checkout develop && git pull origin develop`
+3. `git checkout -b kamil/<task-name>` — clean branch, never work on develop
+4. Run `/feature <name>` — taleemabad-core's own harness command (produces research.md + plan.md)
+5. Wait for Kamal to approve the plan before running `/develop`
+6. Run `/develop <name>` → `/test <name>` → `/fix <name>` until confidence ≥86%
+7. Create PR against develop
+8. Send Slack DM to Kamal (U0AV1DX3WSE) with: PR link, confidence score, test results
 
 ### Rule: NOTHING Is Done Without a Harness Entry
 If Kamil worked on something without a Harness entry → it doesn't exist. Every task, every investigation, every fix = Notion entry.
