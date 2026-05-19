@@ -26,3 +26,10 @@
 ## Integrations & Tools
 - [[vault/memory/jira_hook]] — auto-jira.py creates MC20 tickets via API; token at `~/.claude/hooks/.jira`
 - [[vault/memory/graphify_integration]] — Knowledge graph for context; npm run standup auto-indexes workspace relationships
+- [[vault/memory/multitenant_setup]] — Multi-tenant architecture setup notes
+- [[vault/memory/posthog_credentials]] — PostHog analytics credentials
+- [[vault/memory/repo_personal_agent_workspace]] — github.com/Orenda-Project/personal-agent-workspace public blueprint
+
+## Project-Specific Context
+- [[vault/memory/taleemabad_cms_quiz_system]] — Generic bash script + JSON templates for uploading training quizzes (Sessions 1-6: trainings 920-925)
+- [[vault/memory/taleemabad_oxbridge_feature]] — Oxbridge certificate training feature context
