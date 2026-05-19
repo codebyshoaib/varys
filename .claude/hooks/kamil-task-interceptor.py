@@ -160,6 +160,37 @@ def git_setup(branch_name):
     except Exception as e:
         return False, str(e)
 
+def run_feature(slug):
+    """Run /feature <slug> as a blocking subprocess in taleemabad-core.
+    Returns dict: {ok: bool, output: str, folder: str|None, returncode: int}
+    """
+    import glob as _glob
+    try:
+        result = subprocess.run(
+            ["claude", "--dangerously-skip-permissions", "-p", f"/feature {slug}"],
+            cwd=TALEEMABAD_CORE,
+            timeout=1800,
+            capture_output=True,
+            text=True
+        )
+        pattern = os.path.join(TALEEMABAD_CORE, ".claude", "features", f"*{slug}*")
+        matches = sorted(_glob.glob(pattern))
+        folder = matches[-1] if matches else None
+        return {
+            "ok": result.returncode == 0,
+            "output": ((result.stdout or "") + (result.stderr or ""))[-2000:],
+            "folder": folder,
+            "returncode": result.returncode,
+        }
+    except subprocess.TimeoutExpired as exc:
+        if exc.process:
+            exc.process.kill()
+        return {"ok": False, "output": "timed out after 30 minutes", "folder": None, "returncode": -1}
+    except FileNotFoundError:
+        return {"ok": False, "output": "claude binary not found in PATH", "folder": None, "returncode": -2}
+    except Exception as e:
+        return {"ok": False, "output": str(e), "folder": None, "returncode": -3}
+
 def main():
     try:
         hook_input = json.loads(sys.stdin.read())
