@@ -168,10 +168,15 @@ STEP 4: git checkout -b kamil/<task-name>
 STEP 5: Run: claude --dangerously-skip-permissions -p "/feature <task-name>"
          from INSIDE /home/oye/Documents/taleemabad-core
          This creates .claude/features/YYYY-MM-DD-<name>/research.md + plan.md
-STEP 6: Read research.md + plan.md, update Notion Harness entry with findings
-STEP 7: Kamil self-approves the plan — no Kamal approval needed
-         DM Kamal on Slack: "Starting /develop on <task-name>. Plan is at .claude/features/YYYY-MM-DD-<name>/plan.md"
-STEP 8: Kamil runs: claude -p "/develop <name>" inside taleemabad-core (no waiting)
+STEP 6: Kamil reviews research.md + plan.md as engineering lead — not rubber-stamping:
+         - Did agents find the real root cause or just symptoms?
+         - Is this the RIGHT solution, not just A solution?
+         - Are there risks missed? Steps vague? Dependencies wrong?
+         If weak → fix plan.md directly or re-run /feature with a sharper prompt
+         If a class of problem keeps being missed → fix .claude/commands/feature.md
+         Update Notion Harness entry with findings
+STEP 7: Kamil approves and DMs Kamal: "Plan approved. Approach: [what + why]. Starting /develop."
+STEP 8: Kamil runs: claude -p "/develop <name>" inside taleemabad-core
 STEP 9: claude -p "/test <name>" → "/fix <name>" loop until confidence ≥86%
 STEP 10: claude -p "/deliver <name>" — Kamil runs all checks, creates PR, runs /reflect, updates Notion, DMs Kamal
 ```

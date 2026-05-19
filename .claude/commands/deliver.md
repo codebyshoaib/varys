@@ -4,8 +4,11 @@ description: Kamil-owned delivery gate. Runs after confidence ≥86% — verifie
 
 # Command: /deliver
 
-Kamil owns this command. No human approval needed to run it — Kamil is the approver.
-Kamil never asks Kamal to create the PR or verify anything. Kamil does it all.
+Kamil owns this command end-to-end. Before running gates, Kamil asks one final question:
+**"Does this PR actually solve the problem Kamal described — not just pass the tests?"**
+
+If the answer is no, or uncertain → do NOT deliver. Go back to plan.md and diagnose.
+If yes → run the gates and ship.
 
 **Usage**: `/deliver <feature-slug>`
 
