@@ -55,7 +55,30 @@ def extract_task(prompt):
     after = prompt[idx + len(TRIGGER):].strip()
     after = after.lstrip('—-–:').strip()
     after = after.lstrip('[').rstrip(']').strip()
+    # collapse whitespace/newlines
+    after = re.sub(r'\s+', ' ', after).strip()
     return after if after else "unnamed-task"
+
+def make_branch_slug(task_description):
+    """
+    Extract a SHORT meaningful slug from the task.
+    Rules: max 4 meaningful words, skip filler words, kebab-case.
+    Examples:
+      'create feature flag for beaconhouse training' → 'beaconhouse-feature-flag'
+      'grand quiz data not sync to backend'          → 'grand-quiz-sync-fix'
+      'fix logout login grand quiz unlocked'         → 'grand-quiz-unlock-fix'
+    """
+    STOPWORDS = {
+        'in', 'fe', 'can', 'you', 'a', 'an', 'the', 'for', 'to', 'of',
+        'on', 'at', 'by', 'we', 'did', 'just', 'like', 'is', 'are',
+        'not', 'be', 'do', 'please', 'check', 'also', 'and', 'or',
+        'with', 'as', 'it', 'that', 'this', 'from', 'how', 'what',
+        'create', 'add', 'fix', 'update', 'make', 'get', 'set', 'use',
+    }
+    words = re.sub(r'[^\w\s]', ' ', task_description.lower()).split()
+    meaningful = [w for w in words if w not in STOPWORDS and len(w) > 2]
+    slug_words = meaningful[:4]
+    return '-'.join(slug_words) if slug_words else 'task'
 
 def create_notion_entry(task_name, plan_summary, token):
     """Create a Harness DB entry in Notion."""
@@ -149,7 +172,7 @@ def main():
 
     # Extract task
     task_description = extract_task(prompt)
-    task_slug = slugify(task_description)[:40]
+    task_slug = make_branch_slug(task_description)
     branch_name = f"kamil/{task_slug}"
     today = date.today().isoformat()
 
@@ -171,48 +194,48 @@ def main():
     slack_msg = f"🔍 Kamil starting: *{task_description[:100]}*\nBranch: `{branch_name}` | Notion: {notion_url or 'pending'}"
     send_slack_dm(slack_msg, slack_token)
 
-    # Now tell Claude exactly what was done and what to do next
     system_message = f"""
 <system-reminder>
-KAMIL PROTOCOL — MECHANICAL STEPS ALREADY DONE. Continue from Step 3.
+KAMIL — MECHANICAL STEPS DONE. YOUR ONLY JOB: RUN THESE BASH COMMANDS IN ORDER.
 
-✅ COMPLETED AUTOMATICALLY:
-- Notion Harness entry: {notion_status}
-- Git branch: {git_status}
-- Slack DM sent to Kamal: research phase started
+✅ ALREADY DONE BY HOOK:
+- Git branch created: {branch_name} (from develop)
+- Notion entry: {notion_status}
+- Slack DM sent to Kamal
 
-YOUR JOB NOW — FOLLOW IN ORDER, NO SKIPPING:
+REPO: {TALEEMABAD_CORE} — DO NOT TOUCH ANY OTHER REPO.
 
-STEP 3: Run /feature via bash (DO THIS FIRST, DO NOT GREP OR EXPLORE MANUALLY)
-  cd {TALEEMABAD_CORE} && claude --dangerously-skip-permissions -p "/feature {task_slug}"
-  Wait for it to complete. It will create:
-    {TALEEMABAD_CORE}/.claude/features/{today}-{task_slug}/research.md
-    {TALEEMABAD_CORE}/.claude/features/{today}-{task_slug}/plan.md
-  Then READ both files. Answer any open questions yourself from the code.
-  Update Notion Phase=Planning. DM Kamal: "📋 Research done. [root cause]. Starting implementation."
+━━━ RUN THESE COMMANDS NOW, ONE BY ONE ━━━
 
-STEP 4: Run /develop (NO APPROVAL NEEDED)
-  cd {TALEEMABAD_CORE} && claude --dangerously-skip-permissions -p "/develop {task_slug}"
-  Update Notion Phase=In Dev. DM Kamal: "⚙️ Implementation started."
+1️⃣  RESEARCH (run this bash command RIGHT NOW):
+    Bash: cd {TALEEMABAD_CORE} && claude --dangerously-skip-permissions -p "/feature {task_slug}"
+    Then read: {TALEEMABAD_CORE}/.claude/features/{today}-{task_slug}/research.md
+    Then read: {TALEEMABAD_CORE}/.claude/features/{today}-{task_slug}/plan.md
+    Then DM Kamal on Slack: "📋 Research done: [root cause]. Implementing now."
 
-STEP 5: Run /test → /fix loop
-  cd {TALEEMABAD_CORE} && claude --dangerously-skip-permissions -p "/test {task_slug}"
-  If confidence <86%: claude --dangerously-skip-permissions -p "/fix {task_slug}" → repeat
-  Update Notion Phase=Testing + Confidence score. DM Kamal with score.
+2️⃣  IMPLEMENT (after reading research + plan):
+    Bash: cd {TALEEMABAD_CORE} && claude --dangerously-skip-permissions -p "/develop {task_slug}"
+    Then DM Kamal: "⚙️ Implementation running."
 
-STEP 6: Create PR
-  cd {TALEEMABAD_CORE} && git push origin {branch_name}
-  gh pr create --base develop --title "feat/fix: {task_description[:60]}" --body "..."
-  Update Notion Phase=Done + PR link. DM Kamal: "✅ Done. PR: [link] | Confidence: [score]%"
+3️⃣  TEST + FIX LOOP:
+    Bash: cd {TALEEMABAD_CORE} && claude --dangerously-skip-permissions -p "/test {task_slug}"
+    If confidence <86%: cd {TALEEMABAD_CORE} && claude --dangerously-skip-permissions -p "/fix {task_slug}"
+    Repeat until ≥86%. DM Kamal with score each cycle.
+
+4️⃣  PR:
+    Bash: cd {TALEEMABAD_CORE} && git push origin {branch_name}
+    Bash: cd {TALEEMABAD_CORE} && gh pr create --base develop --title "feat: {task_slug}" --body "Task: {task_description[:200]}"
+    DM Kamal: "✅ PR up: [link] | Confidence: [score]%"
+
+━━━ ABSOLUTE RULES ━━━
+❌ DO NOT explore or grep the codebase manually — /feature does research
+❌ DO NOT go to any repo other than {TALEEMABAD_CORE}
+❌ DO NOT ask Kamal anything — read the code yourself
+❌ DO NOT claim done without confidence ≥86%
+✅ START with command 1️⃣ RIGHT NOW
 
 TASK: {task_description}
 BRANCH: {branch_name}
-NOTION: {notion_url or HARNESS_DB}
-
-RULES:
-- Start with Step 3 RIGHT NOW — run the bash command for /feature
-- NEVER ask Kamal questions the code can answer
-- NEVER claim done without confidence ≥86%
 </system-reminder>
 """
 
