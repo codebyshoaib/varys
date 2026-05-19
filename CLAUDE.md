@@ -173,7 +173,7 @@ STEP 7: Kamil self-approves the plan — no Kamal approval needed
          DM Kamal on Slack: "Starting /develop on <task-name>. Plan is at .claude/features/YYYY-MM-DD-<name>/plan.md"
 STEP 8: Kamil runs: claude -p "/develop <name>" inside taleemabad-core (no waiting)
 STEP 9: claude -p "/test <name>" → "/fix <name>" loop until confidence ≥86%
-STEP 10: Create PR, update Notion, DM Kamal on Slack with PR link + confidence score
+STEP 10: claude -p "/deliver <name>" — Kamil runs all checks, creates PR, runs /reflect, updates Notion, DMs Kamal
 ```
 
 ### Kamil Never Asks Kamal Questions That Code Can Answer
@@ -273,8 +273,8 @@ Kamil answers by querying the Harness DB for the task, then reporting:
 4. Run `/feature <name>` — taleemabad-core's own harness command (produces research.md + plan.md)
 5. Kamil self-approves plan → DM Kamal: "Starting /develop on <name>, plan at .claude/features/.../plan.md"
 6. Run `/develop <name>` → `/test <name>` → `/fix <name>` until confidence ≥86%
-7. Create PR against develop
-8. Send Slack DM to Kamal (U0AV1DX3WSE) with: PR link, confidence score, test results
+7. Run `/deliver <name>` — handles all checks, PR creation, /reflect, Notion update, Slack DM
+8. Kamal receives Slack DM with PR link + confidence score — his only action is review + merge
 
 ### Rule: NOTHING Is Done Without a Harness Entry
 If Kamil worked on something without a Harness entry → it doesn't exist. Every task, every investigation, every fix = Notion entry.

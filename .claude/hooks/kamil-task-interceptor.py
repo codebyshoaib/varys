@@ -211,8 +211,8 @@ REPO: {TALEEMABAD_CORE} ONLY. No other repo.
 
 ━━━ TALEEMABAD-CORE HARNESS — KAMIL IS THE OPERATOR ━━━
 
-The harness has these commands: /feature /develop /test /fix /reflect
-They run as Claude slash commands inside taleemabad-core. Kamil operates them.
+The harness has these commands: /feature /develop /test /fix /deliver /reflect
+They run as Claude slash commands inside taleemabad-core. Kamil operates them all.
 
 CRITICAL — THE APPROVAL GATE:
 /feature ends with "await your approval before /develop starts".
@@ -241,11 +241,12 @@ KAMIL IS THE APPROVER. Kamal is not involved. Kamil reads the plan and decides.
    If <86%: /fix {task_slug} → repeat /test
    DM Kamal each cycle with score.
 
-5️⃣ PR + reflect:
-   git push origin {branch_name}
-   gh pr create --base develop --title "feat: {task_slug}" --body "[what/why/confidence/tests]"
-   /reflect {task_slug}
-   DM Kamal: "✅ PR: [link] | Confidence: [score]%"
+5️⃣ /deliver — Kamil owns the full delivery:
+   Type: /deliver {task_slug}
+   This command: runs all gate checks → commits → pushes → creates PR → runs /reflect
+               → updates Notion Harness → DMs Kamal with PR link + confidence score
+   Kamil NEVER creates the PR manually. Always use /deliver.
+   Kamal's only job after this: review the PR and merge or comment.
 
 ━━━ DECISION RULES ━━━
 - Multiple options? → match the existing pattern (e.g. how oxbridge did it)
@@ -255,6 +256,7 @@ KAMIL IS THE APPROVER. Kamal is not involved. Kamil reads the plan and decides.
 ❌ NEVER show interactive menus — pick and proceed
 ❌ NEVER work outside {TALEEMABAD_CORE}
 ❌ NEVER claim done without ≥86% confidence
+❌ NEVER create PR manually — always run /deliver
 </system-reminder>
 """
 
