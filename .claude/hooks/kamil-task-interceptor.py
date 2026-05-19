@@ -72,8 +72,9 @@ def main():
     prompt = hook_input.get("prompt", "").strip().lower()
 
     if TRIGGER in prompt:
-        # Inject protocol into Claude's context
-        print(json.dumps({"type": "system", "content": PROTOCOL}))
+        # UserPromptSubmit hook: systemMessage is injected into Claude's context
+        output = {"systemMessage": PROTOCOL}
+        print(json.dumps(output))
         sys.exit(0)
 
     sys.exit(0)
