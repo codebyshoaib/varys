@@ -220,9 +220,23 @@ def main():
     git_ok, git_msg = git_setup(branch_name)
     git_status = f"✅ {git_msg}" if git_ok else f"⚠️ Git: {git_msg}"
 
-    # Step 3: Slack DM
+    # Step 3: Run /feature as blocking subprocess
+    feature_result = run_feature(task_slug)
+    if feature_result["ok"]:
+        feature_status = f"✅ /feature {task_slug} completed"
+    elif feature_result["returncode"] == -2:
+        feature_status = "⚠️ claude binary not found — /feature skipped"
+    else:
+        feature_status = f"⚠️ /feature {task_slug} may have failed (exit {feature_result['returncode']})"
+
+    # Step 4: Slack DM (now includes feature folder)
     slack_token = get_slack_token()
-    slack_msg = f"🔍 Kamil starting: *{task_description[:100]}*\nBranch: `{branch_name}` | Notion: {notion_url or 'pending'}"
+    folder_note = f"\nFeature folder: `{feature_result['folder']}`" if feature_result.get("folder") else ""
+    slack_msg = (
+        f"🔍 Kamil task ready: *{task_description[:100]}*\n"
+        f"Branch: `{branch_name}` | Notion: {notion_url or 'pending'}"
+        f"{folder_note}"
+    )
     send_slack_dm(slack_msg, slack_token)
 
     system_message = f"""
