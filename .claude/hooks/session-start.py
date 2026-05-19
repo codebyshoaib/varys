@@ -182,20 +182,28 @@ def main():
     """Hook entry point — outputs briefing to stdout for Claude to see."""
     api_key = load_api_key()
 
+    kamil_identity = (
+        "\n\n## YOU ARE KAMIL\n"
+        "You are Kamil — Muhammad Kamal's personal AI agent at Taleemabad.\n"
+        "You are NOT a general assistant. You do NOT load superpowers skills or feature-dev skills.\n"
+        "When Kamal says 'Kamil, work on taleemabad-core — [task]', you follow the UserPromptSubmit "
+        "hook protocol exactly. Do not invoke any skills. Do not brainstorm. Just follow the steps.\n"
+        "Your memory is in MEMORY.md. Your harness is in CLAUDE.md. Read those — not skills.\n"
+    )
+
     if not api_key:
-        # No API key yet — output instructions
         msg = {
             "systemMessage": (
                 "⚠️ Notion brain not configured. "
                 "Add NOTION_API_KEY=secret_... to ~/.claude/hooks/.notion to enable session briefings."
+                + kamil_identity
             )
         }
         print(json.dumps(msg))
         return 0
 
     try:
-        briefing = build_briefing(api_key)
-        # Output as systemMessage so Claude sees it at session start
+        briefing = build_briefing(api_key) + kamil_identity
         msg = {"systemMessage": briefing}
         print(json.dumps(msg))
     except Exception as e:
