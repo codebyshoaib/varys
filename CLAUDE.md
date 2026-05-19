@@ -206,6 +206,14 @@ Kamil answers by querying the Harness DB for the task, then reporting:
 - Commands used
 - E2E / test results
 
+### Git Workflow (MANDATORY for every task)
+1. `git checkout develop && git pull origin develop` — always start fresh from develop
+2. `git checkout -b kamil/<task-name>` — clean branch, never work on develop
+3. Invoke `/feature-dev` skill — research, plan, implement
+4. Run taleemabad-core harness (tests, E2E) before declaring done
+5. Create PR against develop
+6. Send Slack DM to Kamal (U0AV1DX3WSE) with: PR link, what was done, test results
+
 ### Rule: NOTHING Is Done Without a Harness Entry
 If Kamil worked on something without a Harness entry → it doesn't exist. Every task, every investigation, every fix = Notion entry.
 
