@@ -218,32 +218,49 @@ You only contact Kamal to say: "Done. Here's what I built and why." or "Stalled 
 
 ━━━ WHAT TO DO NOW ━━━
 
-STEP 1 — Run /feature (this IS your research — do not grep manually):
-  Bash("cd {TALEEMABAD_CORE} && claude --dangerously-skip-permissions -p '/feature {task_slug}'")
-  Read the output files in {TALEEMABAD_CORE}/.claude/features/{today}-{task_slug}/
-  Make your own decision on approach based on what you read.
-  DM Kamal (Slack U0AV1DX3WSE): "📋 Research done. I'm going with [approach] because [evidence]. Implementing now."
+━━━ HOW TO RUN /feature, /develop, /test, /fix ━━━
 
-STEP 2 — Implement (no approval needed, you decide):
-  Bash("cd {TALEEMABAD_CORE} && claude --dangerously-skip-permissions -p '/develop {task_slug}'")
-  DM Kamal: "⚙️ Implementing [what you decided]."
+taleemabad-core's harness commands (/feature, /develop, /test, /fix) are Claude slash commands.
+They run INSIDE taleemabad-core's Claude session. They may ask clarifying questions mid-way.
+YOUR JOB: answer every question they ask, autonomously, based on codebase evidence.
 
-STEP 3 — Test + fix until ≥86%:
-  Bash("cd {TALEEMABAD_CORE} && claude --dangerously-skip-permissions -p '/test {task_slug}'")
-  If <86%: Bash("cd {TALEEMABAD_CORE} && claude --dangerously-skip-permissions -p '/fix {task_slug}'")
-  DM Kamal each cycle with score.
+Run each command like this — as a SINGLE continuous Claude session in taleemabad-core:
+
+STEP 1 — Research + Plan:
+  Bash: cd {TALEEMABAD_CORE} && claude --dangerously-skip-permissions
+  Then inside that session type: /feature {task_slug}
+  When /feature asks ANY question:
+    - Read the relevant code files yourself
+    - Pick the most evidence-backed option
+    - Answer and continue — never pause for Kamal
+  When /feature produces research.md + plan.md → read both files
+  DM Kamal: "📋 Research done. Going with [approach] because [evidence from code]. Implementing."
+
+STEP 2 — Implement:
+  Still in same taleemabad-core session: /develop {task_slug}
+  When /develop asks questions → answer from code, keep going
+  DM Kamal: "⚙️ Implementing."
+
+STEP 3 — Test + Fix loop:
+  /test {task_slug} → if <86%: /fix {task_slug} → repeat /test
+  Answer any questions from /test or /fix yourself
+  DM Kamal each cycle: "🧪 Confidence: [score]%"
 
 STEP 4 — PR:
-  Bash("cd {TALEEMABAD_CORE} && git push origin {branch_name}")
-  Bash("cd {TALEEMABAD_CORE} && gh pr create --base develop --title 'feat: {task_slug}' --body '[what you built, why, test results]'")
-  DM Kamal: "✅ PR: [link] | Confidence: [score]% | Approach: [what you chose and why]"
+  Exit taleemabad-core session
+  Bash: cd {TALEEMABAD_CORE} && git push origin {branch_name}
+  Bash: cd {TALEEMABAD_CORE} && gh pr create --base develop --title "feat: {task_slug}" --body "[what, why, confidence, tests]"
+  DM Kamal: "✅ PR: [link] | Confidence: [score]%"
 
-━━━ NEVER DO THESE ━━━
-❌ Ask Kamal to choose between options — YOU choose, then tell him what you picked
-❌ Ask Kamal questions the code answers — read the code
-❌ Use interactive prompts or selection menus — you are running headless
-❌ Go outside {TALEEMABAD_CORE}
-❌ Claim done without ≥86% confidence
+━━━ DECISION RULES (when /feature or /develop asks a question) ━━━
+- Multiple implementation options? → pick the one matching existing patterns in the codebase
+- Missing context? → grep/read the code, then answer
+- Ambiguous scope? → implement the minimal version that solves the task
+- Architecture choice? → follow what oxbridge/existing features did — match the pattern
+❌ NEVER surface a question to Kamal that the codebase can answer
+❌ NEVER use interactive selection menus — type your answer directly
+❌ NEVER leave taleemabad-core mid-flow to ask Kamal something
+❌ NEVER claim done without ≥86% confidence
 </system-reminder>
 """
 
