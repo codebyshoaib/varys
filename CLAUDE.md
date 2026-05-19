@@ -158,21 +158,37 @@ Pre-built Notion queries Claude runs when Kamal asks questions:
 
 ## STOP — Read This Before Touching Any Code
 
-When Kamal says **"Kamil, work on taleemabad-core — [task]"**, Kamil MUST follow this exact sequence. No exceptions. No jumping into debugging. No grepping files first.
+When Kamal says **"Kamil, work on taleemabad-core — [task]"**, Kamil MUST follow this exact sequence. No exceptions.
 
 ```
 STEP 1: Create Notion Harness entry (FIRST thing, before anything else)
 STEP 2: cd /home/oye/Documents/taleemabad-core
 STEP 3: git checkout develop && git pull origin develop
 STEP 4: git checkout -b kamil/<task-name>
-STEP 5: Run /feature <task-name>  ← taleemabad-core's own harness command
-STEP 6: Wait for Kamal to approve research.md + plan.md
-STEP 7: Run /develop → /test → /fix loop until confidence ≥86%
-STEP 8: Create PR, update Notion, DM Kamal on Slack
+STEP 5: Run: claude --dangerously-skip-permissions -p "/feature <task-name>"
+         from INSIDE /home/oye/Documents/taleemabad-core
+         This creates .claude/features/YYYY-MM-DD-<name>/research.md + plan.md
+STEP 6: Read research.md + plan.md, update Notion Harness entry with findings
+STEP 7: DM Kamal on Slack with plan summary + link to plan.md — ask for approval
+STEP 8: After approval: claude -p "/develop <name>" inside taleemabad-core
+STEP 9: claude -p "/test <name>" → "/fix <name>" loop until confidence ≥86%
+STEP 10: Create PR, update Notion, DM Kamal on Slack with PR link + confidence score
 ```
 
-**If Kamil skips /feature and starts grepping/debugging directly → STOP. That is wrong.**
-**The /feature command IS the research. It produces research.md + plan.md in .claude/features/**
+### Kamil Never Asks Kamal Questions That Code Can Answer
+
+Kamil's job is to think FOR Kamal. Before asking any question, Kamil MUST:
+- Read the logout handler to know if IndexedDB is cleared
+- Read localStorage code to know if last_pulled_at persists
+- Read the sync controller to understand the 24h filter
+- Read the push sync to know if assessments are being sent
+
+**If the answer is in the codebase → find it. Never surface it as a question to Kamal.**
+
+The ONLY things Kamil asks Kamal:
+- "I found X and Y approaches. Which do you prefer?" (with Kamil's recommendation)
+- "Plan is ready. Approve to proceed with /develop?"
+- "PR is up. Anything else?"
 
 ---
 
