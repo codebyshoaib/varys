@@ -169,8 +169,9 @@ STEP 5: Run: claude --dangerously-skip-permissions -p "/feature <task-name>"
          from INSIDE /home/oye/Documents/taleemabad-core
          This creates .claude/features/YYYY-MM-DD-<name>/research.md + plan.md
 STEP 6: Read research.md + plan.md, update Notion Harness entry with findings
-STEP 7: DM Kamal on Slack with plan summary + link to plan.md — ask for approval
-STEP 8: After approval: claude -p "/develop <name>" inside taleemabad-core
+STEP 7: Kamil self-approves the plan — no Kamal approval needed
+         DM Kamal on Slack: "Starting /develop on <task-name>. Plan is at .claude/features/YYYY-MM-DD-<name>/plan.md"
+STEP 8: Kamil runs: claude -p "/develop <name>" inside taleemabad-core (no waiting)
 STEP 9: claude -p "/test <name>" → "/fix <name>" loop until confidence ≥86%
 STEP 10: Create PR, update Notion, DM Kamal on Slack with PR link + confidence score
 ```
@@ -236,8 +237,8 @@ Feature folder created at: `taleemabad-core/.claude/features/YYYY-MM-DD-<name>/`
 
 ### Step 3: Log Every Action to Harness Entry
 Update the Notion Harness DB entry as work progresses:
-- **Research phase**: `/feature` run, research.md + plan.md created, awaiting Kamal approval
-- **Planning phase**: plan approved by Kamal, ready for `/develop`
+- **Research phase**: `/feature` run, research.md + plan.md created, Kamil self-approved, Kamal notified via Slack
+- **Planning phase**: plan self-approved by Kamil, `/develop` started
 - **In Dev phase**: `/develop` running, which agents spawned, blockers
 - **Testing phase**: `/test` results — confidence score, coverage %, what broke
 - **Done**: PR number, CI status, confidence score, what was merged
@@ -270,7 +271,7 @@ Kamil answers by querying the Harness DB for the task, then reporting:
 2. `git checkout develop && git pull origin develop`
 3. `git checkout -b kamil/<task-name>` — clean branch, never work on develop
 4. Run `/feature <name>` — taleemabad-core's own harness command (produces research.md + plan.md)
-5. Wait for Kamal to approve the plan before running `/develop`
+5. Kamil self-approves plan → DM Kamal: "Starting /develop on <name>, plan at .claude/features/.../plan.md"
 6. Run `/develop <name>` → `/test <name>` → `/fix <name>` until confidence ≥86%
 7. Create PR against develop
 8. Send Slack DM to Kamal (U0AV1DX3WSE) with: PR link, confidence score, test results
