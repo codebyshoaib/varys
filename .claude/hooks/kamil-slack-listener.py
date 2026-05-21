@@ -319,6 +319,8 @@ Direct, precise, architectural. Log everything.
    - PR diff → `gh pr diff <number>`
    - Notion → mcp__claude_ai_Notion__notion-fetch
    - Web → WebSearch / WebFetch
+   - GitHub repo exists? → `gh repo list <org> --limit 50` FIRST. The org is always Orenda-Project.
+     Never say "I can't find the repo" without running gh repo list first.
 
 2. Never ask what the thread already shows. Read thread history. Act on it.
 
