@@ -107,21 +107,72 @@ anything the recipient themselves said or originated.
 """
 
 
-def fetch_thread_history(web: WebClient, channel: str, thread_ts: str, user_id: str = None) -> str:
-    """Fetch full thread. Label messages by speaker name."""
+def fetch_thread_history(web: WebClient, channel: str, thread_ts: str,
+                         is_dm: bool = False) -> str:
+    """
+    Fetch conversation history and label each message by speaker.
+    - DMs: use conversations_history (flat channel, last 20 messages)
+    - Channel threads: use conversations_replies on the thread root
+    """
     try:
-        resp     = web.conversations_replies(channel=channel, ts=thread_ts, limit=30)
-        messages = resp.get("messages", [])
-        lines    = []
+        if is_dm:
+            # DMs have no threads — read the channel history directly
+            resp     = web.conversations_history(channel=channel, limit=20)
+            messages = list(reversed(resp.get("messages", [])))
+        else:
+            resp     = web.conversations_replies(channel=channel, ts=thread_ts, limit=30)
+            messages = resp.get("messages", [])
+
+        lines = []
         for m in messages:
-            uid  = m.get("user", "")
-            who  = "Kamal" if uid == KAMAL_USER_ID else ("Kamil" if m.get("bot_id") else f"<@{uid}>")
+            uid    = m.get("user", "")
+            bot_id = m.get("bot_id", "")
+            if bot_id:
+                who = "Kamil"
+            elif uid == KAMAL_USER_ID:
+                who = "Kamal"
+            else:
+                who = f"<@{uid}>"
             text = re.sub(r"<@[A-Z0-9]+>", "", m.get("text", "")).strip()
             if text:
                 lines.append(f"{who}: {text}")
         return "\n".join(lines)
-    except Exception:
+    except Exception as e:
+        log(f"fetch_thread_history error: {e}")
         return ""
+
+
+def save_conversation_to_notion(sender_name: str, channel_id: str,
+                                 history: str, latest_msg: str):
+    """
+    Upsert a conversation summary into the Notion Slack Inbox DB.
+    Runs as a best-effort background write via Claude MCP.
+    """
+    notion_db = "6d14f1b6b8cd4ff68fd40efdfc3f304e"
+    prompt = f"""You are Kamil. Save this conversation to Notion.
+
+Use mcp__claude_ai_Notion__notion-create-pages to add ONE page to the Slack Inbox DB:
+  data_source_id: 8749992f-6140-4e72-8b48-7362533cb792
+
+Properties:
+  Message: "DM conversation with {sender_name} — {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+  From: "{sender_name}"
+  Channel: "DM (bot)"
+  Status: "FYI"
+  Type: "FYI"
+  date:Received:start: "{datetime.now().strftime('%Y-%m-%d')}"
+
+Page content (the full transcript):
+{history[-2000:]}
+
+Latest message: {latest_msg[:200]}
+
+Do it now. Reply only "saved" when done."""
+
+    threading.Thread(
+        target=lambda: run_claude(prompt, timeout=60),
+        daemon=True,
+    ).start()
 
 
 def privacy_eval(draft: str, recipient_name: str) -> tuple[str, bool]:
@@ -266,8 +317,8 @@ Pick your mode. Execute. Sign off: 🤖 Kamil"""
 
 
 def dispatch(text: str, web: WebClient, channel: str, thread_ts: str, source: str,
-             sender_id: str = None):
-    """Dispatch to unified handler with full thread context."""
+             sender_id: str = None, is_dm: bool = False):
+    """Dispatch to unified handler with full conversation context."""
     global last_activity_time
     last_activity_time = time.time()
 
@@ -276,17 +327,23 @@ def dispatch(text: str, web: WebClient, channel: str, thread_ts: str, source: st
         return
 
     log(f"[{source}] {clean[:80]}")
-    thread_history = fetch_thread_history(web, channel, thread_ts)
 
-    # Determine if this is a third-party sender (not Kamal)
+    # For DMs: read flat channel history. For channel threads: read thread replies.
+    thread_history = fetch_thread_history(web, channel, thread_ts, is_dm=is_dm)
+
+    # Resolve sender identity
     is_third_party = sender_id is not None and sender_id != KAMAL_USER_ID
     sender_name    = None
-    if is_third_party and sender_id:
+    if sender_id:
         try:
-            info = web.users_info(user=sender_id)
+            info        = web.users_info(user=sender_id)
             sender_name = info["user"]["profile"].get("real_name") or info["user"]["name"]
         except Exception:
             sender_name = f"<@{sender_id}>"
+
+    # Save third-party conversations to Notion asynchronously
+    if is_third_party and thread_history:
+        save_conversation_to_notion(sender_name or "Unknown", channel, thread_history, clean)
 
     threading.Thread(
         target=handle_message,
@@ -378,15 +435,15 @@ def make_handler(web: WebClient, dm_channel: str):
         user    = event.get("user", "")
         channel = event.get("channel", "")
 
-        # 1. DM to Kamil bot — handles both Kamal AND third parties (e.g. Fatima replying)
+        # 1. DM to Kamil bot — Kamal, Fatima, anyone. is_dm=True → flat history fetch
         if event_type == "message" and event.get("channel_type") == "im":
-            # Allow anyone in a DM — third parties trigger privacy eval
-            dispatch(text, web, channel, ts, "DM", sender_id=user)
+            dispatch(text, web, channel, ts, "DM", sender_id=user, is_dm=True)
 
-        # 2. @Kamil mention in any channel — only act on it, reply in thread
+        # 2. @Kamil mention in a channel — reply in thread, use thread replies for history
         elif event_type == "app_mention":
             thread = event.get("thread_ts") or ts
-            dispatch(text, web, channel, thread, f"mention in {channel}", sender_id=user)
+            dispatch(text, web, channel, thread, f"mention in {channel}",
+                     sender_id=user, is_dm=False)
 
     return handler
 
