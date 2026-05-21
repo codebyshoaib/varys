@@ -59,3 +59,38 @@ claude \
     }
 
 echo "[$TIMESTAMP] Kamil weekly report complete." >> "$LOG_FILE"
+
+# ── Humor profile self-review ──────────────────────────────────────────────
+echo "[$TIMESTAMP] Running humor profile review..." >> "$LOG_FILE"
+
+HUMOR_PROMPT="You are Kamil. Review your humor performance from this week.
+
+Read /tmp/kamil-humor-log.jsonl — it contains JSON lines: {ts, prompt, response, reaction}
+
+Analyze the patterns:
+- Which types of humor got positive reactions (Kamal laughed, said 'haha', sent 😂, or just acted on it)?
+- Which missed (Kamal re-explained, ignored, or seemed confused)?
+- What style of humor works best for Kamal?
+
+Then:
+1. Update vault/memory/kamil_humor_profile.md with:
+   - What works (with examples)
+   - What to avoid
+   - 2-3 rules for future humor attempts
+   Format: keep it short and opinionated, like notes to yourself
+
+2. Write a one-line entry to Notion Learning Log DB (0b71db855f914d18ac6d97c0f77fc21e):
+   Title: 'Humor Review — $DATE'
+   Content: the updated humor rules
+
+If the humor log is empty or doesn't exist, just note 'No humor interactions this week' and skip.
+
+Do it now. No explanation needed."
+
+claude \
+    --dangerously-skip-permissions \
+    --print \
+    -p "$HUMOR_PROMPT" \
+    >> "$LOG_FILE" 2>&1 || true
+
+echo "[$TIMESTAMP] Humor review complete." >> "$LOG_FILE"

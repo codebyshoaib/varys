@@ -28,6 +28,9 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).parent))
+from kamil_health import log_error, log_healed, log_needs_manual, log_health
+
 KAMIL_DIR   = Path(__file__).parent.parent.parent
 HOOKS_DIR   = Path(__file__).parent
 SLACK_CFG   = Path.home() / ".claude" / "hooks" / ".slack"
@@ -235,12 +238,14 @@ def check_service(service: dict, token: str | None) -> bool:
         running = is_process_running(check_proc)
         if not running:
             log(f"⚠️  {name} is NOT running — restarting")
+            log_error(service=name, error=f"{name} process not found — was down", context="process check")
             if service.get("start_cmd"):
                 start_service(service["start_cmd"])
                 time.sleep(3)
                 if is_process_running(check_proc):
                     msg = f"🔧 *Kamil self-healed*: `{name}` was down → restarted successfully"
                     log(f"Restart OK for {name}")
+                    log_healed(service=name, root_cause="process was not running", fix="restarted via start_cmd")
                     if token:
                         slack_dm(token, msg)
                     return False
@@ -282,6 +287,10 @@ def check_service(service: dict, token: str | None) -> bool:
         return True
 
     log(f"🔴 {name}: found {len(recent_errors)} error block(s) in recent logs")
+    # Log detection to Notion immediately
+    log_error(service=name,
+              error="\n".join(recent_errors[:2])[:500],
+              context=f"Found {len(recent_errors)} error block(s) in last 15 min of logs")
 
     # 3. Call Claude to diagnose and fix
     claude_result = diagnose_and_fix(service, recent_errors)
@@ -308,6 +317,7 @@ def check_service(service: dict, token: str | None) -> bool:
         time.sleep(3)
         restarted = is_process_running(check_proc)
         restart_note = "restarted ✅" if restarted else "restart FAILED ⚠️"
+        log_healed(service=name, root_cause=root_cause, fix=fix_desc)
 
         msg = (
             f"🔧 *Kamil self-healed*: `{name}`\n"
@@ -316,6 +326,7 @@ def check_service(service: dict, token: str | None) -> bool:
             f"• *Service:* {restart_note}"
         )
     else:
+        log_needs_manual(service=name, root_cause=root_cause, attempted=fix_desc)
         msg = (
             f"⚠️ *Kamil found errors in `{name}` but could not auto-fix*\n"
             f"• *Root cause:* {root_cause}\n"

@@ -42,6 +42,7 @@ from kamil_log import (klog, klog_error, klog_conversation, klog_claude_call,
                         klog_system_start)
 from kamil_people import build_person_context, update_profile_after_conversation
 from kamil_eval import log_to_eval
+from kamil_health import log_response_quality, log_critique
 
 # ── Config ────────────────────────────────────────────────────────────────────
 SLACK_CONFIG = Path.home() / ".claude" / "hooks" / ".slack"
@@ -402,6 +403,32 @@ Pick your mode. Execute. Sign off: 🤖 Kamil"""
         source      = source,
         latency_s   = latency,
     )
+
+    # Self-critique: did Kamil ask a clarifying question it could have answered itself?
+    clarification_phrases = [
+        "could you clarify", "can you clarify", "could you specify",
+        "which one", "do you want", "should i", "do you mean",
+        "i need more", "please confirm", "fair?", "before i",
+        "which database", "what kind of", "how should i",
+    ]
+    answer_lower = answer.lower()
+    asked_clarification = any(p in answer_lower for p in clarification_phrases)
+
+    # Log response quality to Notion Health DB
+    log_response_quality(
+        latency_ms           = latency * 1000,
+        mode                 = mode,
+        clarification_asked  = asked_clarification,
+        request              = text,
+    )
+
+    # If clarification was asked, also log a self-critique
+    if asked_clarification and not is_third_party:
+        log_critique(
+            score   = 30,
+            reason  = "Kamil asked a clarifying question — should have used tools to find the answer",
+            request = text,
+        )
 
     if is_fun:
         log_humor(text, answer)
