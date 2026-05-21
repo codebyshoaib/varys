@@ -91,150 +91,96 @@ def run_claude(prompt: str, cwd: str = None, timeout: int = 240) -> str:
         return f"⚠️ Error: {e}"
 
 
-# ── Intent detection ──────────────────────────────────────────────────────────
-
-def detect_intent(text: str) -> str:
-    t = text.lower()
-    if re.search(r"(review|check|look at)\b.{0,40}\b(pr|pull request|diff|code)", t):
-        return "pr_review"
-    if "github.com" in t and "/pull/" in t:
-        return "pr_review"
-    if re.search(r"\bpr\s*#?\d+\b", t):
-        return "pr_review"
-    if re.search(r"(create|build|make|set up|generate)\b.{0,50}\b(notion|database|db|page)", t):
-        return "notion_task"
-    if re.search(r"(work on|implement|build|fix|add|create)\b.{0,50}\b(feature|bug|task|ticket|issue)", t):
-        return "task"
-    if re.search(r"kamil.{0,30}(taleemabad|core|cms|auth)\b", t):
-        return "task"
-    if "?" in text or re.search(r"^(what|how|why|when|who|where|can|could|find|search|look up|show me|list)\b", t):
-        return "research"
-    return "chat"
+def fetch_thread_history(web: WebClient, channel: str, thread_ts: str) -> str:
+    """Fetch the full thread so Claude has conversation context."""
+    try:
+        resp = web.conversations_replies(channel=channel, ts=thread_ts, limit=20)
+        messages = resp.get("messages", [])
+        lines = []
+        for m in messages:
+            who  = "Kamal" if m.get("user") == KAMAL_USER_ID else "Kamil"
+            text = re.sub(r"<@[A-Z0-9]+>", "", m.get("text", "")).strip()
+            if text:
+                lines.append(f"{who}: {text}")
+        return "\n".join(lines)
+    except Exception:
+        return ""
 
 
-def extract_pr_url(text: str) -> str | None:
-    m = re.search(r"https://github\.com/[^\s>]+/pull/\d+", text)
-    return m.group(0) if m else None
+# ── Single unified handler ────────────────────────────────────────────────────
 
+def handle_message(text: str, thread_history: str, web: WebClient, channel: str, thread_ts: str, source: str):
+    """One Claude call with full context — no rigid intent routing."""
 
-# ── Intent handlers ───────────────────────────────────────────────────────────
+    context_block = f"\n\nThread so far:\n{thread_history}" if thread_history else ""
 
-def handle_pr_review(text: str, web: WebClient, channel: str, thread_ts: str):
-    pr_ref = extract_pr_url(text) or "the PR"
-    web.chat_postMessage(channel=channel, text=f"🔍 Fetching and reviewing {pr_ref}...", thread_ts=thread_ts)
+    prompt = f"""You are Kamil — Kamal's autonomous personal AI agent at Taleemabad.
 
-    answer = run_claude(f"""You are Kamil — Kamal's AI agent at Taleemabad.
+## YOUR RULES (never break these)
 
-Kamal asked: "{text}"
+1. **NEVER ask a question you can answer yourself.**
+   - Need someone's Slack user ID? Search for them with the Slack API (`users.list` or `users.lookupByEmail`).
+   - Need to send a Slack DM? Use `chat.postMessage` with the Slack BOT_TOKEN in ~/.claude/hooks/.slack.
+   - Need a GitHub PR diff? Run `gh pr view <number> --repo <org/repo>` or `gh pr diff`.
+   - Need Notion data? Use Notion MCP tools directly.
+   - Need web info? Use WebSearch or WebFetch.
+   - **If you can figure it out with a tool — do it. Never surface it as a question to Kamal.**
 
-1. If there's a GitHub PR URL, use the gh CLI or web fetch to get the diff and changed files.
-2. Review for: bugs, logic errors, missing edge cases, security, Django/React best practices, multi-tenancy, soft-delete.
-3. Structure your reply for Slack:
-   *Summary:* 1-2 sentences
-   *✅ What's good:* bullet points
-   *⚠️ Issues:* file:line — description
-   *💡 Suggestions:* bullet points
-   *🚦 Verdict:* Approve / Request Changes / Needs Discussion
+2. **Read the full thread before responding.**
+   When Kamal says "send" — look at what was just discussed and send THAT. Don't ask "send what?".
 
-Be direct. No markdown headers (use *bold* instead). Sign off: 🤖 Kamil""", timeout=300)
+3. **Act, then confirm.** Do the thing first, then tell Kamal you did it. Not: "I would need to... here's how you could..." — just do it.
 
+4. **Slack format only.** No markdown headers (#, ##). Use *bold*, bullet points, emoji. Keep it concise.
+
+5. **You have these capabilities — USE THEM:**
+   - Send Slack DMs: POST to slack.com/api/chat.postMessage with BOT_TOKEN
+   - Find Slack users: GET slack.com/api/users.list (filter by name/email)
+   - Read Slack channels/DMs: conversations.history, conversations.replies
+   - GitHub: `gh` CLI — pr view, pr diff, repo list, issue list
+   - Notion: mcp__claude_ai_Notion__* tools — create pages, databases, update
+   - Web: WebSearch, WebFetch
+   - Files: read any file in the codebase
+   - Run code: Bash tool
+
+## KAMAL'S CONTEXT
+- Works at Taleemabad (EdTech, Pakistan)
+- Stack: Django backend, React frontend, multi-tenant LMS
+- Slack workspace: taleemabad-talk.slack.com
+- Kamal's Slack ID: U0AV1DX3WSE
+- Harness DB: {DB_PAGE_HARNESS}
+
+## CURRENT MESSAGE
+Source: {source}
+Kamal says: "{text}"{context_block}
+
+Now execute. Do NOT ask clarifying questions — infer from context and act.
+Sign off: 🤖 Kamil"""
+
+    answer = run_claude(prompt, cwd=str(KAMIL_DIR), timeout=300)
     web.chat_postMessage(channel=channel, text=answer, thread_ts=thread_ts)
-    log(f"PR review sent: {pr_ref}")
-
-
-def handle_notion_task(text: str, web: WebClient, channel: str, thread_ts: str):
-    """Handle requests to create/update Notion databases or pages."""
-    web.chat_postMessage(channel=channel, text="🗂️ On it — building that in Notion...", thread_ts=thread_ts)
-
-    answer = run_claude(f"""You are Kamil — Kamal's AI agent at Taleemabad.
-
-Kamal asked: "{text}"
-
-You have full access to Notion via MCP (mcp__claude_ai_Notion__* tools) and GitHub via gh CLI.
-
-Execute the request completely:
-- If he wants a database of repos: use `gh repo list <org> --limit 100 --json name,description,url,language,updatedAt` to get repos, then create a Notion database with the right schema and populate it.
-- If he wants pages, summaries, or any other Notion work: do it directly.
-
-After completing: reply with what you built, the Notion URL, and a 1-line summary of what's in it.
-Format for Slack. Sign off: 🤖 Kamil""", timeout=360)
-
-    web.chat_postMessage(channel=channel, text=answer, thread_ts=thread_ts)
-    log(f"Notion task done: {text[:60]}")
-
-
-def handle_task(text: str, web: WebClient, channel: str, thread_ts: str):
-    web.chat_postMessage(channel=channel, text="📋 Creating Harness entry and starting work...", thread_ts=thread_ts)
-
-    answer = run_claude(f"""You are Kamil — Kamal's AI agent at Taleemabad.
-
-Kamal assigned this task via Slack: "{text}"
-
-1. Infer the project (taleemabad-core, taleemabad-cms, etc.) from context.
-2. Create a Notion Harness entry (DB: {DB_PAGE_HARNESS}) with: Feature name, Phase=Research, Plan Summary.
-3. If taleemabad-core: cd /home/oye/Documents/taleemabad-core → git checkout develop && git pull → git checkout -b kamil/<name> → run /feature <name>.
-4. Reply: branch name, Harness entry created, what /feature found, next step.
-
-Slack format (*bold*, bullets). Sign off: 🤖 Kamil""", timeout=360)
-
-    web.chat_postMessage(channel=channel, text=answer, thread_ts=thread_ts)
-    log(f"Task started: {text[:60]}")
-
-
-def handle_research(text: str, web: WebClient, channel: str, thread_ts: str):
-    web.chat_postMessage(channel=channel, text="🔎 Looking into that...", thread_ts=thread_ts)
-
-    answer = run_claude(f"""You are Kamil — Kamal's AI agent at Taleemabad.
-
-Kamal asked: "{text}"
-
-Use whatever tools give the best answer:
-- Notion MCP → for questions about Kamal's work, projects, team, PRs
-- Web search → for technical questions, external knowledge
-- gh CLI → for GitHub/repo questions
-- File reads → for codebase questions
-
-Give a direct answer with sources. Concise for Slack.
-Sign off: 🤖 Kamil""", timeout=180)
-
-    web.chat_postMessage(channel=channel, text=answer, thread_ts=thread_ts)
-    log(f"Research: {text[:60]}")
-
-
-def handle_chat(text: str, web: WebClient, channel: str, thread_ts: str):
-    answer = run_claude(f"""You are Kamil — Kamal's AI agent at Taleemabad.
-
-Kamal said: "{text}"
-
-Reply directly. You know his work, his team, his stack. Be helpful, concise, Kamil personality.
-Slack format. Sign off: 🤖 Kamil""", timeout=120)
-
-    web.chat_postMessage(channel=channel, text=answer, thread_ts=thread_ts)
+    log(f"[{source}] replied: {answer[:80]}")
 
 
 def dispatch(text: str, web: WebClient, channel: str, thread_ts: str, source: str):
-    """Route a message to the right handler."""
+    """Dispatch to unified handler with full thread context."""
     global last_activity_time
     last_activity_time = time.time()
 
-    # Strip @mentions and whitespace
     clean = re.sub(r"<@[A-Z0-9]+>", "", text).strip()
     if not clean:
         return
 
-    intent = detect_intent(clean)
-    log(f"[{source}] intent={intent} | {clean[:60]}")
+    log(f"[{source}] {clean[:80]}")
 
-    if intent == "pr_review":
-        threading.Thread(target=handle_pr_review, args=(clean, web, channel, thread_ts), daemon=True).start()
-    elif intent == "notion_task":
-        threading.Thread(target=handle_notion_task, args=(clean, web, channel, thread_ts), daemon=True).start()
-    elif intent == "task":
-        threading.Thread(target=handle_task, args=(clean, web, channel, thread_ts), daemon=True).start()
-    elif intent == "research":
-        threading.Thread(target=handle_research, args=(clean, web, channel, thread_ts), daemon=True).start()
-    else:
-        threading.Thread(target=handle_chat, args=(clean, web, channel, thread_ts), daemon=True).start()
+    # Fetch thread history so Claude has full conversation context
+    thread_history = fetch_thread_history(web, channel, thread_ts)
+
+    threading.Thread(
+        target=handle_message,
+        args=(clean, thread_history, web, channel, thread_ts, source),
+        daemon=True,
+    ).start()
 
 
 # ── Proactive idle work ───────────────────────────────────────────────────────
