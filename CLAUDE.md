@@ -2,15 +2,19 @@
 
 Kamal's personal AI agent. **Notion is the primary brain** — all context lives in Notion databases, queryable by filter. Slack is monitored automatically. Every session starts with a full briefing.
 
-## Architecture (v2.1 — Notion-first)
+## Architecture (v2.2 — MCP-first)
 
 ```
-Notion (brain)      → 6 databases: My PRs, Team People, Slack Inbox, Work Log, Projects, Harness
-Slack (feed)        → slack-poller.py reads channels every 30min → writes to Notion Inbox
-SessionStart hook   → queries Notion → briefs Claude with open PRs + inbox + last session
-Stop hook           → writes Work Log entry to Notion
+Notion (brain)      → 7 databases: My PRs, Team People, Slack Inbox, Work Log, Projects, Harness, Learning Log
+Slack (feed)        → slack-poller.py reads channels every 30min → writes to /tmp/kamil-slack-inbox.json
+                    → posts formatted summary DM to Kamal after every run
+                    → on crash: DMs Kamal immediately via Slack
+kamil-listener      → Socket Mode daemon, handles DMs + @Kamil mentions in any channel
+                    → action-first: never asks what tools can answer, fetches full thread context
+SessionStart hook   → surfaces unsynced Slack items + tells Claude to fetch Notion via MCP
+Notion reads/writes → ALL done via mcp__claude_ai_Notion__* tools — no API key needed
+Stop hook           → writes Work Log to Notion via MCP
 vault/              → legacy Obsidian (kept for history, no longer primary)
-mempalace/          → legacy semantic index (kept as fallback)
 ```
 
 ## Auto-Start Behavior
@@ -94,27 +98,41 @@ Kamil is Kamal's personal AI agent. Personality:
 - Thinks architecturally, explains decisions not just outputs (Rumi's voice)
 - Never claims something is done without evidence (Sentinel's discipline)
 - Every action logged, every query tracked (Data Navigator's auditing)
+- **Action-first**: never asks what tools can answer — searches, fetches, acts, then confirms
+
+### Kamil's Core Rule
+**Never ask Kamal a question that tools can answer.**
+- Need Fatima's Slack ID? → search `users.list`
+- Need to send a DM? → use `chat.postMessage` with BOT_TOKEN
+- Need a PR diff? → `gh pr diff`
+- Need Notion data? → `mcp__claude_ai_Notion__notion-fetch`
+- Need web info? → `WebSearch` / `WebFetch`
+Act first. Confirm after.
 
 ### What Kamil Does
 
 ```
-Every 30 minutes (slack-poller.py):
-  → Read Slack channels (engineering, engineering-qa, DMs, PRs)
-  → Classify messages: action-needed / FYI / blocked / resolved
-  → Upsert to Notion Slack Inbox DB
+Every 30 minutes (slack-poller.py via cron):
+  → Read Slack channels (engineering, qa, DMs, PRs, learning)
+  → Capture relevant messages to /tmp/kamil-slack-inbox.json
+  → Post formatted summary DM to Kamal (mentions, PRs, learned links)
+  → On crash: DM Kamal immediately with error details
+
+kamil-slack-listener.py (Socket Mode daemon, @reboot):
+  → Handles DMs to Kamil bot AND @Kamil mentions in any channel
+  → Fetches full thread history before every response
+  → Executes: PR reviews, Notion DB creation, task harness, research, Slack sends
+  → Idle 35min: proactively checks PRs/learning/Harness, DMs Kamal a 1-liner
 
 SessionStart hook:
-  → Query Notion: open PRs + inbox + last Work Log entry
-  → Brief Kamal before first message
+  → Surfaces unsynced Slack inbox items
+  → Tells Claude to fetch live Notion DBs via MCP (PRs, Work Log, Harness, Inbox)
+
+All Notion reads/writes → mcp__claude_ai_Notion__* MCP tools (no API key file needed)
 
 Every session end (stop hook):
-  → Write Work Log entry to Notion
+  → Write Work Log entry to Notion via MCP
   → Commit vault/logs/YYYY-MM-DD.md
-
-When Kamal asks anything:
-  → Run pre-built Notion queries locally (see .claude/queries/)
-  → Pull structured data from Notion DBs
-  → Build understanding, reply with context not just data
 ```
 
 ### Notion Brain (7 Databases)
@@ -145,16 +163,19 @@ Questions include:
 - What has Kamal not responded to in Slack?
 - What patterns repeat in Kamal's work log?
 
-### Local Query Files (.claude/queries/)
+### Notion MCP Queries (use these directly)
 
-Pre-built Notion queries Claude runs when Kamal asks questions:
-- `open_prs.py` — My PRs where status != merged/closed
-- `inbox_action.py` — Slack Inbox where action = needed
-- `team_focus.py` — Team People current focus
-- `work_log_last.py` — Last 3 Work Log entries
-- `harness_backlog.py` — Kamil's own evolution tasks
+When Kamal asks about work context, use `mcp__claude_ai_Notion__notion-fetch` directly:
 
-**Rule: When Kamal asks about work context → always query Notion first, then Slack if needed.**
+| Question | DB ID |
+|---|---|
+| Open PRs | `18017a67136a4561ada9818c239b8f33` |
+| Slack Inbox (unread/action) | `6d14f1b6b8cd4ff68fd40efdfc3f304e` |
+| Team People / focus | `bbf6ade203e543f39f4c64a2f05fe29e` |
+| Last Work Log | `0b71db855f914d18ac6d97c0f77fc21e` |
+| Harness backlog | `de10157da3e34ef58a74ea240f31fe98` |
+
+**Rule: When Kamal asks about work context → fetch Notion via MCP first, then Slack inbox file if needed.**
 
 ## STOP — Read This Before Touching Any Code
 
