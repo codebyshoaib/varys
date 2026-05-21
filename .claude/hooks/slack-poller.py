@@ -24,6 +24,9 @@ import urllib.parse
 from datetime import datetime, timedelta
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).parent))
+from kamil_log import klog, klog_error
+
 # ── Config ────────────────────────────────────────────────────────────────────
 SLACK_CONFIG    = Path.home() / ".claude" / "hooks" / ".slack"
 INBOX_FILE      = Path("/tmp/kamil-slack-inbox.json")
@@ -407,8 +410,18 @@ def main():
 
         log(f"Done. Added {len(new_items)} new items. Total: {len(all_items)}.")
 
-        # Post summary DM to Kamal using BOT_TOKEN (so it shows as Kamil bot)
-        dm_token = bot_token or token
+        # Break down by type for Axiom
+        by_type = {}
+        for item in new_items:
+            by_type[item["type"]] = by_type.get(item["type"], 0) + 1
+        klog("poller_run",
+             new_items=len(new_items),
+             total_inbox=len(all_items),
+             channels_read=len(MONITOR_CHANNELS),
+             by_type=by_type)
+
+        # Post summary DM
+        dm_token   = bot_token or token
         dm_channel = open_dm(dm_token)
         if dm_channel:
             summary = build_summary_dm(new_items, len(all_items), run_ts)
@@ -420,6 +433,7 @@ def main():
         return 0
 
     except Exception as e:
+        klog_error("poller_run", e)
         error_msg = (
             f"⚠️ *Kamil slack-poller CRASHED*\n"
             f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M')} PKT\n"

@@ -36,6 +36,9 @@ from slack_sdk.socket_mode.request import SocketModeRequest
 from slack_sdk.socket_mode.response import SocketModeResponse
 from slack_sdk.web import WebClient
 
+sys.path.insert(0, str(Path(__file__).parent))
+from kamil_log import klog, klog_error
+
 # ── Config ────────────────────────────────────────────────────────────────────
 SLACK_CONFIG = Path.home() / ".claude" / "hooks" / ".slack"
 KAMIL_DIR    = Path(__file__).parent.parent.parent
@@ -71,10 +74,12 @@ def log(msg: str):
         f.write(line + "\n")
 
 
-def run_claude(prompt: str, cwd: str = None, timeout: int = 240) -> str:
+def run_claude(prompt: str, cwd: str = None, timeout: int = 240,
+               event_context: str = "unknown") -> str:
     nvm = 'export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"'
     env = os.environ.copy()
     env["KAMIL_PROMPT"] = prompt
+    t0 = time.time()
     try:
         result = subprocess.run(
             ["bash", "-c", f'{nvm} && claude --dangerously-skip-permissions --print -p "$KAMIL_PROMPT"'],
@@ -82,12 +87,19 @@ def run_claude(prompt: str, cwd: str = None, timeout: int = 240) -> str:
             cwd=cwd or str(KAMIL_DIR),
             timeout=timeout, env=env,
         )
+        latency = round(time.time() - t0, 1)
         if result.returncode == 0 and result.stdout.strip():
+            klog("claude_call", context=event_context, latency_s=latency, status="ok",
+                 prompt_len=len(prompt), response_len=len(result.stdout))
             return result.stdout.strip()
+        klog("claude_call", context=event_context, latency_s=latency, status="error",
+             stderr=result.stderr.strip()[:200])
         return f"⚠️ I hit an issue: {result.stderr.strip()[:150] or 'no output'}"
     except subprocess.TimeoutExpired:
+        klog("claude_call", context=event_context, latency_s=timeout, status="timeout")
         return "⏱️ That took too long. Try again or break it into smaller steps."
     except Exception as e:
+        klog_error("run_claude", e, context=event_context)
         return f"⚠️ Error: {e}"
 
 
@@ -309,18 +321,23 @@ Kamal says: "{text}"
 
 Pick your mode. Execute. Sign off: 🤖 Kamil"""
 
-    answer = run_claude(prompt, cwd=str(KAMIL_DIR), timeout=300)
+    mode = "human" if is_fun else ("third_party" if is_third_party else "work")
+    answer = run_claude(prompt, cwd=str(KAMIL_DIR), timeout=300, event_context=source)
     web.chat_postMessage(channel=channel, text=answer, thread_ts=thread_ts)
     log(f"[{source}] replied: {answer[:80]}")
+    klog("message_replied", source=source, mode=mode,
+         sender=sender_name or "Kamal", is_third_party=is_third_party,
+         response_len=len(answer), text_preview=text[:100])
     if is_fun:
         log_humor(text, answer)
+        klog("humor_interaction", prompt=text[:100], response=answer[:150])
 
 
-def process_missed_messages(web: WebClient, dm_channel: str):
-    """On connect/reconnect: process any DMs that arrived while offline."""
-    state_file    = Path("/tmp/kamil-last-processed-ts.txt")
-    last_ts       = state_file.read_text().strip() if state_file.exists() else "0"
-    processed_new = False
+def process_missed_messages(web: WebClient, dm_channel: str) -> int:
+    """On connect/reconnect: process any DMs that arrived while offline. Returns count."""
+    state_file = Path("/tmp/kamil-last-processed-ts.txt")
+    last_ts    = state_file.read_text().strip() if state_file.exists() else "0"
+    count      = 0
 
     try:
         resp = web.conversations_history(channel=dm_channel, oldest=last_ts, limit=20)
@@ -338,16 +355,18 @@ def process_missed_messages(web: WebClient, dm_channel: str):
                 continue
 
             log(f"[catchup] {user}: {text[:60]}")
-            dispatch(text, web, dm_channel, ts, "DM-catchup",
-                     sender_id=user, is_dm=True)  # noqa: E501
-            last_ts       = ts
-            processed_new = True
+            klog("message_catchup", sender_id=user, text_preview=text[:100], ts=ts)
+            dispatch(text, web, dm_channel, ts, "DM-catchup", sender_id=user, is_dm=True)
+            last_ts = ts
+            count  += 1
 
         state_file.write_text(last_ts)
-        if processed_new:
-            log(f"Catchup: processed messages up to ts={last_ts}")
+        if count:
+            log(f"Catchup: processed {count} messages up to ts={last_ts}")
     except Exception as e:
+        klog_error("process_missed_messages", e)
         log(f"process_missed_messages error: {e}")
+    return count
 
 
 def dispatch(text: str, web: WebClient, channel: str, thread_ts: str, source: str,
@@ -361,6 +380,9 @@ def dispatch(text: str, web: WebClient, channel: str, thread_ts: str, source: st
         return
 
     log(f"[{source}] {clean[:80]}")
+    klog("message_received", source=source, sender_id=sender_id or "unknown",
+         is_dm=is_dm, is_third_party=(sender_id != KAMAL_USER_ID if sender_id else False),
+         text_preview=clean[:100])
 
     # For DMs: read flat channel history. For channel threads: read thread replies.
     thread_history = fetch_thread_history(web, channel, thread_ts, is_dm=is_dm)
@@ -517,14 +539,17 @@ def main():
         stale_minutes = (time.time() - last_event_time[0]) / 60
         if stale_minutes > 5:
             log(f"Socket stale ({stale_minutes:.1f} min) — reconnecting")
+            klog("socket_stale", stale_minutes=round(stale_minutes, 1))
             try:
                 socket_client.close()
                 time.sleep(2)
                 socket_client.connect()
                 last_event_time[0] = time.time()
-                process_missed_messages(web, dm_channel)
+                missed = process_missed_messages(web, dm_channel)
+                klog("socket_reconnect", missed_messages=missed)
                 log("Reconnected.")
             except Exception as e:
+                klog_error("socket_reconnect", e)
                 log(f"Reconnect failed: {e}")
 
 
