@@ -163,27 +163,43 @@ def sync_to_mempalace(file_path: str) -> bool:
         print(f"[post-tool-use] Error syncing {file_path}: {e}", file=sys.stderr)
         return False
 
+ERROR_LOG = Path("/tmp/kamil-tool-errors.log")
+
+def log_tool_error(tool_name: str, error: str, input_data: dict):
+    """Write tool errors to a file the self-healer monitors."""
+    ts = __import__("datetime").datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    entry = {
+        "ts": ts,
+        "tool": tool_name,
+        "error": error[:500],
+        "input": str(input_data)[:300],
+    }
+    with open(ERROR_LOG, "a") as f:
+        f.write(json.dumps(entry) + "\n")
+
+
 def main():
     """Hook entry point."""
     # Read tool result from stdin (passed by Claude Code hook system)
     try:
-        hook_input = json.loads(sys.stdin.read())
+        raw = sys.stdin.read()
+        hook_input = json.loads(raw) if raw.strip() else {}
     except json.JSONDecodeError:
         hook_input = {}
     except Exception:
         hook_input = {}
 
-    # Extract file path from tool result
-    # Expected format varies by tool; handle Write/Edit tools
-    file_path = None
+    # Detect tool errors and log them for self-healer
+    tool_name = hook_input.get("tool_name", "")
+    tool_result = hook_input.get("tool_result", {})
+    if isinstance(tool_result, dict):
+        error = tool_result.get("error") or tool_result.get("stderr", "")
+        if error and len(str(error).strip()) > 5:
+            log_tool_error(tool_name, str(error), hook_input.get("tool_input", {}))
 
-    if "file_path" in hook_input:
-        file_path = hook_input["file_path"]
-    elif "path" in hook_input:
-        file_path = hook_input["path"]
-    else:
-        # Silent exit if no file path found
-        return
+    # Extract file path for MemPalace sync (Write/Edit tools)
+    tool_input = hook_input.get("tool_input", hook_input)
+    file_path = tool_input.get("file_path") or tool_input.get("path")
 
     if file_path:
         sync_to_mempalace(file_path)
