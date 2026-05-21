@@ -485,15 +485,34 @@ def main():
     socket_client.connect()
     log("Connected. Listening for DMs and @Kamil mentions.")
 
-    # Announce
-    if dm_channel:
-        web.chat_postMessage(
-            channel=dm_channel,
-            text="🤖 *Kamil is online.* DM me or @Kamil in any channel.\nI handle: PR reviews, task assignments, Notion work, research, and questions."
-        )
+    # Process any messages that arrived while listener was offline
+    process_missed_messages(web, dm_channel)
+
+    # Heartbeat: reconnect if socket goes stale (no events for 5 min)
+    last_event_time = [time.time()]
+    original_handler = make_handler(web, dm_channel)
+
+    def handler_with_heartbeat(client, req):
+        last_event_time[0] = time.time()
+        original_handler(client, req)
+
+    socket_client.socket_mode_request_listeners.clear()
+    socket_client.socket_mode_request_listeners.append(handler_with_heartbeat)
 
     while True:
-        time.sleep(10)
+        time.sleep(30)
+        stale_minutes = (time.time() - last_event_time[0]) / 60
+        if stale_minutes > 5:
+            log(f"Socket stale ({stale_minutes:.1f} min) — reconnecting")
+            try:
+                socket_client.close()
+                time.sleep(2)
+                socket_client.connect()
+                last_event_time[0] = time.time()
+                process_missed_messages(web, dm_channel)
+                log("Reconnected.")
+            except Exception as e:
+                log(f"Reconnect failed: {e}")
 
 
 if __name__ == "__main__":
