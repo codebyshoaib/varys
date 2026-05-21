@@ -41,6 +41,7 @@ from kamil_log import (klog, klog_error, klog_conversation, klog_claude_call,
                         klog_socket, klog_catchup, klog_humor, klog_privacy,
                         klog_system_start)
 from kamil_people import build_person_context, update_profile_after_conversation
+from kamil_eval import log_to_eval
 
 # ── Config ────────────────────────────────────────────────────────────────────
 SLACK_CONFIG = Path.home() / ".claude" / "hooks" / ".slack"
@@ -363,8 +364,10 @@ Pick your mode. Execute. Sign off: 🤖 Kamil"""
     web.chat_postMessage(channel=channel, text=answer, thread_ts=thread_ts)
     log(f"[{source}] replied: {answer[:80]}")
 
+    conv_id = f"{channel}-{thread_ts}"
+
     klog_conversation(
-        conv_id        = f"{channel}-{thread_ts}",
+        conv_id        = conv_id,
         sender_name    = sender_name or "Kamal",
         sender_id      = sender_id or KAMAL_USER_ID,
         is_third_party = is_third_party,
@@ -375,6 +378,17 @@ Pick your mode. Execute. Sign off: 🤖 Kamil"""
         reply          = answer,
         latency_s      = latency,
         thread_preview = thread_history,
+    )
+
+    # Write to Eval Log for Kamal to review and rate
+    log_to_eval(
+        conv_id     = conv_id,
+        sender_name = sender_name or "Kamal",
+        request     = text,
+        reply       = answer,
+        mode        = mode,
+        source      = source,
+        latency_s   = latency,
     )
 
     if is_fun:

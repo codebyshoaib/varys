@@ -72,22 +72,45 @@ For each problem found:
 **Catchup messages >10/day:**
 → Socket is unreliable, propose fallback polling every 5min as safety net
 
+## EVAL HARNESS — most important part
+Read the Eval Log DB (ID: 94017dd157b44f3ca96423ad2ad989da):
+- Find all ❌ Wrong and ⚠️ Partial entries where Fix Applied = false
+- For each one, read: Request, Kamil Reply, Failure Type, Your Note
+- Classify the root cause:
+  - "Asked clarifying question" → find the prompt rule that allows it, remove it
+  - "Wrong intent detected" → find what triggered wrong mode, tighten detection
+  - "Missing context" → find what context was missing, add it to system prompt
+  - "Too slow" → find which Claude call was slow (check Axiom claude_call events)
+  - "Privacy violated" → tighten privacy rules in handle_message prompt
+- For each fix, write the EXACT line change in the prompt:
+  OLD: "Never ask what tools can answer"
+  NEW: "Never ask what tools can answer. This includes: do not ask which song,
+        do not ask who to send to — search users.list directly."
+- Apply fixes with confidence >75% directly to .claude/hooks/kamil-slack-listener.py
+- Mark Fix Applied = true in Notion for each resolved entry
+
+Calculate confidence score:
+  good / (good + partial + wrong) * 100
+  Target: ≥85%
+
 ## OUTPUT
 
-1. Write findings to Notion Learning Log DB (create a page with today's date)
-   Use mcp__claude_ai_Notion__notion-create-pages
-   Parent: page_id 364d8747b3b1813d8ac8c248800f0a4d (Kamal's Agent Brain)
+1. Apply all high-confidence fixes to kamil-slack-listener.py directly
+   Commit: git add -A && git commit -m "auto: [summary of fixes] — confidence [N]%"
 
-2. If any fix has confidence >80%: apply it directly to the relevant hook file
-   Then commit: git add -A && git commit -m "auto: [what was fixed] from Axiom patterns"
+2. Write a Learning Log page to Notion:
+   Parent: 364d8747b3b1813d8ac8c248800f0a4d
+   Title: "Kamil Learn — [today's date]"
+   Content: findings, fixes applied, confidence score, patterns found
 
-3. DM Kamal on Slack with a 3-line summary:
-   "🧠 Nightly learning complete:
-   - Found: [key pattern]
-   - Fixed: [what was auto-fixed] / Proposed: [what needs review]
-   - Next: [1 thing to watch]"
+3. Update vault/memory/kamil_humor_profile.md if humor interactions were logged
 
-4. Update vault/memory/kamil_humor_profile.md if humor interactions were logged
+4. DM Kamal with this exact format:
+   "🧠 *Nightly eval complete — [date]*
+   Confidence: [N]% ([good] good / [partial] partial / [wrong] wrong)
+   Fixed: [what was auto-fixed or 'nothing needed fixing']
+   Watching: [1 pattern to watch next week]
+   Eval Log: https://www.notion.so/94017dd157b44f3ca96423ad2ad989da"
 
 Be decisive. If the fix is clear — apply it. Don't just report.
 Sign off: 🤖 Kamil (autonomous run)

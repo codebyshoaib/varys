@@ -47,7 +47,8 @@ def _load_token() -> str:
     return os.environ.get("AXIOM_TOKEN", "")
 
 
-def _now() -> str:
+def _now_iso() -> str:
+    """ISO timestamp for local fallback log only."""
     return datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
 
 
@@ -55,11 +56,11 @@ def _send(events: list):
     """Send events to Axiom. Never raises."""
     token = _load_token()
 
-    # Always write to local fallback
+    # Always write to local fallback with timestamp
     try:
         with open(_FALLBACK_LOG, "a") as f:
             for e in events:
-                f.write(json.dumps(e) + "\n")
+                f.write(json.dumps({**e, "_local_time": _now_iso()}) + "\n")
     except Exception:
         pass
 
@@ -67,7 +68,10 @@ def _send(events: list):
         return
 
     try:
-        payload = json.dumps(events).encode()
+        # Do NOT send _time — let Axiom use ingest time as the index timestamp.
+        # Sending _time as a string field causes it to be stored but not indexed.
+        axiom_events = [{k: v for k, v in e.items() if k != "_time"} for e in events]
+        payload = json.dumps(axiom_events).encode()
         req = urllib.request.Request(
             "https://api.axiom.co/v1/datasets/kamil-logs/ingest",
             data=payload,
@@ -85,7 +89,6 @@ def _send(events: list):
 def _base(component: str, event: str) -> dict:
     """Base fields present on every event."""
     return {
-        "_time":      _now(),
         "component":  component,   # listener | poller | session-start | learn
         "event":      event,
         "session_id": _SESSION_ID,
