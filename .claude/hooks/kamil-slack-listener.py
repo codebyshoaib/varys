@@ -322,15 +322,37 @@ Kamal says: "{text}"
 Pick your mode. Execute. Sign off: 🤖 Kamil"""
 
     mode = "human" if is_fun else ("third_party" if is_third_party else "work")
+    t0 = time.time()
     answer = run_claude(prompt, cwd=str(KAMIL_DIR), timeout=300, event_context=source)
+    latency = round(time.time() - t0, 1)
+
     web.chat_postMessage(channel=channel, text=answer, thread_ts=thread_ts)
     log(f"[{source}] replied: {answer[:80]}")
-    klog("message_replied", source=source, mode=mode,
-         sender=sender_name or "Kamal", is_third_party=is_third_party,
-         response_len=len(answer), text_preview=text[:100])
+
+    # Full conversation log — this is what you see in Axiom
+    klog("conversation",
+         source=source,
+         mode=mode,
+         sender_name=sender_name or "Kamal",
+         sender_id=sender_id or KAMAL_USER_ID,
+         is_third_party=is_third_party,
+         channel=channel,
+         # What they asked
+         request=text,
+         # What Kamil replied
+         reply=answer,
+         # How long it took
+         latency_s=latency,
+         # Truncated thread for context (last 3 exchanges)
+         thread_preview=thread_history[-500:] if thread_history else "",
+    )
+
     if is_fun:
         log_humor(text, answer)
-        klog("humor_interaction", prompt=text[:100], response=answer[:150])
+        klog("humor_interaction",
+             sender=sender_name or "Kamal",
+             request=text,
+             reply=answer[:300])
 
 
 def process_missed_messages(web: WebClient, dm_channel: str) -> int:

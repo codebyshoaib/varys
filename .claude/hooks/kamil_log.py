@@ -45,7 +45,8 @@ def klog(event: str, **fields):
     dataset = cfg.get("AXIOM_DATASET", "kamil-logs")
 
     payload = {
-        "_time": datetime.datetime.now(datetime.UTC).isoformat(),
+        # Axiom expects plain UTC ISO string without timezone suffix
+        "_time": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
         "event": event,
         **fields,
     }
