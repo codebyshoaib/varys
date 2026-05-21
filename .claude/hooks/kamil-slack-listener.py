@@ -234,7 +234,8 @@ def log_humor(prompt_text: str, response_text: str):
 
 def handle_message(text: str, thread_history: str, web: WebClient, channel: str,
                    thread_ts: str, source: str, sender_id: str = None,
-                   sender_name: str = None, is_third_party: bool = False):
+                   sender_name: str = None, is_third_party: bool = False,
+                   is_dm: bool = False):
     """
     One Claude call with full context.
     is_third_party=True when Fatima (or anyone not Kamal) is the sender — Kamil
@@ -278,7 +279,10 @@ def handle_message(text: str, thread_history: str, web: WebClient, channel: str,
                          was_modified=True,
                          original_len=len(draft),
                          safe_len=len(safe_reply))
-        web.chat_postMessage(channel=channel, text=safe_reply, thread_ts=thread_ts)
+        reply_kwargs = {"channel": channel, "text": safe_reply}
+        if not is_dm:
+            reply_kwargs["thread_ts"] = thread_ts
+        web.chat_postMessage(**reply_kwargs)
         log(f"[third-party reply to {sender_name}] {safe_reply[:60]}")
 
         # Update profile with signals from this interaction (background)
@@ -365,7 +369,11 @@ Pick your mode. Execute. Sign off: 🤖 Kamil"""
     answer = run_claude(prompt, cwd=str(KAMIL_DIR), timeout=300, event_context=source)
     latency = round(time.time() - t0, 1)
 
-    web.chat_postMessage(channel=channel, text=answer, thread_ts=thread_ts)
+    # DMs must NOT use thread_ts — it creates hidden sub-threads invisible in main DM view
+    reply_kwargs = {"channel": channel, "text": answer}
+    if not is_dm:
+        reply_kwargs["thread_ts"] = thread_ts
+    web.chat_postMessage(**reply_kwargs)
     log(f"[{source}] replied: {answer[:80]}")
 
     conv_id = f"{channel}-{thread_ts}"
@@ -472,7 +480,7 @@ def dispatch(text: str, web: WebClient, channel: str, thread_ts: str, source: st
     threading.Thread(
         target=handle_message,
         args=(clean, thread_history, web, channel, thread_ts, source,
-              sender_id, sender_name, is_third_party),
+              sender_id, sender_name, is_third_party, is_dm),
         daemon=True,
     ).start()
 
