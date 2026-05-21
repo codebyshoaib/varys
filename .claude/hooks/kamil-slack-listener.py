@@ -587,7 +587,9 @@ def main():
     process_missed_messages(web, dm_channel)
 
     # Heartbeat: reconnect if socket goes stale (no events for 5 min)
+    # Also poll for missed messages every 2 min regardless of socket state
     last_event_time = [time.time()]
+    last_poll_time  = [time.time()]
     original_handler = make_handler(web, dm_channel)
 
     def handler_with_heartbeat(client, req):
@@ -599,7 +601,18 @@ def main():
 
     while True:
         time.sleep(30)
-        stale_minutes = (time.time() - last_event_time[0]) / 60
+        now = time.time()
+        stale_minutes = (now - last_event_time[0]) / 60
+        poll_minutes  = (now - last_poll_time[0])  / 60
+
+        # Poll for missed DMs every 2 min as a safety net (catches messages
+        # that arrived during socket stale/reconnect gaps)
+        if poll_minutes >= 2:
+            last_poll_time[0] = now
+            missed = process_missed_messages(web, dm_channel)
+            if missed:
+                log(f"[poll] Recovered {missed} missed message(s)")
+
         if stale_minutes > 5:
             log(f"Socket stale ({stale_minutes:.1f} min) — reconnecting")
             klog_socket("socket_stale", stale_minutes=round(stale_minutes, 1))
