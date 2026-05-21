@@ -17,6 +17,7 @@ Config:
 
 import json
 import os
+import subprocess
 import sys
 import urllib.request
 import urllib.error
@@ -319,22 +320,102 @@ def write_to_kamil_inbox(text: str, source_channel: str, from_id: str, ts: str):
     log(f"Kamil inbox queued: {from_id} in {source_channel}")
 
 
+# ── Self-question exploration ─────────────────────────────────────────────────
+
+SELF_QUESTIONS_PAGE = "365d8747b3b181b281b8ef5820e15881"
+QUESTION_INDEX_FILE = Path("/tmp/kamil-question-index.txt")
+
+def explore_self_question(bot_token: str, dm_channel: str):
+    """
+    When Slack is quiet, pick the next unanswered question from the
+    Self-Questions page, research it with real data, update the page,
+    and DM Kamal the finding.
+    """
+    # Rotate through question index
+    idx = 0
+    if QUESTION_INDEX_FILE.exists():
+        try:
+            idx = int(QUESTION_INDEX_FILE.read_text().strip())
+        except Exception:
+            idx = 0
+
+    nvm = 'export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"'
+    env = os.environ.copy()
+
+    prompt = f"""You are Kamil — Kamal's autonomous AI agent. Slack is quiet. Use this time well.
+
+## YOUR JOB THIS CYCLE
+Pick question #{idx} from the "Next Questions to Explore" checklist on this Notion page:
+{SELF_QUESTIONS_PAGE}
+
+Fetch that page first with mcp__claude_ai_Notion__notion-fetch to read the current questions.
+Pick the #{idx % 8} item from the "Next Questions to Explore" section (wrap around if needed).
+
+## RESEARCH IT
+Use real data sources:
+- Notion MCP → for Kamal's PRs, Work Log, Harness, Team People
+- Slack Inbox file → /tmp/kamil-slack-inbox.json
+- GitHub → `gh pr list --repo taleemabad/taleemabad-core --limit 10` or relevant repo
+- Web search → if it's a technical or external question
+
+## AFTER RESEARCHING
+1. Write a 2-3 sentence answer based on what you actually found (not guesses)
+2. Update the Self-Questions Notion page:
+   - Move the question from "Next Questions to Explore" to the relevant section
+   - Add "**Answer (DATE):** [your finding]" under it
+   - Add 1-2 new questions to the queue based on what you discovered
+   Use mcp__claude_ai_Notion__notion-update-page with update_content command.
+
+3. Output ONLY a Slack-formatted DM message (2-4 lines):
+   "🧠 *[question topic]* — [1 line finding]
+   [1 line of context or implication]
+   _Asked myself: [the new question I just added to the queue]_"
+
+Today: {datetime.now().strftime('%Y-%m-%d')} PKT
+Time: {datetime.now().strftime('%H:%M')}
+Question index: {idx}"""
+
+    env["KAMIL_PROMPT"] = prompt
+    try:
+        result = subprocess.run(
+            ["bash", "-c", f'{nvm} && claude --dangerously-skip-permissions --print -p "$KAMIL_PROMPT"'],
+            capture_output=True, text=True,
+            cwd=str(Path(__file__).parent.parent.parent),
+            timeout=180, env=env,
+        )
+        finding = result.stdout.strip() if result.returncode == 0 else ""
+    except Exception as e:
+        finding = ""
+        log(f"explore_self_question error: {e}")
+
+    # Advance index
+    QUESTION_INDEX_FILE.write_text(str(idx + 1))
+
+    if finding and len(finding) > 20:
+        send_dm(bot_token, dm_channel, finding)
+        log(f"Self-question explored: {finding[:80]}")
+    else:
+        # Fallback if Claude failed
+        send_dm(bot_token, dm_channel,
+                f"*🤖 {datetime.now().strftime('%H:%M')} —* Slack quiet. Researching open questions... check Notion Self-Questions page for updates.")
+
+
 # ── Summary DM ────────────────────────────────────────────────────────────────
 
 def build_summary_dm(new_items: list, total_inbox: int, run_ts: str) -> str:
     now = datetime.now().strftime("%H:%M")
 
-    # Nothing happened — one liner
+    # Nothing actionable — return empty string, caller will run self-question instead
     if not new_items:
-        return f"*🤖 {now} —* Quiet 30 min. Nothing needs your attention."
+        return ""
 
     # Only surface items that actually need eyes: mentions, PRs, bugs, DMs
     priority = [i for i in new_items if i["type"] in ("Mention", "PR Review Request", "Bug Report", "Question")]
     learned  = [i for i in new_items if i["channel"] in LEARNING_CHANNELS and i["links"]]
 
-    # If only FYIs and nothing actionable — also one liner
+    # Only FYIs — also trigger self-question
     if not priority and not learned:
-        return f"*🤖 {now} —* {len(new_items)} FYI messages, nothing that needs you."
+        return ""
 
     lines = [f"*🤖 {now} — {len(priority) + len(learned)} things worth your eyes*\n"]
 
@@ -417,13 +498,18 @@ def main():
         klog_poller(new_items=len(new_items), total_inbox=len(all_items),
                     channels_read=len(MONITOR_CHANNELS), by_type=by_type)
 
-        # Post summary DM
+        # Post summary DM or explore a self-question if quiet
         dm_token   = bot_token or token
         dm_channel = open_dm(dm_token)
         if dm_channel:
             summary = build_summary_dm(new_items, len(all_items), run_ts)
-            send_dm(dm_token, dm_channel, summary)
-            log("Summary DM sent to Kamal.")
+            if summary:
+                send_dm(dm_token, dm_channel, summary)
+                log("Summary DM sent to Kamal.")
+            else:
+                # Slack is quiet — use this time to explore a self-question
+                log("Slack quiet — exploring self-question.")
+                explore_self_question(dm_token, dm_channel)
         else:
             log("Could not open DM channel.")
 
