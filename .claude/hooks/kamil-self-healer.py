@@ -101,6 +101,59 @@ def slack_dm(token: str, text: str):
     ], capture_output=True)
 
 
+def query_axiom_errors(service_name: str, minutes: int = 15) -> list[str]:
+    """
+    Query Axiom for recent error events for this service.
+    Returns list of error strings. Falls back to local log on failure.
+    """
+    axiom_cfg = Path.home() / ".claude" / "hooks" / ".axiom"
+    token = ""
+    if axiom_cfg.exists():
+        for line in axiom_cfg.read_text().splitlines():
+            if line.startswith("AXIOM_TOKEN="):
+                token = line.split("=", 1)[1].strip()
+
+    if not token:
+        return []
+
+    import urllib.request
+    from datetime import timezone
+    start = (datetime.utcnow() - __import__("datetime").timedelta(minutes=minutes)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    end   = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    payload = json.dumps({
+        "apl": "kamil-logs | where [\"event\"] == \"error\" | project _time, component, context, error, traceback | order by _time desc | limit 20",
+        "startTime": start,
+        "endTime":   end,
+    }).encode()
+
+    try:
+        req = urllib.request.Request(
+            "https://api.axiom.co/v1/datasets/kamil-logs/query",
+            data=payload,
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read())
+
+        errors = []
+        for row in data.get("matches", []):
+            d = row.get("data", {})
+            if d.get("event") != "error":
+                continue
+            # Filter by service/component if possible
+            ctx = d.get("context", "") + d.get("component", "")
+            if service_name.replace("-", "_") in ctx or service_name.replace("_", "-") in ctx or not ctx:
+                tb  = d.get("traceback", "")
+                err = d.get("error", "")
+                errors.append(f"Error: {err}\n{tb}".strip())
+        return errors
+
+    except Exception as e:
+        log(f"Axiom query failed: {e} — falling back to local log")
+        return []
+
+
 def read_log_tail(log_path: str, lines: int = 80) -> str:
     p = Path(log_path)
     if not p.exists():
@@ -256,41 +309,21 @@ def check_service(service: dict, token: str | None) -> bool:
                         slack_dm(token, msg)
                     return False
 
-    # 2. Check logs for recent errors (last 15 minutes)
-    log_tail = read_log_tail(log_path, lines=80)
-    error_blocks = extract_errors(log_tail)
-
-    # Only consider errors from the last 15 minutes
-    # (rough filter: look for recent timestamp patterns)
-    recent_errors = []
-    now = datetime.now()
-    for block in error_blocks:
-        # Extract timestamps like [HH:MM:SS] from blocks
-        ts_matches = re.findall(r'\[(\d{2}:\d{2}:\d{2})\]', block)
-        if ts_matches:
-            for ts_str in ts_matches:
-                try:
-                    ts = datetime.strptime(ts_str, "%H:%M:%S").replace(
-                        year=now.year, month=now.month, day=now.day
-                    )
-                    if (now - ts).total_seconds() < 900:  # 15 min
-                        recent_errors.append(block)
-                        break
-                except Exception:
-                    pass
-        else:
-            # No timestamp — include it (conservative)
-            recent_errors.append(block)
-
+    # 2. Query Axiom for recent errors (primary) — local log as fallback
+    recent_errors = query_axiom_errors(name, minutes=15)
+    if not recent_errors:
+        # Fallback: scan local log file
+        log_tail     = read_log_tail(log_path, lines=80)
+        recent_errors = extract_errors(log_tail)
     if not recent_errors:
         log(f"✅ {name}: healthy")
         return True
 
-    log(f"🔴 {name}: found {len(recent_errors)} error block(s) in recent logs")
+    log(f"🔴 {name}: found {len(recent_errors)} error(s) via Axiom/log in last 15 min")
     # Log detection to Notion immediately
     log_error(service=name,
               error="\n".join(recent_errors[:2])[:500],
-              context=f"Found {len(recent_errors)} error block(s) in last 15 min of logs")
+              context=f"Found {len(recent_errors)} error(s) in last 15 min")
 
     # 3. Call Claude to diagnose and fix
     claude_result = diagnose_and_fix(service, recent_errors)

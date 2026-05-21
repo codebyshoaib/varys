@@ -362,7 +362,7 @@ Use real data sources:
 1. Write a 2-3 sentence answer based on what you actually found (not guesses)
 2. Update the Self-Questions Notion page:
    - Move the question from "Next Questions to Explore" to the relevant section
-   - Add "**Answer (DATE):** [your finding]" under it
+   - Add "**Answer ({datetime.now().strftime('%Y-%m-%d')}):** [your finding]" under it
    - Add 1-2 new questions to the queue based on what you discovered
    Use mcp__claude_ai_Notion__notion-update-page with update_content command.
 
