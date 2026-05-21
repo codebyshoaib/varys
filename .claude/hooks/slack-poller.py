@@ -342,6 +342,9 @@ def explore_self_question(bot_token: str, dm_channel: str):
     nvm = 'export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"'
     env = os.environ.copy()
 
+    today = datetime.now().strftime('%Y-%m-%d')
+    time_now = datetime.now().strftime('%H:%M')
+
     prompt = f"""You are Kamil — Kamal's autonomous AI agent. Slack is quiet. Use this time well.
 
 ## YOUR JOB THIS CYCLE
@@ -362,7 +365,7 @@ Use real data sources:
 1. Write a 2-3 sentence answer based on what you actually found (not guesses)
 2. Update the Self-Questions Notion page:
    - Move the question from "Next Questions to Explore" to the relevant section
-   - Add "**Answer ({datetime.now().strftime('%Y-%m-%d')}):** [your finding]" under it
+   - Add "**Answer ({today}):** [your finding]" under it
    - Add 1-2 new questions to the queue based on what you discovered
    Use mcp__claude_ai_Notion__notion-update-page with update_content command.
 
@@ -371,8 +374,8 @@ Use real data sources:
    [1 line of context or implication]
    _Asked myself: [the new question I just added to the queue]_"
 
-Today: {datetime.now().strftime('%Y-%m-%d')} PKT
-Time: {datetime.now().strftime('%H:%M')}
+Today: {today} PKT
+Time: {time_now}
 Question index: {idx}"""
 
     env["KAMIL_PROMPT"] = prompt
