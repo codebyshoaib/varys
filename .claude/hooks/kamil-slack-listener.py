@@ -37,7 +37,9 @@ from slack_sdk.socket_mode.response import SocketModeResponse
 from slack_sdk.web import WebClient
 
 sys.path.insert(0, str(Path(__file__).parent))
-from kamil_log import klog, klog_error
+from kamil_log import (klog, klog_error, klog_conversation, klog_claude_call,
+                        klog_socket, klog_catchup, klog_humor, klog_privacy,
+                        klog_system_start)
 
 # ── Config ────────────────────────────────────────────────────────────────────
 SLACK_CONFIG = Path.home() / ".claude" / "hooks" / ".slack"
@@ -89,14 +91,14 @@ def run_claude(prompt: str, cwd: str = None, timeout: int = 240,
         )
         latency = round(time.time() - t0, 1)
         if result.returncode == 0 and result.stdout.strip():
-            klog("claude_call", context=event_context, latency_s=latency, status="ok",
-                 prompt_len=len(prompt), response_len=len(result.stdout))
+            klog_claude_call(context=event_context, latency_s=latency, status="ok",
+                             prompt_len=len(prompt), response_len=len(result.stdout))
             return result.stdout.strip()
-        klog("claude_call", context=event_context, latency_s=latency, status="error",
-             stderr=result.stderr.strip()[:200])
+        klog_claude_call(context=event_context, latency_s=latency, status="error",
+                         error=result.stderr.strip()[:200])
         return f"⚠️ I hit an issue: {result.stderr.strip()[:150] or 'no output'}"
     except subprocess.TimeoutExpired:
-        klog("claude_call", context=event_context, latency_s=timeout, status="timeout")
+        klog_claude_call(context=event_context, latency_s=timeout, status="timeout")
         return "⏱️ That took too long. Try again or break it into smaller steps."
     except Exception as e:
         klog_error("run_claude", e, context=event_context)
@@ -259,6 +261,10 @@ Do NOT sign off as "Kamil" — just reply as if continuing the chat naturally.""
         safe_reply, was_modified = privacy_eval(draft, sender_name or "this person")
         if was_modified:
             log(f"Privacy filter modified reply to {sender_name}")
+            klog_privacy(sender_name=sender_name or "unknown",
+                         was_modified=True,
+                         original_len=len(draft),
+                         safe_len=len(safe_reply))
         web.chat_postMessage(channel=channel, text=safe_reply, thread_ts=thread_ts)
         log(f"[third-party reply to {sender_name}] {safe_reply[:60]}")
         return
@@ -329,30 +335,23 @@ Pick your mode. Execute. Sign off: 🤖 Kamil"""
     web.chat_postMessage(channel=channel, text=answer, thread_ts=thread_ts)
     log(f"[{source}] replied: {answer[:80]}")
 
-    # Full conversation log — this is what you see in Axiom
-    klog("conversation",
-         source=source,
-         mode=mode,
-         sender_name=sender_name or "Kamal",
-         sender_id=sender_id or KAMAL_USER_ID,
-         is_third_party=is_third_party,
-         channel=channel,
-         # What they asked
-         request=text,
-         # What Kamil replied
-         reply=answer,
-         # How long it took
-         latency_s=latency,
-         # Truncated thread for context (last 3 exchanges)
-         thread_preview=thread_history[-500:] if thread_history else "",
+    klog_conversation(
+        conv_id        = f"{channel}-{thread_ts}",
+        sender_name    = sender_name or "Kamal",
+        sender_id      = sender_id or KAMAL_USER_ID,
+        is_third_party = is_third_party,
+        channel        = channel,
+        source         = source,
+        mode           = mode,
+        request        = text,
+        reply          = answer,
+        latency_s      = latency,
+        thread_preview = thread_history,
     )
 
     if is_fun:
         log_humor(text, answer)
-        klog("humor_interaction",
-             sender=sender_name or "Kamal",
-             request=text,
-             reply=answer[:300])
+        klog_humor(sender_name=sender_name or "Kamal", request=text, reply=answer)
 
 
 def process_missed_messages(web: WebClient, dm_channel: str) -> int:
@@ -377,7 +376,7 @@ def process_missed_messages(web: WebClient, dm_channel: str) -> int:
                 continue
 
             log(f"[catchup] {user}: {text[:60]}")
-            klog("message_catchup", sender_id=user, text_preview=text[:100], ts=ts)
+            klog_catchup(sender_id=user, text_preview=text[:100], ts=ts)
             dispatch(text, web, dm_channel, ts, "DM-catchup", sender_id=user, is_dm=True)
             last_ts = ts
             count  += 1
@@ -402,9 +401,6 @@ def dispatch(text: str, web: WebClient, channel: str, thread_ts: str, source: st
         return
 
     log(f"[{source}] {clean[:80]}")
-    klog("message_received", source=source, sender_id=sender_id or "unknown",
-         is_dm=is_dm, is_third_party=(sender_id != KAMAL_USER_ID if sender_id else False),
-         text_preview=clean[:100])
 
     # For DMs: read flat channel history. For channel threads: read thread replies.
     thread_history = fetch_thread_history(web, channel, thread_ts, is_dm=is_dm)
@@ -538,6 +534,7 @@ def main():
     socket_client = SocketModeClient(app_token=app_token, web_client=web)
     socket_client.socket_mode_request_listeners.append(make_handler(web, dm_channel))
 
+    klog_system_start("listener")
     log("Kamil listener starting (Socket Mode)...")
     socket_client.connect()
     log("Connected. Listening for DMs and @Kamil mentions.")
@@ -561,14 +558,14 @@ def main():
         stale_minutes = (time.time() - last_event_time[0]) / 60
         if stale_minutes > 5:
             log(f"Socket stale ({stale_minutes:.1f} min) — reconnecting")
-            klog("socket_stale", stale_minutes=round(stale_minutes, 1))
+            klog_socket("socket_stale", stale_minutes=round(stale_minutes, 1))
             try:
                 socket_client.close()
                 time.sleep(2)
                 socket_client.connect()
                 last_event_time[0] = time.time()
                 missed = process_missed_messages(web, dm_channel)
-                klog("socket_reconnect", missed_messages=missed)
+                klog_socket("socket_reconnect", missed_messages=missed)
                 log("Reconnected.")
             except Exception as e:
                 klog_error("socket_reconnect", e)

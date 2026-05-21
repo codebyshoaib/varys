@@ -25,7 +25,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from kamil_log import klog, klog_error
+from kamil_log import klog, klog_error, klog_poller
 
 # ── Config ────────────────────────────────────────────────────────────────────
 SLACK_CONFIG    = Path.home() / ".claude" / "hooks" / ".slack"
@@ -414,11 +414,8 @@ def main():
         by_type = {}
         for item in new_items:
             by_type[item["type"]] = by_type.get(item["type"], 0) + 1
-        klog("poller_run",
-             new_items=len(new_items),
-             total_inbox=len(all_items),
-             channels_read=len(MONITOR_CHANNELS),
-             by_type=by_type)
+        klog_poller(new_items=len(new_items), total_inbox=len(all_items),
+                    channels_read=len(MONITOR_CHANNELS), by_type=by_type)
 
         # Post summary DM
         dm_token   = bot_token or token
