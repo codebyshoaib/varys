@@ -316,6 +316,40 @@ Pick your mode. Execute. Sign off: 🤖 Kamil"""
         log_humor(text, answer)
 
 
+def process_missed_messages(web: WebClient, dm_channel: str):
+    """On connect/reconnect: process any DMs that arrived while offline."""
+    state_file    = Path("/tmp/kamil-last-processed-ts.txt")
+    last_ts       = state_file.read_text().strip() if state_file.exists() else "0"
+    processed_new = False
+
+    try:
+        resp = web.conversations_history(channel=dm_channel, oldest=last_ts, limit=20)
+        msgs = list(reversed(resp.get("messages", [])))
+        for m in msgs:
+            ts      = m.get("ts", "")
+            user    = m.get("user", "")
+            bot_id  = m.get("bot_id", "")
+            text    = m.get("text", "").strip()
+            subtype = m.get("subtype", "")
+
+            if not text or bot_id or subtype or ts == last_ts:
+                continue
+            if float(ts) <= float(last_ts):
+                continue
+
+            log(f"[catchup] {user}: {text[:60]}")
+            dispatch(text, web, dm_channel, ts, "DM-catchup",
+                     sender_id=user, is_dm=True)  # noqa: E501
+            last_ts       = ts
+            processed_new = True
+
+        state_file.write_text(last_ts)
+        if processed_new:
+            log(f"Catchup: processed messages up to ts={last_ts}")
+    except Exception as e:
+        log(f"process_missed_messages error: {e}")
+
+
 def dispatch(text: str, web: WebClient, channel: str, thread_ts: str, source: str,
              sender_id: str = None, is_dm: bool = False):
     """Dispatch to unified handler with full conversation context."""
@@ -349,27 +383,6 @@ def dispatch(text: str, web: WebClient, channel: str, thread_ts: str, source: st
         target=handle_message,
         args=(clean, thread_history, web, channel, thread_ts, source,
               sender_id, sender_name, is_third_party),
-        daemon=True,
-    ).start()
-
-
-def dispatch(text: str, web: WebClient, channel: str, thread_ts: str, source: str):
-    """Dispatch to unified handler with full thread context."""
-    global last_activity_time
-    last_activity_time = time.time()
-
-    clean = re.sub(r"<@[A-Z0-9]+>", "", text).strip()
-    if not clean:
-        return
-
-    log(f"[{source}] {clean[:80]}")
-
-    # Fetch thread history so Claude has full conversation context
-    thread_history = fetch_thread_history(web, channel, thread_ts)
-
-    threading.Thread(
-        target=handle_message,
-        args=(clean, thread_history, web, channel, thread_ts, source),
         daemon=True,
     ).start()
 
