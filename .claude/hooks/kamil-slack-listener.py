@@ -50,6 +50,7 @@ LOG_FILE     = Path("/tmp/kamil-slack-listener.log")
 STATE_FILE   = Path("/tmp/kamil-listener-state.json")
 
 KAMAL_USER_ID   = "U0AV1DX3WSE"
+KAMIL_BOT_USER  = "U0B4L7RVA8L"  # Kamil's own bot user — skip in catchup
 DB_PAGE_HARNESS = "de10157da3e34ef58a74ea240f31fe98"
 
 # Track last activity time for idle detection
@@ -414,8 +415,8 @@ def process_missed_messages(web: WebClient, dm_channel: str) -> int:
             text    = m.get("text", "").strip()
             subtype = m.get("subtype", "")
 
-            # Skip bot messages (bot_id set), own posts (no user field), edits/deletes
-            if not text or bot_id or subtype or ts == last_ts or not user:
+            # Skip bot messages, Kamil's own replies, and edits/deletes
+            if not text or bot_id or subtype or ts == last_ts or user == KAMIL_BOT_USER:
                 continue
             if float(ts) <= float(last_ts):
                 continue
