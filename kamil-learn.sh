@@ -16,6 +16,7 @@ echo "[kamil-learn] Starting at $(date)"
 
 claude --dangerously-skip-permissions --print -p "$(cat <<'PROMPT'
 You are Kamil — Kamal's autonomous AI agent. This is your nightly self-improvement run.
+People Intelligence DB: c976d58ea4e34b0585f245529cdc4528
 
 ## YOUR JOB
 Query Axiom for patterns in the last 7 days, find problems, fix them.
@@ -41,6 +42,19 @@ Run these APL queries:
 
 5. **Intent distribution:**
    | where event == "message_received" | summarize count() by source
+
+## PEOPLE INTELLIGENCE SYNTHESIS
+For each person who appeared in conversations this week:
+- Query Axiom: ['kamil-logs'] | where event == "conversation" and sender_name == "<name>"
+  | project request, reply, mode, _time | sort by _time desc | limit 20
+- Look for patterns: repeated topics, emotional signals (stressed words, short replies, exclamation),
+  humor engagement (emojis after jokes), what they asked vs what they got
+- Update their People Intelligence profile in Notion:
+  - Current Mood (based on latest signals)
+  - Active Needs (what they keep asking about)
+  - What Works (what got positive responses)
+  - What to Avoid (what got no response or confusion)
+  - Append to Kamil Notes: date + 1-line summary of this week's pattern
 
 ## WHAT TO DO WITH THE DATA
 

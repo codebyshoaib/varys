@@ -40,6 +40,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from kamil_log import (klog, klog_error, klog_conversation, klog_claude_call,
                         klog_socket, klog_catchup, klog_humor, klog_privacy,
                         klog_system_start)
+from kamil_people import build_person_context, update_profile_after_conversation
 
 # ── Config ────────────────────────────────────────────────────────────────────
 SLACK_CONFIG = Path.home() / ".claude" / "hooks" / ".slack"
@@ -242,22 +243,31 @@ def handle_message(text: str, thread_history: str, web: WebClient, channel: str,
     ])
 
     if is_third_party:
-        # Kamil is replying to a non-Kamal person (e.g. Fatima replied to a song)
+        person_context = build_person_context(sender_name or "Unknown", sender_id or "")
+
         prompt = f"""You are Kamil — Kamal's AI agent at Taleemabad, replying on behalf of the conversation.
 
-{sender_name or "Someone"} sent this message: "{text}"
+## WHO YOU'RE TALKING TO
+{person_context}
 
-Thread so far:
+## THIS MESSAGE
+{sender_name or "Someone"} says: "{text}"
+
+## THREAD SO FAR
 {thread_history or "(no prior context)"}
 
+## PRIVACY RULES
 {PRIVACY_RULES}
 
-Reply warmly and naturally. You're continuing a friendly conversation.
-Keep it short (1-3 lines). Match their energy — if they're playful, be playful back.
-Do NOT reveal any private info about Kamal, the team, or internal systems.
-Do NOT sign off as "Kamil" — just reply as if continuing the chat naturally."""
+## HOW TO REPLY
+- Match their energy and communication style (see profile above)
+- If they're stressed or have an active need — acknowledge it briefly
+- If humor works for them — use it; if not — stay warm but direct
+- Keep it short (1-3 lines)
+- Do NOT sign off as "Kamil" — reply naturally
+- Do NOT reveal private info about Kamal, the team, or internal systems"""
 
-        draft = run_claude(prompt, timeout=120)
+        draft    = run_claude(prompt, timeout=120)
         safe_reply, was_modified = privacy_eval(draft, sender_name or "this person")
         if was_modified:
             log(f"Privacy filter modified reply to {sender_name}")
@@ -267,6 +277,17 @@ Do NOT sign off as "Kamil" — just reply as if continuing the chat naturally.""
                          safe_len=len(safe_reply))
         web.chat_postMessage(channel=channel, text=safe_reply, thread_ts=thread_ts)
         log(f"[third-party reply to {sender_name}] {safe_reply[:60]}")
+
+        # Update profile with signals from this interaction (background)
+        update_profile_after_conversation(
+            sender_name=sender_name or "Unknown",
+            sender_id=sender_id or "",
+            is_third_party=True,
+            request=text,
+            reply=safe_reply,
+            mode=mode,
+            thread_history=thread_history,
+        )
         return
 
     # ── Normal Kamal → Kamil flow ─────────────────────────────────────────────
@@ -312,6 +333,13 @@ Direct, precise, architectural. Log everything.
 - Notion: mcp__claude_ai_Notion__* tools
 - Web: WebSearch, WebFetch
 - Files, bash, code: anything
+
+## PEOPLE INTELLIGENCE
+People Intelligence DB: c976d58ea4e34b0585f245529cdc4528
+When Kamal asks about a person ("how is Fatima?", "what does Haroon need?"):
+→ Search People Intelligence DB for their profile
+→ Read their Current Mood, Active Needs, Recurring Topics, What Works, Kamil Notes
+→ Answer from the profile + check Notion Slack Inbox for recent messages from them
 
 ## KAMAL'S CONTEXT
 - Taleemabad, Pakistan — EdTech, Django + React, multi-tenant LMS
