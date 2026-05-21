@@ -320,49 +320,56 @@ def write_to_kamil_inbox(text: str, source_channel: str, from_id: str, ts: str):
 
 def build_summary_dm(new_items: list, total_inbox: int, run_ts: str) -> str:
     now = datetime.now().strftime("%H:%M")
-    channels_read = len(MONITOR_CHANNELS)
 
-    # Break down by type
-    mentions      = [i for i in new_items if i["type"] == "Mention"]
-    pr_requests   = [i for i in new_items if i["type"] == "PR Review Request"]
-    bugs          = [i for i in new_items if i["type"] == "Bug Report"]
-    learned_links = []
-    for i in new_items:
-        if i["channel"] in LEARNING_CHANNELS and i["links"]:
-            learned_links.extend(i["links"])
-
-    lines = [f"*🤖 Kamil Report — {now} PKT*"]
-    lines.append(f"Scanned {channels_read} channels + DMs in the last 30 min.\n")
-
+    # Nothing happened — one liner
     if not new_items:
-        lines.append("📭 *Nothing new.* Channels are quiet.")
-    else:
-        lines.append(f"📥 *{len(new_items)} new items captured:*")
+        return f"*🤖 {now} —* Quiet 30 min. Nothing needs your attention."
 
-    if mentions:
-        lines.append(f"\n*📣 You were mentioned ({len(mentions)}x):*")
-        for m in mentions[:3]:
-            lines.append(f"  • {m['from']} in {m['channel']}: _{m['message'][:80]}_")
-            lines.append(f"    <{m['permalink']}|Open in Slack>")
+    # Only surface items that actually need eyes: mentions, PRs, bugs, DMs
+    priority = [i for i in new_items if i["type"] in ("Mention", "PR Review Request", "Bug Report", "Question")]
+    learned  = [i for i in new_items if i["channel"] in LEARNING_CHANNELS and i["links"]]
 
-    if pr_requests:
-        lines.append(f"\n*🔀 PR Review Requests ({len(pr_requests)}):*")
-        for pr in pr_requests[:3]:
-            lines.append(f"  • {pr['from']} in {pr['channel']}: _{pr['message'][:80]}_")
-            lines.append(f"    <{pr['permalink']}|Open in Slack>")
+    # If only FYIs and nothing actionable — also one liner
+    if not priority and not learned:
+        return f"*🤖 {now} —* {len(new_items)} FYI messages, nothing that needs you."
 
-    if bugs:
-        lines.append(f"\n*🐛 Bug/Error Reports ({len(bugs)}):*")
-        for b in bugs[:3]:
-            lines.append(f"  • {b['channel']}: _{b['message'][:80]}_")
+    lines = [f"*🤖 {now} — {len(priority) + len(learned)} things worth your eyes*\n"]
 
-    if learned_links:
-        lines.append(f"\n*📚 Learned ({len(learned_links)} links from engineering channels):*")
-        for link in learned_links[:3]:
-            lines.append(f"  • {link}")
+    for item in priority[:5]:
+        t       = item["type"]
+        frm     = item["from"]
+        channel = item["channel"]
+        msg     = item["message"][:90].rstrip()
+        link    = item["permalink"]
 
-    lines.append(f"\n📊 Total in Notion inbox queue: *{total_inbox}* items")
-    lines.append("\n_DM me to assign a task, PR review, or ask anything. I'll get on it._")
+        if t == "Mention":
+            lines.append(f"📣 *{frm}* mentioned you in {channel}")
+            lines.append(f'   _"{msg}"_')
+            lines.append(f"   → Reply or: _\"Kamil reply to [name] tell them...\"_")
+            lines.append(f"   <{link}|Open>")
+        elif t == "PR Review Request":
+            lines.append(f"🔀 *New PR* in {channel} from {frm}")
+            lines.append(f'   _"{msg}"_')
+            lines.append(f"   → Say _\"Kamil review that PR\"_ and I'll do it")
+            lines.append(f"   <{link}|Open>")
+        elif t == "Bug Report":
+            lines.append(f"🐛 *Bug/error* in {channel}")
+            lines.append(f'   _"{msg}"_')
+            lines.append(f"   <{link}|Open>")
+        elif t == "Question":
+            lines.append(f"❓ *{frm}* asked something in {channel}")
+            lines.append(f'   _"{msg}"_')
+            lines.append(f"   <{link}|Open>")
+        lines.append("")
+
+    if learned:
+        first = learned[0]
+        link  = first["links"][0] if first["links"] else ""
+        lines.append(f"📚 *{first['from']}* shared in {first['channel']}")
+        if link:
+            lines.append(f"   {link}")
+        if len(learned) > 1:
+            lines.append(f"   _(+{len(learned)-1} more links)_")
 
     return "\n".join(lines)
 

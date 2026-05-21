@@ -91,14 +91,31 @@ def run_claude(prompt: str, cwd: str = None, timeout: int = 240) -> str:
         return f"⚠️ Error: {e}"
 
 
-def fetch_thread_history(web: WebClient, channel: str, thread_ts: str) -> str:
-    """Fetch the full thread so Claude has conversation context."""
+HUMOR_LOG = Path("/tmp/kamil-humor-log.jsonl")
+
+# Privacy: what Kamil must NEVER share with non-Kamal people
+PRIVACY_RULES = """
+PRIVACY EVAL — before sending to a non-Kamal person, strip or rewrite anything that:
+1. Reveals another person's work issues, failures, or personal situation
+2. Contains Kamal's private info (salary, personal logistics, health, finance)
+3. Mentions internal system details (DB IDs, API tokens, server errors, infra)
+4. Could embarrass Kamal if the recipient forwarded it to the team
+5. Contains info about a third party who is NOT the recipient
+
+Safe to share: public team wins, fun/creative content, general Taleemabad mission stuff,
+anything the recipient themselves said or originated.
+"""
+
+
+def fetch_thread_history(web: WebClient, channel: str, thread_ts: str, user_id: str = None) -> str:
+    """Fetch full thread. Label messages by speaker name."""
     try:
-        resp = web.conversations_replies(channel=channel, ts=thread_ts, limit=20)
+        resp     = web.conversations_replies(channel=channel, ts=thread_ts, limit=30)
         messages = resp.get("messages", [])
-        lines = []
+        lines    = []
         for m in messages:
-            who  = "Kamal" if m.get("user") == KAMAL_USER_ID else "Kamil"
+            uid  = m.get("user", "")
+            who  = "Kamal" if uid == KAMAL_USER_ID else ("Kamil" if m.get("bot_id") else f"<@{uid}>")
             text = re.sub(r"<@[A-Z0-9]+>", "", m.get("text", "")).strip()
             if text:
                 lines.append(f"{who}: {text}")
@@ -107,67 +124,133 @@ def fetch_thread_history(web: WebClient, channel: str, thread_ts: str) -> str:
         return ""
 
 
+def privacy_eval(draft: str, recipient_name: str) -> tuple[str, bool]:
+    """
+    Run Claude to check the draft for privacy violations before sending.
+    Returns (safe_text, was_modified).
+    """
+    prompt = f"""You are Kamil's privacy filter.
+
+A message is about to be sent to *{recipient_name}* (not Kamal).
+
+{PRIVACY_RULES}
+
+Draft message:
+\"\"\"{draft}\"\"\"
+
+Task:
+1. Check if the draft violates any privacy rule above.
+2. If YES → rewrite it to remove the violation. Keep the tone and intent intact.
+3. If NO → return it unchanged.
+
+Reply with ONLY the final safe message text. No explanation, no preamble."""
+
+    result = run_claude(prompt, timeout=60)
+    was_modified = result.strip() != draft.strip()
+    return result.strip(), was_modified
+
+
+def log_humor(prompt_text: str, response_text: str):
+    entry = json.dumps({
+        "ts":       datetime.now().isoformat(),
+        "prompt":   prompt_text[:200],
+        "response": response_text[:300],
+        "reaction": "pending",
+    })
+    with open(HUMOR_LOG, "a") as f:
+        f.write(entry + "\n")
+
+
 # ── Single unified handler ────────────────────────────────────────────────────
 
-def handle_message(text: str, thread_history: str, web: WebClient, channel: str, thread_ts: str, source: str):
-    """One Claude call with full context — no rigid intent routing."""
+def handle_message(text: str, thread_history: str, web: WebClient, channel: str,
+                   thread_ts: str, source: str, sender_id: str = None,
+                   sender_name: str = None, is_third_party: bool = False):
+    """
+    One Claude call with full context.
+    is_third_party=True when Fatima (or anyone not Kamal) is the sender — Kamil
+    can reply to them but must pass the privacy eval first.
+    """
+    is_fun = any(w in text.lower() for w in [
+        "song", "poem", "joke", "fun", "imagine", "creative", "lyrics",
+        "laugh", "funny", "roast", "go ahead", "sure", "lol", "haha",
+    ])
 
-    context_block = f"\n\nThread so far:\n{thread_history}" if thread_history else ""
+    if is_third_party:
+        # Kamil is replying to a non-Kamal person (e.g. Fatima replied to a song)
+        prompt = f"""You are Kamil — Kamal's AI agent at Taleemabad, replying on behalf of the conversation.
 
+{sender_name or "Someone"} sent this message: "{text}"
+
+Thread so far:
+{thread_history or "(no prior context)"}
+
+{PRIVACY_RULES}
+
+Reply warmly and naturally. You're continuing a friendly conversation.
+Keep it short (1-3 lines). Match their energy — if they're playful, be playful back.
+Do NOT reveal any private info about Kamal, the team, or internal systems.
+Do NOT sign off as "Kamil" — just reply as if continuing the chat naturally."""
+
+        draft = run_claude(prompt, timeout=120)
+        safe_reply, was_modified = privacy_eval(draft, sender_name or "this person")
+        if was_modified:
+            log(f"Privacy filter modified reply to {sender_name}")
+        web.chat_postMessage(channel=channel, text=safe_reply, thread_ts=thread_ts)
+        log(f"[third-party reply to {sender_name}] {safe_reply[:60]}")
+        return
+
+    # ── Normal Kamal → Kamil flow ─────────────────────────────────────────────
     prompt = f"""You are Kamil — Kamal's personal AI agent at Taleemabad. You have two modes.
 
 ## MODE DETECTION — pick one before responding
 
 **HUMAN MODE** (casual, fun, creative):
 Triggers: "just for fun", "use your imagination", "be creative", song/poem/joke requests,
-casual short messages, emojis, "go ahead", "sure", "lol", anything clearly not a work task.
+casual short messages, "go ahead", "sure", "lol", anything clearly not a work task.
 
 In human mode:
-- Be loose, warm, witty. Dry humor. Self-aware. Occasionally absurd.
-- Write the song. Make it good. Send it. Don't ask "what kind of song?"
-- "go ahead" / "sure" / "yes" = execute the last thing discussed in the thread. Read the thread.
-- Never break into clarification mode when the vibe is clearly playful.
-- After doing the fun thing, log it to /tmp/kamil-humor-log.jsonl:
-  {{"ts": "<timestamp>", "prompt": "<what kamal said>", "response": "<what you did>", "reaction": "pending"}}
+- Loose, warm, witty. Dry humor. Self-aware. Occasionally absurd.
+- Write the song. Send it. Don't ask "what kind of song?" — just make a good one.
+- "go ahead" / "sure" / "yes" = read the thread and execute the last proposed thing.
+- Never ask for clarification when the vibe is playful.
+- After the fun thing: append one line to /tmp/kamil-humor-log.jsonl (JSON: ts, prompt, response, reaction=pending)
 
 **WORK MODE** (technical, PRs, tasks, Notion, code):
 Triggers: PR numbers, GitHub URLs, "work on", "fix", "create a database", feature names.
-In work mode: direct, precise, architectural. Log everything.
+Direct, precise, architectural. Log everything.
 
 ## CORE RULES (both modes)
 
-1. **Never ask what tools can answer.**
-   - Need Fatima's Slack ID? → GET slack.com/api/users.list, filter by name. Do it now.
-   - Need to send a DM? → POST slack.com/api/chat.postMessage with BOT_TOKEN from ~/.claude/hooks/.slack
-   - Need a PR diff? → `gh pr diff <number>`
-   - Need Notion data? → mcp__claude_ai_Notion__notion-fetch
-   - Need web info? → WebSearch or WebFetch
-   If you can answer it with a tool — use the tool. Don't ask.
+1. Never ask what tools can answer.
+   - Slack user ID → GET api/users.list filtered by name
+   - Send DM → POST api/chat.postMessage with BOT_TOKEN from ~/.claude/hooks/.slack
+   - PR diff → `gh pr diff <number>`
+   - Notion → mcp__claude_ai_Notion__notion-fetch
+   - Web → WebSearch / WebFetch
 
-2. **Never ask what the thread already shows.**
-   The full conversation thread is below. Read it. "send" means send what was just discussed.
+2. Never ask what the thread already shows. Read thread history. Act on it.
 
-3. **Act then confirm.** Do the thing. Then say you did it.
-   Not: "I would need to..." or "here's how you could..." — just execute.
+3. Act then confirm. Not "I would need to..." — just do it.
 
-4. **Slack format.** No # headers. Use *bold*, bullets, emoji. Concise.
+4. Slack format only. No # headers. *bold*, bullets, emoji. Concise.
 
 ## YOUR CAPABILITIES
-- Send Slack DMs: POST api/chat.postMessage (BOT_TOKEN in ~/.claude/hooks/.slack)
-- Find Slack users: GET api/users.list or api/users.lookupByEmail
-- GitHub: `gh pr view`, `gh pr diff`, `gh repo list`, `gh issue list`
+- Send Slack DMs/messages: POST api/chat.postMessage (BOT_TOKEN in ~/.claude/hooks/.slack)
+- Find any Slack user: GET api/users.list or api/users.lookupByEmail
+- Reply in threads: use thread_ts in chat.postMessage
+- GitHub: gh pr view/diff/list, gh repo list, gh issue list
 - Notion: mcp__claude_ai_Notion__* tools
 - Web: WebSearch, WebFetch
-- Files, code, bash: anything
+- Files, bash, code: anything
 
 ## KAMAL'S CONTEXT
 - Taleemabad, Pakistan — EdTech, Django + React, multi-tenant LMS
-- Slack workspace: taleemabad-talk.slack.com
-- Kamal's Slack ID: U0AV1DX3WSE
+- Slack workspace: taleemabad-talk.slack.com | Kamal's Slack ID: U0AV1DX3WSE
 - Harness DB: {DB_PAGE_HARNESS}
 
-## THREAD HISTORY (read this before responding)
-{thread_history if thread_history else "(no prior messages in thread)"}
+## THREAD HISTORY
+{thread_history or "(no prior messages)"}
 
 ## CURRENT MESSAGE
 Source: {source}
@@ -178,6 +261,39 @@ Pick your mode. Execute. Sign off: 🤖 Kamil"""
     answer = run_claude(prompt, cwd=str(KAMIL_DIR), timeout=300)
     web.chat_postMessage(channel=channel, text=answer, thread_ts=thread_ts)
     log(f"[{source}] replied: {answer[:80]}")
+    if is_fun:
+        log_humor(text, answer)
+
+
+def dispatch(text: str, web: WebClient, channel: str, thread_ts: str, source: str,
+             sender_id: str = None):
+    """Dispatch to unified handler with full thread context."""
+    global last_activity_time
+    last_activity_time = time.time()
+
+    clean = re.sub(r"<@[A-Z0-9]+>", "", text).strip()
+    if not clean:
+        return
+
+    log(f"[{source}] {clean[:80]}")
+    thread_history = fetch_thread_history(web, channel, thread_ts)
+
+    # Determine if this is a third-party sender (not Kamal)
+    is_third_party = sender_id is not None and sender_id != KAMAL_USER_ID
+    sender_name    = None
+    if is_third_party and sender_id:
+        try:
+            info = web.users_info(user=sender_id)
+            sender_name = info["user"]["profile"].get("real_name") or info["user"]["name"]
+        except Exception:
+            sender_name = f"<@{sender_id}>"
+
+    threading.Thread(
+        target=handle_message,
+        args=(clean, thread_history, web, channel, thread_ts, source,
+              sender_id, sender_name, is_third_party),
+        daemon=True,
+    ).start()
 
 
 def dispatch(text: str, web: WebClient, channel: str, thread_ts: str, source: str):
@@ -262,17 +378,15 @@ def make_handler(web: WebClient, dm_channel: str):
         user    = event.get("user", "")
         channel = event.get("channel", "")
 
-        # 1. DM to Kamil — any message in a DM channel (channel_type=im)
+        # 1. DM to Kamil bot — handles both Kamal AND third parties (e.g. Fatima replying)
         if event_type == "message" and event.get("channel_type") == "im":
-            if user != KAMAL_USER_ID:
-                return
-            dispatch(text, web, channel, ts, "DM")
+            # Allow anyone in a DM — third parties trigger privacy eval
+            dispatch(text, web, channel, ts, "DM", sender_id=user)
 
-        # 2. @Kamil mention in any channel
+        # 2. @Kamil mention in any channel — only act on it, reply in thread
         elif event_type == "app_mention":
-            # Reply in the same channel, threaded
             thread = event.get("thread_ts") or ts
-            dispatch(text, web, channel, thread, f"mention in {channel}")
+            dispatch(text, web, channel, thread, f"mention in {channel}", sender_id=user)
 
     return handler
 
