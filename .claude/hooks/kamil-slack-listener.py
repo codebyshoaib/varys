@@ -1,22 +1,24 @@
 #!/usr/bin/env python3
 """
-kamil-slack-listener.py — Kamil's Slack brain. Runs as a persistent daemon.
+kamil-slack-listener.py — Kamil's Slack brain. Socket Mode daemon.
 
-When Kamal DMs Kamil on Slack:
-  - PR review assignment  → fetches diff from GitHub, posts real review
-  - Task assignment       → creates Notion Harness entry, starts work
-  - Question              → searches web/Notion/GitHub, answers with context
-  - General chat          → answers directly, Kamil personality
+Handles two event types:
+  1. DM to Kamil bot         → any message in a DM channel
+  2. @Kamil mention          → app_mention in any channel
 
-When idle (no messages for 30 min):
-  - Reads a learning link from #engineering-learning or #engineering-ai
-  - Summarises it, writes to Notion Learning Log
-  - DMs Kamal a 1-line "I just learned X" message
+Intent routing:
+  pr_review  → fetches GitHub diff, posts structured code review
+  task       → creates Notion Harness entry, starts taleemabad-core harness
+  research   → searches web + Notion + GitHub, answers with context
+  chat       → direct answer with Kamil personality
 
-Run as daemon:
-  python3 .claude/hooks/kamil-slack-listener.py &
+Idle 35min → proactive: reads engineering links, writes to Notion Learning Log, DMs Kamal.
 
-Or via systemd — see kamil.service
+Run:
+  python3 .claude/hooks/kamil-slack-listener.py
+
+Auto-start via cron:
+  @reboot python3 /home/oye/.../kamil-slack-listener.py >> /tmp/kamil-slack-listener.log 2>&1
 """
 
 import json
@@ -25,23 +27,30 @@ import re
 import subprocess
 import sys
 import time
-import urllib.request
-import urllib.parse
+import threading
 from datetime import datetime
 from pathlib import Path
+
+from slack_sdk.socket_mode import SocketModeClient
+from slack_sdk.socket_mode.request import SocketModeRequest
+from slack_sdk.socket_mode.response import SocketModeResponse
+from slack_sdk.web import WebClient
 
 # ── Config ────────────────────────────────────────────────────────────────────
 SLACK_CONFIG = Path.home() / ".claude" / "hooks" / ".slack"
 KAMIL_DIR    = Path(__file__).parent.parent.parent
-INBOX_FILE   = Path("/tmp/kamil-slack-inbox.json")
 LOG_FILE     = Path("/tmp/kamil-slack-listener.log")
+STATE_FILE   = Path("/tmp/kamil-listener-state.json")
 
-KAMAL_USER_ID = "U0AV1DX3WSE"
-WORKSPACE     = "taleemabad-talk.slack.com"
-
-# Notion DB IDs (Claude writes via MCP, but Kamil needs them for task context)
+KAMAL_USER_ID   = "U0AV1DX3WSE"
 DB_PAGE_HARNESS = "de10157da3e34ef58a74ea240f31fe98"
 
+# Track last activity time for idle detection
+last_activity_time = time.time()
+last_idle_work     = 0.0
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
 
 def load_config() -> dict:
     config = {}
@@ -62,333 +71,294 @@ def log(msg: str):
         f.write(line + "\n")
 
 
-def slack_post(token: str, endpoint: str, payload: dict) -> dict:
-    url  = f"https://slack.com/api/{endpoint}"
-    data = json.dumps(payload).encode()
-    req  = urllib.request.Request(
-        url, data=data,
-        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-    )
+def run_claude(prompt: str, cwd: str = None, timeout: int = 240) -> str:
+    nvm = 'export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"'
+    env = os.environ.copy()
+    env["KAMIL_PROMPT"] = prompt
     try:
-        with urllib.request.urlopen(req, timeout=20) as resp:
-            return json.loads(resp.read())
+        result = subprocess.run(
+            ["bash", "-c", f'{nvm} && claude --dangerously-skip-permissions --print -p "$KAMIL_PROMPT"'],
+            capture_output=True, text=True,
+            cwd=cwd or str(KAMIL_DIR),
+            timeout=timeout, env=env,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+        return f"⚠️ I hit an issue: {result.stderr.strip()[:150] or 'no output'}"
+    except subprocess.TimeoutExpired:
+        return "⏱️ That took too long. Try again or break it into smaller steps."
     except Exception as e:
-        log(f"Slack POST error ({endpoint}): {e}")
-        return {}
-
-
-def slack_get(token: str, endpoint: str, params: dict = None) -> dict:
-    base = f"https://slack.com/api/{endpoint}"
-    if params:
-        base += "?" + urllib.parse.urlencode(params)
-    req = urllib.request.Request(base, headers={"Authorization": f"Bearer {token}"})
-    try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            return json.loads(resp.read())
-    except Exception as e:
-        log(f"Slack GET error ({endpoint}): {e}")
-        return {}
-
-
-def send_message(bot_token: str, channel: str, text: str, thread_ts: str = None):
-    payload = {"channel": channel, "text": text}
-    if thread_ts:
-        payload["thread_ts"] = thread_ts
-    result = slack_post(bot_token, "chat.postMessage", payload)
-    if not result.get("ok"):
-        log(f"Send failed: {result.get('error')}")
-
-
-def open_dm(bot_token: str) -> str | None:
-    resp = slack_post(bot_token, "conversations.open", {"users": KAMAL_USER_ID})
-    if resp.get("ok"):
-        return resp.get("channel", {}).get("id")
-    return None
+        return f"⚠️ Error: {e}"
 
 
 # ── Intent detection ──────────────────────────────────────────────────────────
 
 def detect_intent(text: str) -> str:
-    """Classify what Kamal wants."""
     t = text.lower()
-
-    # PR review
-    if re.search(r"(review|check|look at|read).{0,30}(pr|pull request|diff)", t):
+    if re.search(r"(review|check|look at)\b.{0,40}\b(pr|pull request|diff|code)", t):
         return "pr_review"
     if "github.com" in t and "/pull/" in t:
         return "pr_review"
-    if re.search(r"pr\s*#?\d+", t):
+    if re.search(r"\bpr\s*#?\d+\b", t):
         return "pr_review"
-
-    # Task assignment
-    if re.search(r"(work on|implement|build|fix|add|create|do).{0,50}(feature|bug|task|ticket)", t):
+    if re.search(r"(create|build|make|set up|generate)\b.{0,50}\b(notion|database|db|page)", t):
+        return "notion_task"
+    if re.search(r"(work on|implement|build|fix|add|create)\b.{0,50}\b(feature|bug|task|ticket|issue)", t):
         return "task"
-    if re.search(r"kamil.{0,20}(taleemabad|core|cms|auth)", t):
+    if re.search(r"kamil.{0,30}(taleemabad|core|cms|auth)\b", t):
         return "task"
-    if re.search(r"(jira|ticket|issue)\s*#?\w+", t):
-        return "task"
-
-    # Research / question
-    if "?" in text or re.search(r"^(what|how|why|when|who|where|can you|could you|find|search|look up)", t):
+    if "?" in text or re.search(r"^(what|how|why|when|who|where|can|could|find|search|look up|show me|list)\b", t):
         return "research"
-
     return "chat"
 
 
 def extract_pr_url(text: str) -> str | None:
-    match = re.search(r"https://github\.com/[^\s>]+/pull/\d+", text)
-    if match:
-        return match.group(0)
-    match = re.search(r"pr\s*#?(\d+)", text.lower())
-    if match:
-        return f"PR #{match.group(1)}"
-    return None
-
-
-# ── Claude runner ─────────────────────────────────────────────────────────────
-
-def run_claude(prompt: str, cwd: str = None, timeout: int = 180) -> str:
-    """Run Claude with a prompt, return output."""
-    nvm_source = 'export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"'
-    env = os.environ.copy()
-    env["KAMIL_PROMPT"] = prompt
-
-    result = subprocess.run(
-        ["bash", "-c", f'{nvm_source} && claude --dangerously-skip-permissions --print -p "$KAMIL_PROMPT"'],
-        capture_output=True,
-        text=True,
-        cwd=cwd or str(KAMIL_DIR),
-        timeout=timeout,
-        env=env,
-    )
-    if result.returncode != 0 or not result.stdout.strip():
-        stderr = result.stderr.strip()[:200] if result.stderr else "no output"
-        return f"I ran into an issue: {stderr}"
-    return result.stdout.strip()
+    m = re.search(r"https://github\.com/[^\s>]+/pull/\d+", text)
+    return m.group(0) if m else None
 
 
 # ── Intent handlers ───────────────────────────────────────────────────────────
 
-def handle_pr_review(text: str, bot_token: str, channel: str, thread_ts: str):
-    pr_ref = extract_pr_url(text)
-    send_message(bot_token, channel, f"🔍 On it. Fetching and reviewing {pr_ref or 'the PR'}...", thread_ts)
+def handle_pr_review(text: str, web: WebClient, channel: str, thread_ts: str):
+    pr_ref = extract_pr_url(text) or "the PR"
+    web.chat_postMessage(channel=channel, text=f"🔍 Fetching and reviewing {pr_ref}...", thread_ts=thread_ts)
 
-    prompt = f"""You are Kamil — Kamal's personal AI agent at Taleemabad.
+    answer = run_claude(f"""You are Kamil — Kamal's AI agent at Taleemabad.
 
-Kamal asked you to review this PR: {text}
+Kamal asked: "{text}"
 
-Do the following:
-1. If there's a GitHub URL, fetch the PR diff and files changed.
-2. Review the code for: bugs, logic errors, missing edge cases, security issues, Django/React best practices, multi-tenancy, soft-delete compliance.
-3. Give a structured review:
-   - Summary (1-2 sentences)
-   - ✅ What's good
-   - ⚠️ Issues found (with file:line if possible)
-   - 💡 Suggestions
-   - 🚦 Verdict: Approve / Request Changes / Needs Discussion
+1. If there's a GitHub PR URL, use the gh CLI or web fetch to get the diff and changed files.
+2. Review for: bugs, logic errors, missing edge cases, security, Django/React best practices, multi-tenancy, soft-delete.
+3. Structure your reply for Slack:
+   *Summary:* 1-2 sentences
+   *✅ What's good:* bullet points
+   *⚠️ Issues:* file:line — description
+   *💡 Suggestions:* bullet points
+   *🚦 Verdict:* Approve / Request Changes / Needs Discussion
 
-Be direct. No fluff. You are replying on Slack so keep formatting clean.
-Sign off: 🤖 Kamil"""
+Be direct. No markdown headers (use *bold* instead). Sign off: 🤖 Kamil""", timeout=300)
 
-    review = run_claude(prompt, cwd=str(KAMIL_DIR), timeout=240)
-    send_message(bot_token, channel, review, thread_ts)
-    log(f"PR review sent for: {pr_ref}")
+    web.chat_postMessage(channel=channel, text=answer, thread_ts=thread_ts)
+    log(f"PR review sent: {pr_ref}")
 
 
-def handle_task(text: str, bot_token: str, channel: str, thread_ts: str):
-    send_message(bot_token, channel, "📋 Got it. Creating Harness entry and starting work...", thread_ts)
+def handle_notion_task(text: str, web: WebClient, channel: str, thread_ts: str):
+    """Handle requests to create/update Notion databases or pages."""
+    web.chat_postMessage(channel=channel, text="🗂️ On it — building that in Notion...", thread_ts=thread_ts)
 
-    prompt = f"""You are Kamil — Kamal's personal AI agent at Taleemabad.
+    answer = run_claude(f"""You are Kamil — Kamal's AI agent at Taleemabad.
 
-Kamal assigned you this task via Slack DM: "{text}"
+Kamal asked: "{text}"
 
-Do the following:
-1. Understand what he wants — infer the project (taleemabad-core, taleemabad-cms, etc.) from context.
-2. Create a Notion Harness entry for this task (use the Notion MCP tool, DB ID: {DB_PAGE_HARNESS}).
-3. If this is a taleemabad-core task: cd to /home/oye/Documents/taleemabad-core and follow the CLAUDE.md harness (git checkout develop, pull, new branch kamil/<name>, run /feature <name>).
-4. Report back: "I've created the Harness entry and started /feature on branch kamil/<name>. Plan will be at .claude/features/..."
+You have full access to Notion via MCP (mcp__claude_ai_Notion__* tools) and GitHub via gh CLI.
 
-Be direct. Reply in Slack format (no markdown headers, use *bold* and bullet points).
-Sign off: 🤖 Kamil"""
+Execute the request completely:
+- If he wants a database of repos: use `gh repo list <org> --limit 100 --json name,description,url,language,updatedAt` to get repos, then create a Notion database with the right schema and populate it.
+- If he wants pages, summaries, or any other Notion work: do it directly.
 
-    reply = run_claude(prompt, cwd=str(KAMIL_DIR), timeout=300)
-    send_message(bot_token, channel, reply, thread_ts)
+After completing: reply with what you built, the Notion URL, and a 1-line summary of what's in it.
+Format for Slack. Sign off: 🤖 Kamil""", timeout=360)
+
+    web.chat_postMessage(channel=channel, text=answer, thread_ts=thread_ts)
+    log(f"Notion task done: {text[:60]}")
+
+
+def handle_task(text: str, web: WebClient, channel: str, thread_ts: str):
+    web.chat_postMessage(channel=channel, text="📋 Creating Harness entry and starting work...", thread_ts=thread_ts)
+
+    answer = run_claude(f"""You are Kamil — Kamal's AI agent at Taleemabad.
+
+Kamal assigned this task via Slack: "{text}"
+
+1. Infer the project (taleemabad-core, taleemabad-cms, etc.) from context.
+2. Create a Notion Harness entry (DB: {DB_PAGE_HARNESS}) with: Feature name, Phase=Research, Plan Summary.
+3. If taleemabad-core: cd /home/oye/Documents/taleemabad-core → git checkout develop && git pull → git checkout -b kamil/<name> → run /feature <name>.
+4. Reply: branch name, Harness entry created, what /feature found, next step.
+
+Slack format (*bold*, bullets). Sign off: 🤖 Kamil""", timeout=360)
+
+    web.chat_postMessage(channel=channel, text=answer, thread_ts=thread_ts)
     log(f"Task started: {text[:60]}")
 
 
-def handle_research(text: str, bot_token: str, channel: str, thread_ts: str):
-    send_message(bot_token, channel, "🔎 Let me look into that...", thread_ts)
+def handle_research(text: str, web: WebClient, channel: str, thread_ts: str):
+    web.chat_postMessage(channel=channel, text="🔎 Looking into that...", thread_ts=thread_ts)
 
-    prompt = f"""You are Kamil — Kamal's personal AI agent at Taleemabad.
+    answer = run_claude(f"""You are Kamil — Kamal's AI agent at Taleemabad.
 
-Kamal asked you this question via Slack: "{text}"
+Kamal asked: "{text}"
 
-Do the following:
-1. Use any available tool: web search, Notion MCP, GitHub, file reads — whatever gives the best answer.
-2. Search Notion first if it's about Kamal's work, projects, or team.
-3. Search the web if it's a technical question, external knowledge, or research.
-4. Give a direct, useful answer with sources if relevant.
-5. If you found something in Notion or GitHub, cite it.
+Use whatever tools give the best answer:
+- Notion MCP → for questions about Kamal's work, projects, team, PRs
+- Web search → for technical questions, external knowledge
+- gh CLI → for GitHub/repo questions
+- File reads → for codebase questions
 
-Keep the reply concise for Slack. No fluff.
-Sign off: 🤖 Kamil"""
+Give a direct answer with sources. Concise for Slack.
+Sign off: 🤖 Kamil""", timeout=180)
 
-    answer = run_claude(prompt, cwd=str(KAMIL_DIR), timeout=180)
-    send_message(bot_token, channel, answer, thread_ts)
-    log(f"Research answered: {text[:60]}")
+    web.chat_postMessage(channel=channel, text=answer, thread_ts=thread_ts)
+    log(f"Research: {text[:60]}")
 
 
-def handle_chat(text: str, bot_token: str, channel: str, thread_ts: str):
-    prompt = f"""You are Kamil — Kamal's personal AI agent at Taleemabad.
+def handle_chat(text: str, web: WebClient, channel: str, thread_ts: str):
+    answer = run_claude(f"""You are Kamil — Kamal's AI agent at Taleemabad.
 
 Kamal said: "{text}"
 
-Reply directly. You know his work, his team, his projects. Be helpful, concise, personality intact.
-No markdown headers. Keep it conversational for Slack.
-Sign off: 🤖 Kamil"""
+Reply directly. You know his work, his team, his stack. Be helpful, concise, Kamil personality.
+Slack format. Sign off: 🤖 Kamil""", timeout=120)
 
-    reply = run_claude(prompt, cwd=str(KAMIL_DIR), timeout=120)
-    send_message(bot_token, channel, reply, thread_ts)
+    web.chat_postMessage(channel=channel, text=answer, thread_ts=thread_ts)
+
+
+def dispatch(text: str, web: WebClient, channel: str, thread_ts: str, source: str):
+    """Route a message to the right handler."""
+    global last_activity_time
+    last_activity_time = time.time()
+
+    # Strip @mentions and whitespace
+    clean = re.sub(r"<@[A-Z0-9]+>", "", text).strip()
+    if not clean:
+        return
+
+    intent = detect_intent(clean)
+    log(f"[{source}] intent={intent} | {clean[:60]}")
+
+    if intent == "pr_review":
+        threading.Thread(target=handle_pr_review, args=(clean, web, channel, thread_ts), daemon=True).start()
+    elif intent == "notion_task":
+        threading.Thread(target=handle_notion_task, args=(clean, web, channel, thread_ts), daemon=True).start()
+    elif intent == "task":
+        threading.Thread(target=handle_task, args=(clean, web, channel, thread_ts), daemon=True).start()
+    elif intent == "research":
+        threading.Thread(target=handle_research, args=(clean, web, channel, thread_ts), daemon=True).start()
+    else:
+        threading.Thread(target=handle_chat, args=(clean, web, channel, thread_ts), daemon=True).start()
 
 
 # ── Proactive idle work ───────────────────────────────────────────────────────
 
-def do_proactive_work(bot_token: str, dm_channel: str):
-    """When idle, Kamil learns something and DMs a 1-liner."""
-    log("Idle — doing proactive learning...")
+def proactive_loop(web: WebClient, dm_channel: str):
+    """Background thread: every 35min of idle, do something useful."""
+    global last_activity_time, last_idle_work
+    while True:
+        time.sleep(60)
+        idle_min  = (time.time() - last_activity_time) / 60
+        since_idle = (time.time() - last_idle_work) / 60
+        if idle_min >= 35 and since_idle >= 35:
+            last_idle_work = time.time()
+            log("Idle 35min — doing proactive work")
+            answer = run_claude("""You are Kamil — Kamal's autonomous AI agent. You have idle time.
 
-    prompt = """You are Kamil — Kamal's autonomous personal AI agent.
+Pick ONE valuable action:
+1. Check Notion My PRs DB (18017a67136a4561ada9818c239b8f33) — any CI failing or stale PRs?
+2. Check /tmp/kamil-slack-inbox.json — any unsynced learning links worth summarising?
+3. Check Harness DB (de10157da3e34ef58a74ea240f31fe98) — any tasks stuck >2 days?
+4. Web search one topic: Django performance, React offline sync, or taleemabad tech stack news.
 
-You have some idle time. Do ONE of these (pick the most valuable):
-1. Check if any of Kamal's open PRs have CI failing — look in Notion My PRs DB (18017a67136a4561ada9818c239b8f33).
-2. Read a recent link from #engineering-learning or #engineering-ai in /tmp/kamil-slack-inbox.json and summarize it.
-3. Check the Harness DB for any tasks stuck in Research or In Dev for more than 2 days.
-4. Search the web for one of these topics relevant to Taleemabad's stack: Django performance, React Query patterns, offline sync strategies.
+Do the work, then reply in 2-3 lines for Slack:
+"📚 While you were away: [what I found/learned]. [action taken]"
+Sign off: 🤖 Kamil""", timeout=180)
 
-After doing the work:
-- Write a brief learning note to Notion (Learning Log DB or Harness entry if applicable).
-- Reply with ONE short Slack message (2-3 lines max) summarizing what you found.
-- Format: "📚 While you were away: [what I learned/found]. [action taken if any]"
-
-Sign off: 🤖 Kamil"""
-
-    result = run_claude(prompt, cwd=str(KAMIL_DIR), timeout=180)
-    if result and len(result) > 20:
-        send_message(bot_token, dm_channel, result)
-        log(f"Proactive work done: {result[:80]}")
+            if answer and len(answer) > 20:
+                web.chat_postMessage(channel=dm_channel, text=answer)
+                log(f"Proactive: {answer[:80]}")
 
 
-# ── Main event loop ───────────────────────────────────────────────────────────
+# ── Socket Mode event handler ─────────────────────────────────────────────────
 
-def poll_events(user_token: str, bot_token: str):
-    """Poll for new DMs to Kamil using user token, reply with bot token."""
-    state_file  = Path("/tmp/kamil-listener-state.json")
-    idle_file   = Path("/tmp/kamil-listener-idle.json")
+def make_handler(web: WebClient, dm_channel: str):
+    processed = set()
 
-    # Load last seen timestamp
-    state       = json.loads(state_file.read_text()) if state_file.exists() else {}
-    last_seen   = state.get("last_ts", str(time.time() - 300))
-    idle_state  = json.loads(idle_file.read_text()) if idle_file.exists() else {}
-    last_active = idle_state.get("last_active", time.time())
+    def handler(client: SocketModeClient, req: SocketModeRequest):
+        client.send_socket_mode_response(SocketModeResponse(envelope_id=req.envelope_id))
 
-    dm_channel  = open_dm(bot_token)
-    if not dm_channel:
-        log("Cannot open DM channel — check BOT_TOKEN")
-        return
+        if req.type != "events_api":
+            return
 
-    processed_ts = set(state.get("processed", []))
-    new_messages  = 0
+        event      = req.payload.get("event", {})
+        event_type = event.get("type", "")
+        subtype    = event.get("subtype", "")
+        bot_id     = event.get("bot_id", "")
+        ts         = event.get("ts", "")
 
-    # Poll the bot's DM channel for messages from Kamal
-    result = slack_get(user_token, "conversations.list", {"types": "im", "limit": 50})
-    if not result.get("ok"):
-        log(f"conversations.list failed: {result.get('error')}")
-        return
+        # Deduplicate
+        if ts in processed:
+            return
+        processed.add(ts)
+        if len(processed) > 1000:
+            processed.clear()
 
-    for ch in result.get("channels", []):
-        ch_id = ch.get("id", "")
+        # Skip bot messages and edits/deletes
+        if bot_id or subtype:
+            return
 
-        msgs = slack_get(user_token, "conversations.history", {
-            "channel": ch_id,
-            "oldest":  last_seen,
-            "limit":   10,
-        })
-        if not msgs.get("ok"):
-            continue
+        text    = event.get("text", "").strip()
+        user    = event.get("user", "")
+        channel = event.get("channel", "")
 
-        for msg in msgs.get("messages", []):
-            ts      = msg.get("ts", "")
-            from_id = msg.get("user", "")
-            text    = msg.get("text", "").strip()
+        # 1. DM to Kamil — any message in a DM channel (channel_type=im)
+        if event_type == "message" and event.get("channel_type") == "im":
+            if user != KAMAL_USER_ID:
+                return
+            dispatch(text, web, channel, ts, "DM")
 
-            if ts in processed_ts:
-                continue
-            if msg.get("bot_id") or msg.get("subtype"):
-                continue
-            if from_id != KAMAL_USER_ID:
-                continue
-            if not text:
-                continue
+        # 2. @Kamil mention in any channel
+        elif event_type == "app_mention":
+            # Reply in the same channel, threaded
+            thread = event.get("thread_ts") or ts
+            dispatch(text, web, channel, thread, f"mention in {channel}")
 
-            # Strip @mentions
-            text = re.sub(r"<@[A-Z0-9]+>", "", text).strip()
-            if not text:
-                continue
+    return handler
 
-            log(f"Kamal says: {text[:80]}")
-            processed_ts.add(ts)
-            new_messages += 1
-            last_active = time.time()
 
-            intent = detect_intent(text)
-            log(f"Intent: {intent}")
-
-            if intent == "pr_review":
-                handle_pr_review(text, bot_token, dm_channel, ts)
-            elif intent == "task":
-                handle_task(text, bot_token, dm_channel, ts)
-            elif intent == "research":
-                handle_research(text, bot_token, dm_channel, ts)
-            else:
-                handle_chat(text, bot_token, dm_channel, ts)
-
-    # Save state
-    # Keep processed list bounded to last 500
-    processed_list = list(processed_ts)[-500:]
-    state_file.write_text(json.dumps({
-        "last_ts":   str(time.time()),
-        "processed": processed_list,
-    }))
-
-    # Proactive idle: if no messages for 35 min
-    idle_minutes = (time.time() - last_active) / 60
-    if new_messages == 0 and idle_minutes >= 35:
-        do_proactive_work(bot_token, dm_channel)
-        last_active = time.time()
-
-    idle_file.write_text(json.dumps({"last_active": last_active}))
-
+# ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
     cfg        = load_config()
-    user_token = cfg.get("SLACK_TOKEN") or os.environ.get("SLACK_TOKEN")
-    bot_token  = cfg.get("BOT_TOKEN")   or os.environ.get("BOT_TOKEN")
+    bot_token  = cfg.get("BOT_TOKEN")  or os.environ.get("BOT_TOKEN")
+    app_token  = cfg.get("APP_TOKEN")  or os.environ.get("APP_TOKEN")
 
-    if not user_token or not bot_token:
-        log("ERROR: SLACK_TOKEN and BOT_TOKEN required in ~/.claude/hooks/.slack")
+    if not bot_token or not app_token:
+        log("ERROR: BOT_TOKEN and APP_TOKEN required in ~/.claude/hooks/.slack")
         sys.exit(1)
 
-    log("Kamil listener starting — polling every 30s")
-
-    # Save PID
     Path("/tmp/kamil-slack-listener.pid").write_text(str(os.getpid()))
 
+    web = WebClient(token=bot_token)
+
+    # Open DM with Kamal for proactive messages
+    try:
+        dm_resp    = web.conversations_open(users=KAMAL_USER_ID)
+        dm_channel = dm_resp["channel"]["id"]
+        log(f"DM channel with Kamal: {dm_channel}")
+    except Exception as e:
+        log(f"Could not open DM: {e}")
+        dm_channel = None
+
+    # Start proactive idle thread
+    if dm_channel:
+        t = threading.Thread(target=proactive_loop, args=(web, dm_channel), daemon=True)
+        t.start()
+
+    # Connect via Socket Mode
+    socket_client = SocketModeClient(app_token=app_token, web_client=web)
+    socket_client.socket_mode_request_listeners.append(make_handler(web, dm_channel))
+
+    log("Kamil listener starting (Socket Mode)...")
+    socket_client.connect()
+    log("Connected. Listening for DMs and @Kamil mentions.")
+
+    # Announce
+    if dm_channel:
+        web.chat_postMessage(
+            channel=dm_channel,
+            text="🤖 *Kamil is online.* DM me or @Kamil in any channel.\nI handle: PR reviews, task assignments, Notion work, research, and questions."
+        )
+
     while True:
-        try:
-            poll_events(user_token, bot_token)
-        except Exception as e:
-            log(f"Poll error: {e}")
-        time.sleep(30)
+        time.sleep(10)
 
 
 if __name__ == "__main__":
