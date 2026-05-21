@@ -58,6 +58,7 @@ last_activity_time = time.time()
 last_idle_work     = 0.0
 
 
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def load_config() -> dict:
@@ -416,7 +417,10 @@ def process_missed_messages(web: WebClient, dm_channel: str) -> int:
             subtype = m.get("subtype", "")
 
             # Skip bot messages, Kamil's own replies, and edits/deletes
-            if not text or bot_id or subtype or ts == last_ts or user == KAMIL_BOT_USER:
+            # MCP Slack tool sends as Kamal's OAuth token so bot_id is absent —
+            # detect Kamil's own messages by the leading robot emoji signature
+            is_kamil_own = (user == KAMIL_BOT_USER or text.startswith("🤖"))
+            if not text or bot_id or subtype or ts == last_ts or is_kamil_own:
                 continue
             if float(ts) <= float(last_ts):
                 continue
