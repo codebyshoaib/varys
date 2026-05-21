@@ -414,7 +414,8 @@ def process_missed_messages(web: WebClient, dm_channel: str) -> int:
             text    = m.get("text", "").strip()
             subtype = m.get("subtype", "")
 
-            if not text or bot_id or subtype or ts == last_ts:
+            # Skip bot messages (bot_id set), own posts (no user field), edits/deletes
+            if not text or bot_id or subtype or ts == last_ts or not user:
                 continue
             if float(ts) <= float(last_ts):
                 continue
