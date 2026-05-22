@@ -130,12 +130,13 @@ anything the recipient themselves said or originated.
 
 
 def fetch_thread_history(web: WebClient, channel: str, thread_ts: str,
-                         is_dm: bool = False, retry_count: int = 0) -> str:
+                         is_dm: bool = False, retry_count: int = 0, bot_token: str = None) -> str:
     """
     Fetch conversation history and label each message by speaker.
     - DMs: use conversations_history (flat channel, last 20 messages)
     - Channel threads: use conversations_replies on the thread root
     - Retries once on network errors (IncompleteRead, timeout, connection)
+    - IncompleteRead triggers full WebClient reconnect (socket corruption)
     """
     try:
         if is_dm:
@@ -160,10 +161,17 @@ def fetch_thread_history(web: WebClient, channel: str, thread_ts: str,
             if text:
                 lines.append(f"{who}: {text}")
         return "\n".join(lines)
-    except (http.client.IncompleteRead, TimeoutError, ConnectionError, OSError, socket.gaierror, URLError) as e:
+    except http.client.IncompleteRead as e:
+        if retry_count < 1 and bot_token:
+            time.sleep(1)
+            web_new = WebClient(token=bot_token)
+            return fetch_thread_history(web_new, channel, thread_ts, is_dm=is_dm, retry_count=1, bot_token=bot_token)
+        klog_error("fetch_thread_history", e, context=f"network_error-retry-exhausted-IncompleteRead")
+        return ""
+    except (TimeoutError, ConnectionError, OSError, socket.gaierror, URLError) as e:
         if retry_count < 1:
             time.sleep(0.5)
-            return fetch_thread_history(web, channel, thread_ts, is_dm=is_dm, retry_count=1)
+            return fetch_thread_history(web, channel, thread_ts, is_dm=is_dm, retry_count=1, bot_token=bot_token)
         klog_error("fetch_thread_history", e, context=f"network_error-retry-exhausted-{type(e).__name__}")
         return ""
     except Exception as e:
@@ -446,7 +454,7 @@ Pick your mode. Execute. Sign off: 🤖 Kamil"""
         klog_humor(sender_name=sender_name or "Kamal", request=text, reply=answer)
 
 
-def process_missed_messages(web: WebClient, dm_channel: str, retry_count: int = 0) -> int:
+def process_missed_messages(web: WebClient, dm_channel: str, retry_count: int = 0, bot_token: str = None) -> int:
     """On connect/reconnect: process any DMs that arrived while offline. Returns count."""
     if not dm_channel:
         return 0
@@ -475,17 +483,24 @@ def process_missed_messages(web: WebClient, dm_channel: str, retry_count: int = 
 
             log(f"[catchup] {user}: {text[:60]}")
             klog_catchup(sender_id=user, text_preview=text[:100], ts=ts)
-            dispatch(text, web, dm_channel, ts, "DM-catchup", sender_id=user, is_dm=True)
+            dispatch(text, web, dm_channel, ts, "DM-catchup", sender_id=user, is_dm=True, bot_token=bot_token)
             last_ts = ts
             count  += 1
 
         state_file.write_text(last_ts)
         if count:
             log(f"Catchup: processed {count} messages up to ts={last_ts}")
-    except (http.client.IncompleteRead, TimeoutError, ConnectionError, OSError, socket.gaierror, URLError) as e:
+    except http.client.IncompleteRead as e:
+        if retry_count < 1 and bot_token:
+            time.sleep(1)
+            web_new = WebClient(token=bot_token)
+            return process_missed_messages(web_new, dm_channel, retry_count=1, bot_token=bot_token)
+        klog_error("process_missed_messages", e, context=f"network_error-retry-exhausted-IncompleteRead")
+        return 0
+    except (TimeoutError, ConnectionError, OSError, socket.gaierror, URLError) as e:
         if retry_count < 1:
             time.sleep(0.5)
-            return process_missed_messages(web, dm_channel, retry_count=1)
+            return process_missed_messages(web, dm_channel, retry_count=1, bot_token=bot_token)
         klog_error("process_missed_messages", e, context=f"network_error-retry-exhausted-{type(e).__name__}")
         return 0
     except Exception as e:
@@ -494,7 +509,7 @@ def process_missed_messages(web: WebClient, dm_channel: str, retry_count: int = 
 
 
 def dispatch(text: str, web: WebClient, channel: str, thread_ts: str, source: str,
-             sender_id: str = None, is_dm: bool = False):
+             sender_id: str = None, is_dm: bool = False, bot_token: str = None):
     """Dispatch to unified handler with full conversation context."""
     global last_activity_time
     last_activity_time = time.time()
@@ -506,7 +521,7 @@ def dispatch(text: str, web: WebClient, channel: str, thread_ts: str, source: st
     log(f"[{source}] {clean[:80]}")
 
     # For DMs: read flat channel history. For channel threads: read thread replies.
-    thread_history = fetch_thread_history(web, channel, thread_ts, is_dm=is_dm)
+    thread_history = fetch_thread_history(web, channel, thread_ts, is_dm=is_dm, bot_token=bot_token)
 
     # Resolve sender identity
     is_third_party = sender_id is not None and sender_id != KAMAL_USER_ID
@@ -561,7 +576,7 @@ Sign off: 🤖 Kamil""", timeout=180)
 
 # ── Socket Mode event handler ─────────────────────────────────────────────────
 
-def make_handler(web: WebClient, dm_channel: str):
+def make_handler(web: WebClient, dm_channel: str, bot_token: str):
     processed = set()
 
     def handler(client: SocketModeClient, req: SocketModeRequest):
@@ -593,13 +608,13 @@ def make_handler(web: WebClient, dm_channel: str):
 
         # 1. DM to Kamil bot — Kamal, Fatima, anyone. is_dm=True → flat history fetch
         if event_type == "message" and event.get("channel_type") == "im":
-            dispatch(text, web, channel, ts, "DM", sender_id=user, is_dm=True)
+            dispatch(text, web, channel, ts, "DM", sender_id=user, is_dm=True, bot_token=bot_token)
 
         # 2. @Kamil mention in a channel — reply in thread, use thread replies for history
         elif event_type == "app_mention":
             thread = event.get("thread_ts") or ts
             dispatch(text, web, channel, thread, f"mention in {channel}",
-                     sender_id=user, is_dm=False)
+                     sender_id=user, is_dm=False, bot_token=bot_token)
 
     return handler
 
@@ -635,7 +650,7 @@ def main():
 
     # Connect via Socket Mode
     socket_client = SocketModeClient(app_token=app_token, web_client=web)
-    socket_client.socket_mode_request_listeners.append(make_handler(web, dm_channel))
+    socket_client.socket_mode_request_listeners.append(make_handler(web, dm_channel, bot_token))
 
     klog_system_start("listener")
     log("Kamil listener starting (Socket Mode)...")
@@ -665,13 +680,13 @@ def main():
     log("Connected. Listening for DMs and @Kamil mentions.")
 
     # Process any messages that arrived while listener was offline
-    process_missed_messages(web, dm_channel)
+    process_missed_messages(web, dm_channel, bot_token=bot_token)
 
     # Heartbeat: reconnect if socket goes stale (no events for 5 min)
     # Also poll for missed messages every 2 min regardless of socket state
     last_event_time = [time.time()]
     last_poll_time  = [time.time()]
-    original_handler = make_handler(web, dm_channel)
+    original_handler = make_handler(web, dm_channel, bot_token)
 
     def handler_with_heartbeat(client, req):
         last_event_time[0] = time.time()
@@ -697,7 +712,7 @@ def main():
                 time.sleep(2)
                 socket_client.connect()
                 last_event_time[0] = time.time()
-                missed = process_missed_messages(web, dm_channel)
+                missed = process_missed_messages(web, dm_channel, bot_token=bot_token)
                 klog_socket("socket_reconnect", missed_messages=missed)
                 log("Reconnected.")
             except Exception as e:
@@ -711,7 +726,7 @@ def main():
         # Skip polling during active reconnection to avoid network spam
         if poll_minutes >= 2 and not reconnecting[0]:
             last_poll_time[0] = now
-            missed = process_missed_messages(web, dm_channel)
+            missed = process_missed_messages(web, dm_channel, bot_token=bot_token)
             if missed:
                 log(f"[poll] Recovered {missed} missed message(s)")
 
