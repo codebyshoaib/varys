@@ -649,21 +649,16 @@ def main():
     socket_client.socket_mode_request_listeners.clear()
     socket_client.socket_mode_request_listeners.append(handler_with_heartbeat)
 
+    reconnecting = [False]
+
     while True:
         time.sleep(30)
         now = time.time()
         stale_minutes = (now - last_event_time[0]) / 60
         poll_minutes  = (now - last_poll_time[0])  / 60
 
-        # Poll for missed DMs every 2 min as a safety net (catches messages
-        # that arrived during socket stale/reconnect gaps)
-        if poll_minutes >= 2:
-            last_poll_time[0] = now
-            missed = process_missed_messages(web, dm_channel)
-            if missed:
-                log(f"[poll] Recovered {missed} missed message(s)")
-
         if stale_minutes > 5:
+            reconnecting[0] = True
             log(f"Socket stale ({stale_minutes:.1f} min) — reconnecting")
             klog_socket("socket_stale", stale_minutes=round(stale_minutes, 1))
             try:
@@ -677,6 +672,17 @@ def main():
             except Exception as e:
                 klog_error("socket_reconnect", e)
                 log(f"Reconnect failed: {e}")
+            finally:
+                reconnecting[0] = False
+
+        # Poll for missed DMs every 2 min as a safety net (catches messages
+        # that arrived during socket stale/reconnect gaps)
+        # Skip polling during active reconnection to avoid network spam
+        if poll_minutes >= 2 and not reconnecting[0]:
+            last_poll_time[0] = now
+            missed = process_missed_messages(web, dm_channel)
+            if missed:
+                log(f"[poll] Recovered {missed} missed message(s)")
 
 
 if __name__ == "__main__":
