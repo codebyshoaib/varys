@@ -697,6 +697,7 @@ def main():
 
     reconnecting = [False]
     last_reconnect_time = [time.time()]
+    web_ref = [web]  # mutable ref so reconnect loop can update it
 
     while True:
         time.sleep(30)
@@ -704,9 +705,10 @@ def main():
         stale_minutes = (now - last_event_time[0]) / 60
         poll_minutes  = (now - last_poll_time[0])  / 60
 
-        if stale_minutes > 5:
+        # 30 min threshold — Socket Mode is legitimately quiet during off-hours.
+        # 5 min caused 80+ unnecessary reconnects per day (confirmed via Axiom).
+        if stale_minutes > 30:
             time_since_last_reconnect = now - last_reconnect_time[0]
-            # Avoid hammering the socket — enforce 5sec minimum between reconnect attempts
             if time_since_last_reconnect < 5:
                 continue
 
@@ -716,6 +718,12 @@ def main():
             try:
                 socket_client.close()
                 time.sleep(2)
+                # Recreate WebClient after reconnect — old HTTP connection pool is corrupted
+                # after a stale socket, causing IncompleteRead on next API call.
+                web = WebClient(token=bot_token)
+                web_ref[0] = web
+                socket_client = SocketModeClient(app_token=app_token, web_client=web)
+                socket_client.socket_mode_request_listeners.append(handler_with_heartbeat)
                 socket_client.connect()
                 last_event_time[0] = time.time()
                 last_reconnect_time[0] = now
@@ -733,7 +741,7 @@ def main():
         # Skip polling during active reconnection to avoid network spam
         if poll_minutes >= 2 and not reconnecting[0]:
             last_poll_time[0] = now
-            missed = process_missed_messages(web, dm_channel, bot_token=bot_token)
+            missed = process_missed_messages(web_ref[0], dm_channel, bot_token=bot_token)
             if missed:
                 log(f"[poll] Recovered {missed} missed message(s)")
 
