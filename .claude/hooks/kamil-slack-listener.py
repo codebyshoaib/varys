@@ -46,6 +46,8 @@ from kamil_log import (klog, klog_error, klog_conversation, klog_claude_call,
 from kamil_people import build_person_context, update_profile_after_conversation
 from kamil_eval import log_to_eval
 from kamil_health import log_response_quality, log_critique
+from kamil_eval_tracker import (eval_conversation, eval_proactive_dm,
+                                 record_reaction, expire_pending)
 
 # ── Config ────────────────────────────────────────────────────────────────────
 SLACK_CONFIG = Path.home() / ".claude" / "hooks" / ".slack"
@@ -449,6 +451,16 @@ Pick your mode. Execute. Sign off: 🤖 Kamil"""
             request = text,
         )
 
+    # Eval tracker — log this action, watch for Kamal's reaction
+    if not is_third_party:
+        eval_conversation(
+            request             = text,
+            reply               = answer,
+            asked_clarification = asked_clarification,
+            channel             = channel,
+            ts                  = thread_ts,
+        )
+
     if is_fun:
         log_humor(text, answer)
         klog_humor(sender_name=sender_name or "Kamal", request=text, reply=answer)
@@ -537,12 +549,38 @@ def dispatch(text: str, web: WebClient, channel: str, thread_ts: str, source: st
     if is_third_party and thread_history:
         save_conversation_to_notion(sender_name or "Unknown", channel, thread_history, clean)
 
+    # Reaction watcher: if Kamal is replying, check if this is a reaction to a pending Kamil action
+    if sender_id == KAMAL_USER_ID and not is_third_party:
+        _check_pending_reactions(channel, thread_ts)
+
+    # Expire old pending evals (no reaction within 35 min = reacted:no)
+    expire_pending(max_age_minutes=35)
+
     threading.Thread(
         target=handle_message,
         args=(clean, thread_history, web, channel, thread_ts, source,
               sender_id, sender_name, is_third_party, is_dm),
         daemon=True,
     ).start()
+
+
+def _check_pending_reactions(channel: str, ts: str):
+    """
+    When Kamal sends a message, check if any pending eval actions in this
+    channel are waiting for a reaction. Mark the most recent one as reacted=yes.
+    """
+    from kamil_eval_tracker import PENDING_FILE, record_reaction
+    if not PENDING_FILE.exists():
+        return
+    try:
+        lines = PENDING_FILE.read_text().splitlines()
+        for line in reversed(lines):  # most recent first
+            entry = json.loads(line)
+            if entry.get("channel") == channel:
+                record_reaction(entry["action_id"], reacted=True, boost=30)
+                return  # only credit the most recent pending action
+    except Exception:
+        pass
 
 
 # ── Proactive idle work ───────────────────────────────────────────────────────
@@ -570,8 +608,11 @@ Do the work, then reply in 2-3 lines for Slack:
 Sign off: 🤖 Kamil""", timeout=180)
 
             if answer and len(answer) > 20:
-                web.chat_postMessage(channel=dm_channel, text=answer)
+                resp = web.chat_postMessage(channel=dm_channel, text=answer)
                 log(f"Proactive: {answer[:80]}")
+                # Eval: log proactive DM, watch for Kamal reaction
+                msg_ts = resp.get("ts", "") if isinstance(resp, dict) else ""
+                eval_proactive_dm(content=answer, channel=dm_channel, ts=msg_ts)
 
 
 # ── Socket Mode event handler ─────────────────────────────────────────────────

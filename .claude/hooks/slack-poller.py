@@ -27,6 +27,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from kamil_log import klog, klog_error, klog_poller
+from kamil_eval_tracker import eval_poller_summary, eval_self_question
 
 # ── Config ────────────────────────────────────────────────────────────────────
 SLACK_CONFIG    = Path.home() / ".claude" / "hooks" / ".slack"
@@ -394,11 +395,21 @@ Question index: {idx}"""
     # Advance index
     QUESTION_INDEX_FILE.write_text(str(idx + 1))
 
+    # Score: did Claude use a real tool? Check for Notion/GitHub/Slack references in answer
+    tool_keywords = ["notion", "github", "slack-inbox", "gh pr", "mcp__", "found", "checked"]
+    tool_used     = any(kw in finding.lower() for kw in tool_keywords)
+    followup      = "asked myself" in finding.lower() or "new question" in finding.lower()
+    eval_self_question(
+        question       = f"Question #{idx}",
+        answer         = finding[:300] if finding else "(no answer)",
+        tool_used      = tool_used,
+        spawned_followup = followup,
+    )
+
     if finding and len(finding) > 20:
         send_dm(bot_token, dm_channel, finding)
         log(f"Self-question explored: {finding[:80]}")
     else:
-        # Fallback if Claude failed
         send_dm(bot_token, dm_channel,
                 f"*🤖 {datetime.now().strftime('%H:%M')} —* Slack quiet. Researching open questions... check Notion Self-Questions page for updates.")
 
@@ -507,8 +518,12 @@ def main():
         if dm_channel:
             summary = build_summary_dm(new_items, len(all_items), run_ts)
             if summary:
-                send_dm(dm_token, dm_channel, summary)
+                result = slack_post(dm_token, "chat.postMessage",
+                                    {"channel": dm_channel, "text": summary})
                 log("Summary DM sent to Kamal.")
+                msg_ts = result.get("ts", "") if result.get("ok") else ""
+                eval_poller_summary(summary=summary, new_items=len(new_items),
+                                    channel=dm_channel, ts=msg_ts)
             else:
                 # Slack is quiet — use this time to explore a self-question
                 log("Slack quiet — exploring self-question.")

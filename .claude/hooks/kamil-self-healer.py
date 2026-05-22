@@ -30,6 +30,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from kamil_health import log_error, log_healed, log_needs_manual, log_health
+from kamil_eval_tracker import eval_self_heal
 
 KAMIL_DIR   = Path(__file__).parent.parent.parent
 HOOKS_DIR   = Path(__file__).parent
@@ -351,6 +352,7 @@ def check_service(service: dict, token: str | None) -> bool:
         restarted = is_process_running(check_proc)
         restart_note = "restarted ✅" if restarted else "restart FAILED ⚠️"
         log_healed(service=name, root_cause=root_cause, fix=fix_desc)
+        eval_self_heal(service=name, root_cause=root_cause, fix=fix_desc, applied=True)
 
         msg = (
             f"🔧 *Kamil self-healed*: `{name}`\n"
@@ -360,6 +362,7 @@ def check_service(service: dict, token: str | None) -> bool:
         )
     else:
         log_needs_manual(service=name, root_cause=root_cause, attempted=fix_desc)
+        eval_self_heal(service=name, root_cause=root_cause, fix=fix_desc, applied=False)
         msg = (
             f"⚠️ *Kamil found errors in `{name}` but could not auto-fix*\n"
             f"• *Root cause:* {root_cause}\n"
