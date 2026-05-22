@@ -135,7 +135,7 @@ def fetch_thread_history(web: WebClient, channel: str, thread_ts: str,
     Fetch conversation history and label each message by speaker.
     - DMs: use conversations_history (flat channel, last 20 messages)
     - Channel threads: use conversations_replies on the thread root
-    - Retries once on IncompleteRead (network hiccup)
+    - Retries once on network errors (IncompleteRead, timeout, connection)
     """
     try:
         if is_dm:
@@ -160,14 +160,11 @@ def fetch_thread_history(web: WebClient, channel: str, thread_ts: str,
             if text:
                 lines.append(f"{who}: {text}")
         return "\n".join(lines)
-    except http.client.IncompleteRead as e:
+    except (http.client.IncompleteRead, TimeoutError, ConnectionError, OSError, socket.gaierror, URLError) as e:
         if retry_count < 1:
             time.sleep(0.5)
             return fetch_thread_history(web, channel, thread_ts, is_dm=is_dm, retry_count=1)
-        klog_error("fetch_thread_history", e, context="IncompleteRead-retry-exhausted")
-        return ""
-    except (TimeoutError, ConnectionError, OSError, socket.gaierror, URLError) as e:
-        klog_error("fetch_thread_history", e, context="network_error")
+        klog_error("fetch_thread_history", e, context=f"network_error-retry-exhausted-{type(e).__name__}")
         return ""
     except Exception as e:
         klog_error("fetch_thread_history", e)
@@ -485,14 +482,11 @@ def process_missed_messages(web: WebClient, dm_channel: str, retry_count: int = 
         state_file.write_text(last_ts)
         if count:
             log(f"Catchup: processed {count} messages up to ts={last_ts}")
-    except http.client.IncompleteRead as e:
+    except (http.client.IncompleteRead, TimeoutError, ConnectionError, OSError, socket.gaierror, URLError) as e:
         if retry_count < 1:
             time.sleep(0.5)
             return process_missed_messages(web, dm_channel, retry_count=1)
-        klog_error("process_missed_messages", e, context="IncompleteRead-retry-exhausted")
-        return 0
-    except (TimeoutError, ConnectionError, OSError, socket.gaierror, URLError) as e:
-        klog_error("process_missed_messages", e, context="network_error")
+        klog_error("process_missed_messages", e, context=f"network_error-retry-exhausted-{type(e).__name__}")
         return 0
     except Exception as e:
         klog_error("process_missed_messages", e)
