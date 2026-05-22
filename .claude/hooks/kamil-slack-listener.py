@@ -696,6 +696,7 @@ def main():
     socket_client.socket_mode_request_listeners.append(handler_with_heartbeat)
 
     reconnecting = [False]
+    last_reconnect_time = [time.time()]
 
     while True:
         time.sleep(30)
@@ -704,6 +705,11 @@ def main():
         poll_minutes  = (now - last_poll_time[0])  / 60
 
         if stale_minutes > 5:
+            time_since_last_reconnect = now - last_reconnect_time[0]
+            # Avoid hammering the socket — enforce 5sec minimum between reconnect attempts
+            if time_since_last_reconnect < 5:
+                continue
+
             reconnecting[0] = True
             log(f"Socket stale ({stale_minutes:.1f} min) — reconnecting")
             klog_socket("socket_stale", stale_minutes=round(stale_minutes, 1))
@@ -712,6 +718,7 @@ def main():
                 time.sleep(2)
                 socket_client.connect()
                 last_event_time[0] = time.time()
+                last_reconnect_time[0] = now
                 missed = process_missed_messages(web, dm_channel, bot_token=bot_token)
                 klog_socket("socket_reconnect", missed_messages=missed)
                 log("Reconnected.")
