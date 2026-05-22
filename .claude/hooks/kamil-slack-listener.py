@@ -366,7 +366,6 @@ Kamal says: "{text}"
 
 Pick your mode. Execute. Sign off: 🤖 Kamil"""
 
-    mode = "human" if is_fun else ("third_party" if is_third_party else "work")
     t0 = time.time()
     answer = run_claude(prompt, cwd=str(KAMIL_DIR), timeout=300, event_context=source)
     latency = round(time.time() - t0, 1)
@@ -380,6 +379,7 @@ Pick your mode. Execute. Sign off: 🤖 Kamil"""
 
     conv_id = f"{channel}-{thread_ts}"
 
+    # mode was already determined at line ~248
     klog_conversation(
         conv_id        = conv_id,
         sender_name    = sender_name or "Kamal",
