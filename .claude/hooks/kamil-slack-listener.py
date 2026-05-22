@@ -438,12 +438,14 @@ Pick your mode. Execute. Sign off: 🤖 Kamil"""
 
 def process_missed_messages(web: WebClient, dm_channel: str) -> int:
     """On connect/reconnect: process any DMs that arrived while offline. Returns count."""
+    if not dm_channel:
+        return 0
     state_file = Path("/tmp/kamil-last-processed-ts.txt")
     last_ts    = state_file.read_text().strip() if state_file.exists() else "0"
     count      = 0
 
     try:
-        resp = web.conversations_history(channel=dm_channel, oldest=last_ts, limit=20)
+        resp = web.conversations_history(channel=dm_channel, oldest=last_ts, limit=20, timeout=10)
         msgs = list(reversed(resp.get("messages", [])))
         for m in msgs:
             ts      = m.get("ts", "")
@@ -470,6 +472,10 @@ def process_missed_messages(web: WebClient, dm_channel: str) -> int:
         state_file.write_text(last_ts)
         if count:
             log(f"Catchup: processed {count} messages up to ts={last_ts}")
+    except (TimeoutError, ConnectionError, OSError) as e:
+        klog_error("process_missed_messages", e)
+        log(f"process_missed_messages error (network): {type(e).__name__}")
+        return 0
     except Exception as e:
         klog_error("process_missed_messages", e)
         log(f"process_missed_messages error: {e}")
