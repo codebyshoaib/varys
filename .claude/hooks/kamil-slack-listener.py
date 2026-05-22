@@ -644,7 +644,29 @@ def main():
 
     klog_system_start("listener")
     log("Kamil listener starting (Socket Mode)...")
-    socket_client.connect()
+
+    # Retry initial connect on network errors (IncompleteRead, timeout)
+    connect_retries = 0
+    while connect_retries < 3:
+        try:
+            socket_client.connect()
+            break
+        except http.client.IncompleteRead as e:
+            connect_retries += 1
+            if connect_retries < 3:
+                log(f"Initial connect failed (IncompleteRead), retrying ({connect_retries}/3)...")
+                time.sleep(2)
+            else:
+                log(f"Initial connect failed after 3 retries: {e}")
+                raise
+        except (TimeoutError, ConnectionError, OSError) as e:
+            connect_retries += 1
+            if connect_retries < 3:
+                log(f"Initial connect failed ({type(e).__name__}), retrying ({connect_retries}/3)...")
+                time.sleep(2)
+            else:
+                raise
+
     log("Connected. Listening for DMs and @Kamil mentions.")
 
     # Process any messages that arrived while listener was offline
