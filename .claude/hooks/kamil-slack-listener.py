@@ -24,12 +24,14 @@ Auto-start via cron:
 import json
 import os
 import re
+import socket
 import subprocess
 import sys
 import time
 import threading
 from datetime import datetime
 from pathlib import Path
+from urllib.error import URLError
 
 from slack_sdk.socket_mode import SocketModeClient
 from slack_sdk.socket_mode.request import SocketModeRequest
@@ -472,7 +474,7 @@ def process_missed_messages(web: WebClient, dm_channel: str) -> int:
         state_file.write_text(last_ts)
         if count:
             log(f"Catchup: processed {count} messages up to ts={last_ts}")
-    except (TimeoutError, ConnectionError, OSError) as e:
+    except (TimeoutError, ConnectionError, OSError, socket.gaierror, URLError) as e:
         klog_error("process_missed_messages", e)
         log(f"process_missed_messages error (network): {type(e).__name__}")
         return 0
