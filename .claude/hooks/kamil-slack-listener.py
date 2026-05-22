@@ -21,6 +21,7 @@ Auto-start via cron:
   @reboot python3 /home/oye/.../kamil-slack-listener.py >> /tmp/kamil-slack-listener.log 2>&1
 """
 
+import http.client
 import json
 import os
 import re
@@ -129,11 +130,12 @@ anything the recipient themselves said or originated.
 
 
 def fetch_thread_history(web: WebClient, channel: str, thread_ts: str,
-                         is_dm: bool = False) -> str:
+                         is_dm: bool = False, retry_count: int = 0) -> str:
     """
     Fetch conversation history and label each message by speaker.
     - DMs: use conversations_history (flat channel, last 20 messages)
     - Channel threads: use conversations_replies on the thread root
+    - Retries once on IncompleteRead (network hiccup)
     """
     try:
         if is_dm:
@@ -158,6 +160,12 @@ def fetch_thread_history(web: WebClient, channel: str, thread_ts: str,
             if text:
                 lines.append(f"{who}: {text}")
         return "\n".join(lines)
+    except http.client.IncompleteRead as e:
+        if retry_count < 1:
+            time.sleep(0.5)
+            return fetch_thread_history(web, channel, thread_ts, is_dm=is_dm, retry_count=1)
+        log(f"fetch_thread_history IncompleteRead (retried): {type(e).__name__}")
+        return ""
     except Exception as e:
         log(f"fetch_thread_history error: {e}")
         return ""
@@ -438,7 +446,7 @@ Pick your mode. Execute. Sign off: 🤖 Kamil"""
         klog_humor(sender_name=sender_name or "Kamal", request=text, reply=answer)
 
 
-def process_missed_messages(web: WebClient, dm_channel: str) -> int:
+def process_missed_messages(web: WebClient, dm_channel: str, retry_count: int = 0) -> int:
     """On connect/reconnect: process any DMs that arrived while offline. Returns count."""
     if not dm_channel:
         return 0
@@ -474,6 +482,12 @@ def process_missed_messages(web: WebClient, dm_channel: str) -> int:
         state_file.write_text(last_ts)
         if count:
             log(f"Catchup: processed {count} messages up to ts={last_ts}")
+    except http.client.IncompleteRead as e:
+        if retry_count < 1:
+            time.sleep(0.5)
+            return process_missed_messages(web, dm_channel, retry_count=1)
+        log(f"process_missed_messages IncompleteRead (retried): {type(e).__name__}")
+        return 0
     except (TimeoutError, ConnectionError, OSError, socket.gaierror, URLError) as e:
         klog_error("process_missed_messages", e)
         log(f"process_missed_messages error (network): {type(e).__name__}")
