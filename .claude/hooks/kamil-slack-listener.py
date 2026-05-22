@@ -161,7 +161,7 @@ def fetch_thread_history(web: WebClient, channel: str, thread_ts: str,
             if text:
                 lines.append(f"{who}: {text}")
         return "\n".join(lines)
-    except http.client.IncompleteRead as e:
+    except (http.client.IncompleteRead, http.client.HTTPException) as e:
         if retry_count < 1 and bot_token:
             time.sleep(1)
             web_new = WebClient(token=bot_token)
@@ -490,7 +490,7 @@ def process_missed_messages(web: WebClient, dm_channel: str, retry_count: int = 
         state_file.write_text(last_ts)
         if count:
             log(f"Catchup: processed {count} messages up to ts={last_ts}")
-    except http.client.IncompleteRead as e:
+    except (http.client.IncompleteRead, http.client.HTTPException) as e:
         if retry_count < 1 and bot_token:
             time.sleep(1)
             web_new = WebClient(token=bot_token)
