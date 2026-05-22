@@ -246,6 +246,7 @@ def handle_message(text: str, thread_history: str, web: WebClient, channel: str,
         "song", "poem", "joke", "fun", "imagine", "creative", "lyrics",
         "laugh", "funny", "roast", "go ahead", "sure", "lol", "haha",
     ])
+    mode = "human" if is_fun else ("third_party" if is_third_party else "work")
 
     if is_third_party:
         person_context = build_person_context(sender_name or "Unknown", sender_id or "")
