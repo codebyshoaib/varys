@@ -164,10 +164,13 @@ def fetch_thread_history(web: WebClient, channel: str, thread_ts: str,
         if retry_count < 1:
             time.sleep(0.5)
             return fetch_thread_history(web, channel, thread_ts, is_dm=is_dm, retry_count=1)
-        log(f"fetch_thread_history IncompleteRead (retried): {type(e).__name__}")
+        klog_error("fetch_thread_history", e, context="IncompleteRead-retry-exhausted")
+        return ""
+    except (TimeoutError, ConnectionError, OSError, socket.gaierror, URLError) as e:
+        klog_error("fetch_thread_history", e, context="network_error")
         return ""
     except Exception as e:
-        log(f"fetch_thread_history error: {e}")
+        klog_error("fetch_thread_history", e)
         return ""
 
 
@@ -486,16 +489,14 @@ def process_missed_messages(web: WebClient, dm_channel: str, retry_count: int = 
         if retry_count < 1:
             time.sleep(0.5)
             return process_missed_messages(web, dm_channel, retry_count=1)
-        log(f"process_missed_messages IncompleteRead (retried): {type(e).__name__}")
+        klog_error("process_missed_messages", e, context="IncompleteRead-retry-exhausted")
         return 0
     except (TimeoutError, ConnectionError, OSError, socket.gaierror, URLError) as e:
-        klog_error("process_missed_messages", e)
-        log(f"process_missed_messages error (network): {type(e).__name__}")
+        klog_error("process_missed_messages", e, context="network_error")
         return 0
     except Exception as e:
         klog_error("process_missed_messages", e)
-        log(f"process_missed_messages error: {e}")
-    return count
+        return 0
 
 
 def dispatch(text: str, web: WebClient, channel: str, thread_ts: str, source: str,
