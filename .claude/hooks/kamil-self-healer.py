@@ -31,6 +31,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 from kamil_health import log_error, log_healed, log_needs_manual, log_health
 from kamil_eval_tracker import eval_self_heal
+from kamil_log import klog, klog_error
 
 KAMIL_DIR   = Path(__file__).parent.parent.parent
 HOOKS_DIR   = Path(__file__).parent
