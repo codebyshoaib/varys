@@ -429,6 +429,16 @@ def main():
         return 1
 
     log("Starting job hunt...")
+
+    # Check OpenOutreach for LinkedIn activity (runs silently if DB not present yet)
+    try:
+        from openoutreach_monitor import run as monitor_openoutreach
+        oo_events = monitor_openoutreach(bot_token)
+        if oo_events:
+            log(f"OpenOutreach: {oo_events} new LinkedIn event(s)")
+    except Exception as e:
+        log(f"OpenOutreach monitor skipped: {e}")
+
     seen = load_seen()
 
     # Fetch from all sources

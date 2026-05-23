@@ -94,3 +94,8 @@ claude \
     >> "$LOG_FILE" 2>&1 || true
 
 echo "[$TIMESTAMP] Humor review complete." >> "$LOG_FILE"
+
+# ── Portfolio CV intelligence update ──────────────────────────────────────────
+echo "[$TIMESTAMP] Running portfolio CV intelligence..." >> "$LOG_FILE"
+python3 /home/oye/Documents/free_work/personal-agent-v2/.claude/hooks/portfolio-updater.py >> "$LOG_FILE" 2>&1 || true
+echo "[$TIMESTAMP] Portfolio update complete." >> "$LOG_FILE"

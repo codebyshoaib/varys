@@ -1,0 +1,44 @@
+{
+  "_comment": "OpenOutreach campaign config for Kamal — house fund goal",
+  "_managed_by": "Kamil — do not edit manually, use openoutreach-manager.py",
+
+  "campaign": {
+    "name": "Freelance Client Outreach — Django/AI Senior Engineer",
+    "objective": "I am Muhammad Kamal, a Senior Backend Engineer with 4+ years experience. I am looking for freelance clients who need Python/Django backend development, AI agent development, or AWS infrastructure work. I want to connect with CTOs, Engineering Managers, Founders, or Product Leads at tech startups, SaaS companies, EdTech platforms, or any company building AI-powered products. Budget range: $35-60/hr or $800-5000 fixed projects.",
+
+    "target_market": "CTOs, VPs of Engineering, Engineering Managers, Founders, or Technical Co-founders at: (1) SaaS startups needing backend engineers, (2) EdTech companies building LMS or teacher tools, (3) Companies building AI agents or automation workflows, (4) Companies using Django/Python who need senior help, (5) Companies wanting to integrate Claude/LLMs into their products. Company size: 5-200 employees. Stage: Seed to Series B. Location: US, UK, Canada, Australia, or remote-first anywhere.",
+
+    "daily_limits": {
+      "connection_requests": 20,
+      "follow_ups": 5,
+      "profile_views": 50
+    },
+    "weekly_limits": {
+      "connection_requests": 80,
+      "follow_ups": 25
+    }
+  },
+
+  "message_templates": {
+    "connection_request": "Hi {{first_name}}, I'm a Senior Backend Engineer (Django/Python/AWS) who also builds AI agents. Saw your work at {{company}} — looked interesting. Happy to connect.",
+
+    "follow_up_1": "Thanks for connecting {{first_name}}! Quick question — is {{company}} ever looking for senior Django/Python help on a contract basis? I've been building production systems at 10K+ DAU scale and recently got deep into AI agent development. Happy to share more if there's a fit.",
+
+    "follow_up_2": "Hey {{first_name}}, following up in case my last message got buried. I specialise in Django backends, AWS infrastructure, and AI agent development (Claude API). If {{company}} ever has a backend challenge or an AI project that needs a senior engineer, I'd love to hear about it. No pressure either way.",
+
+    "follow_up_3": "Hi {{first_name}}, last message from me — I promise! If the timing isn't right now, feel free to reach out when it is. I'm at oyekamalkhan@gmail.com. Wishing {{company}} well."
+  },
+
+  "kamal_profile": {
+    "name": "Muhammad Kamal",
+    "title": "Senior Backend Engineer | Python • Django • AWS • AI Agents",
+    "email": "oyekamalkhan@gmail.com",
+    "portfolio": "https://oykamal.netlify.app/",
+    "github": "https://github.com/oyekamal",
+    "linkedin": "https://linkedin.com/in/oyekamal",
+    "top_skills": ["Django", "Python", "AWS", "AI Agents", "Claude API", "React", "PostgreSQL", "Terraform", "ECS", "Multi-tenant SaaS"],
+    "headline_achievement": "40% latency reduction, zero-downtime migrations on millions of rows, 10K+ DAU production system at Taleemabad",
+    "rate_hourly": "$40-55",
+    "rate_fixed": "$800-4000"
+  }
+}
