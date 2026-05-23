@@ -111,7 +111,7 @@ def run_claude(prompt: str, cwd: str = None, timeout: int = 240,
         klog_claude_call(context=event_context, latency_s=timeout, status="timeout")
         return "⏱️ That took too long. Try again or break it into smaller steps."
     except Exception as e:
-        klog_error("run_claude", e, context=event_context)
+        klog_error(context=f"run_claude-{event_context}", exc=e)
         return f"⚠️ Error: {e}"
 
 
@@ -168,16 +168,16 @@ def fetch_thread_history(web: WebClient, channel: str, thread_ts: str,
             time.sleep(1)
             web_new = WebClient(token=bot_token)
             return fetch_thread_history(web_new, channel, thread_ts, is_dm=is_dm, retry_count=1, bot_token=bot_token)
-        klog_error("fetch_thread_history", e, context=f"network_error-retry-exhausted-IncompleteRead")
+        klog_error(context="fetch_thread_history-network_error-retry-exhausted-IncompleteRead", exc=e)
         return ""
     except (TimeoutError, ConnectionError, OSError, socket.gaierror, URLError) as e:
         if retry_count < 1:
             time.sleep(0.5)
             return fetch_thread_history(web, channel, thread_ts, is_dm=is_dm, retry_count=1, bot_token=bot_token)
-        klog_error("fetch_thread_history", e, context=f"network_error-retry-exhausted-{type(e).__name__}")
+        klog_error(context=f"fetch_thread_history-network_error-retry-exhausted-{type(e).__name__}", exc=e)
         return ""
     except Exception as e:
-        klog_error("fetch_thread_history", e)
+        klog_error(context="fetch_thread_history", exc=e)
         return ""
 
 
@@ -520,7 +520,7 @@ def process_missed_messages(web: WebClient, dm_channel: str, retry_count: int = 
             time.sleep(1)
             web_new = WebClient(token=bot_token)
             return process_missed_messages(web_new, dm_channel, retry_count=1, bot_token=bot_token)
-        klog_error("process_missed_messages", e, context=f"network_error-retry-exhausted-IncompleteRead")
+        klog_error(context=f"network_error-retry-exhausted-IncompleteRead", exc=e, component="process_missed_messages")
         return 0
     except (TimeoutError, ConnectionError, OSError, socket.gaierror, URLError) as e:
         if retry_count < 1:
@@ -529,7 +529,7 @@ def process_missed_messages(web: WebClient, dm_channel: str, retry_count: int = 
         klog_error(f"process_missed_messages-network_error-retry-exhausted-{type(e).__name__}", exc=e, component="process_missed_messages")
         return 0
     except Exception as e:
-        klog_error("process_missed_messages", e)
+        klog_error(context="process_missed_messages", exc=e)
         return 0
 
 
@@ -785,7 +785,7 @@ def main():
                 klog_socket("socket_reconnect", missed_messages=missed)
                 log("Reconnected.")
             except Exception as e:
-                klog_error("socket_reconnect", e)
+                klog_error(context="socket_reconnect", exc=e)
                 log(f"Reconnect failed: {e}")
             finally:
                 reconnecting[0] = False
