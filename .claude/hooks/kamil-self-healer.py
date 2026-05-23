@@ -37,6 +37,7 @@ KAMIL_DIR   = Path(__file__).parent.parent.parent
 HOOKS_DIR   = Path(__file__).parent
 SLACK_CFG   = Path.home() / ".claude" / "hooks" / ".slack"
 HEAL_LOG    = Path("/tmp/kamil-self-healer.log")
+HEAL_STATE  = Path("/tmp/kamil-healer-state.json")
 KAMAL_DM    = "D0B415M06SK"
 
 SERVICES = [
@@ -312,7 +313,26 @@ def check_service(service: dict, token: str | None) -> bool:
                     return False
 
     # 2. Query Axiom for recent errors (primary) — local log as fallback
-    recent_errors = query_axiom_errors(name, minutes=15)
+    # Only look at errors AFTER the last known heal for this service
+    state = {}
+    if HEAL_STATE.exists():
+        try:
+            state = json.loads(HEAL_STATE.read_text())
+        except Exception:
+            pass
+    last_healed_at = state.get(name, {}).get("last_healed_at")
+    # Use 15 min window but no earlier than last heal time
+    minutes = 15
+    if last_healed_at:
+        from datetime import timezone
+        healed_dt  = datetime.fromisoformat(last_healed_at)
+        age_minutes = (datetime.utcnow() - healed_dt).total_seconds() / 60
+        if age_minutes < 15:
+            # Last heal was recent — skip, errors predate it
+            log(f"✅ {name}: healthy (healed {round(age_minutes)}m ago)")
+            return True
+
+    recent_errors = query_axiom_errors(name, minutes=minutes)
     if not recent_errors:
         # Fallback: scan local log file
         log_tail     = read_log_tail(log_path, lines=80)
@@ -354,6 +374,9 @@ def check_service(service: dict, token: str | None) -> bool:
         restart_note = "restarted ✅" if restarted else "restart FAILED ⚠️"
         log_healed(service=name, root_cause=root_cause, fix=fix_desc)
         eval_self_heal(service=name, root_cause=root_cause, fix=fix_desc, applied=True)
+        # Record heal time so next run doesn't re-diagnose same errors
+        state[name] = {"last_healed_at": datetime.utcnow().isoformat()}
+        HEAL_STATE.write_text(json.dumps(state))
 
         msg = (
             f"🔧 *Kamil self-healed*: `{name}`\n"
