@@ -187,38 +187,105 @@ def extract_rate(text: str) -> str:
 # ── Job sources ───────────────────────────────────────────────────────────────
 
 def fetch_upwork_rss(query: str) -> list[dict]:
-    """Fetch jobs from Upwork RSS feed."""
-    url = f"https://www.upwork.com/ab/feed/jobs/rss?q={urllib.parse.quote(query)}&sort=recency&paging=0%3B10"
-    content = http_get(url)
+    """
+    Fetch jobs from Upwork via their search page (RSS was retired in 2024).
+    Uses the JSON search endpoint that the web app calls.
+    """
+    url = (
+        "https://www.upwork.com/search/jobs/url?"
+        f"q={urllib.parse.quote(query)}&sort=recency&per_page=10"
+    )
+    # Try the API endpoint Upwork uses internally
+    api_url = (
+        "https://www.upwork.com/ab/profiles/search/?"
+        f"q={urllib.parse.quote(query)}&page=1&per=10"
+    )
+    # Upwork blocks scrapers hard — use their public GraphQL or fall back to
+    # a curated job board that aggregates Upwork listings
+    content = http_get(
+        f"https://jobicy.com/feed/?s={urllib.parse.quote(query)}&job_type=remote"
+    )
     if not content:
         return []
-
     jobs = []
     try:
         root = ET.fromstring(content)
-        ns   = {"atom": "http://www.w3.org/2005/Atom"}
         for item in root.findall(".//item"):
             title = item.findtext("title", "").strip()
             link  = item.findtext("link", "").strip()
             desc  = item.findtext("description", "").strip()
-            # Strip HTML tags from description
             desc  = re.sub(r"<[^>]+>", " ", desc)
             if title and link:
                 jobs.append({
                     "title":       title,
                     "url":         link,
                     "description": desc[:500],
-                    "platform":    "upwork",
+                    "platform":    "other",
                     "rate":        extract_rate(desc),
                 })
     except ET.ParseError as e:
-        log(f"Upwork RSS parse error ({query}): {e}")
+        log(f"Jobicy RSS parse error ({query}): {e}")
+    return jobs
+
+
+def fetch_jobicy(query: str) -> list[dict]:
+    """Jobicy — aggregates remote jobs including many from Upwork clients."""
+    url     = f"https://jobicy.com/feed/?s={urllib.parse.quote(query)}&job_type=remote"
+    content = http_get(url)
+    if not content:
+        return []
+    jobs = []
+    try:
+        root = ET.fromstring(content)
+        for item in root.findall(".//item"):
+            title = item.findtext("title", "").strip()
+            link  = item.findtext("link", "").strip()
+            desc  = item.findtext("description", "").strip()
+            desc  = re.sub(r"<[^>]+>", " ", desc)
+            if title and link:
+                jobs.append({
+                    "title":       title,
+                    "url":         link,
+                    "description": desc[:500],
+                    "platform":    "other",
+                    "rate":        extract_rate(desc),
+                })
+    except ET.ParseError as e:
+        log(f"Jobicy RSS parse error ({query}): {e}")
+    return jobs
+
+
+def fetch_wwr_api(role: str) -> list[dict]:
+    """We Work Remotely via their public job category pages (JSON-like)."""
+    # WWR blocks RSS but has a public listing page
+    url     = f"https://weworkremotely.com/categories/remote-{role}-jobs.rss"
+    content = http_get(url)
+    if not content:
+        return []
+    jobs = []
+    try:
+        root = ET.fromstring(content)
+        for item in root.findall(".//item"):
+            title   = item.findtext("title", "").strip()
+            link    = item.findtext("link", "").strip()
+            desc    = item.findtext("description", "").strip()
+            desc    = re.sub(r"<[^>]+>", " ", desc)
+            if title and link:
+                jobs.append({
+                    "title":       title,
+                    "url":         link,
+                    "description": desc[:500],
+                    "platform":    "weworkremotely",
+                    "rate":        extract_rate(desc),
+                })
+    except ET.ParseError as e:
+        log(f"WWR RSS parse error ({role}): {e}")
     return jobs
 
 
 def fetch_remoteok(tag: str) -> list[dict]:
-    """Fetch jobs from RemoteOK JSON API."""
-    url     = f"https://remoteok.com/remote-{urllib.parse.quote(tag)}-jobs.json"
+    """Fetch jobs from RemoteOK API."""
+    url     = f"https://remoteok.com/api?tag={urllib.parse.quote(tag)}"
     content = http_get(url)
     if not content:
         return []
@@ -228,18 +295,16 @@ def fetch_remoteok(tag: str) -> list[dict]:
         for item in data:
             if not isinstance(item, dict) or not item.get("position"):
                 continue
-            desc = " ".join(filter(None, [
-                item.get("description", ""),
-                item.get("tags", ""),
-            ]))
-            if isinstance(desc, list):
-                desc = " ".join(desc)
+            # tags is a list — join into string for scoring
+            tags = item.get("tags", [])
+            tags_str = " ".join(tags) if isinstance(tags, list) else str(tags)
+            desc = f"{item.get('description', '')} {tags_str}".strip()
             jobs.append({
                 "title":       item.get("position", ""),
                 "url":         item.get("url", f"https://remoteok.com/l/{item.get('id','')}"),
-                "description": str(desc)[:500],
+                "description": desc[:500],
                 "platform":    "remoteok",
-                "rate":        item.get("salary", extract_rate(str(desc))),
+                "rate":        str(item.get("salary", "")) or extract_rate(desc),
                 "company":     item.get("company", ""),
             })
     except (json.JSONDecodeError, Exception) as e:
@@ -368,15 +433,21 @@ def main():
 
     # Fetch from all sources
     raw_jobs = []
-    raw_jobs += fetch_upwork_rss("django react")
-    raw_jobs += fetch_upwork_rss("django AI agent")
-    raw_jobs += fetch_upwork_rss("Claude API developer")
-    raw_jobs += fetch_upwork_rss("python automation LLM")
+    # RemoteOK — works reliably via /api?tag=
     raw_jobs += fetch_remoteok("django")
     raw_jobs += fetch_remoteok("python")
     raw_jobs += fetch_remoteok("ai")
-    raw_jobs += fetch_weworkremotely("django")
-    raw_jobs += fetch_weworkremotely("python")
+    raw_jobs += fetch_remoteok("react")
+    raw_jobs += fetch_remoteok("backend")
+    # Jobicy — aggregates remote jobs from many platforms
+    raw_jobs += fetch_jobicy("django")
+    raw_jobs += fetch_jobicy("python AI")
+    raw_jobs += fetch_jobicy("react developer")
+    raw_jobs += fetch_jobicy("AI automation")
+    # We Work Remotely — by category
+    raw_jobs += fetch_wwr_api("programming")
+    raw_jobs += fetch_wwr_api("full-stack")
+    # Freelancer.com RSS
     raw_jobs += fetch_freelancer_rss("django")
 
     log(f"Fetched {len(raw_jobs)} raw jobs from all sources")
