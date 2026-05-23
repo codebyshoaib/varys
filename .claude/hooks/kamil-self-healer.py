@@ -124,7 +124,7 @@ def query_axiom_errors(service_name: str, minutes: int = 15) -> list[str]:
     end   = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
 
     payload = json.dumps({
-        "apl": "kamil-logs | where [\"event\"] == \"error\" | project _time, component, context, error, traceback | order by _time desc | limit 20",
+        "apl": f'kamil-logs | where ["event"] == "error" | where ["context"] contains "{service_name.replace("-","_")}" or ["context"] contains "{service_name.replace("_","-")}" or ["component"] contains "{service_name}" | project _time, component, context, error, traceback | order by _time desc | limit 10',
         "startTime": start,
         "endTime":   end,
     }).encode()
