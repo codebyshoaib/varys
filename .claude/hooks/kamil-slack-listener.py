@@ -513,7 +513,7 @@ def process_missed_messages(web: WebClient, dm_channel: str, retry_count: int = 
         if retry_count < 1:
             time.sleep(0.5)
             return process_missed_messages(web, dm_channel, retry_count=1, bot_token=bot_token)
-        klog_error("process_missed_messages", e, context=f"network_error-retry-exhausted-{type(e).__name__}", exc_info=True)
+        klog_error(f"process_missed_messages-network_error-retry-exhausted-{type(e).__name__}", exc=e, component="process_missed_messages")
         return 0
     except Exception as e:
         klog_error("process_missed_messages", e)
