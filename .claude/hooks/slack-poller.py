@@ -534,7 +534,7 @@ def main():
         return 0
 
     except Exception as e:
-        klog_error("poller_run", e)
+        klog_error(context="poller_run", exc=e)
         error_msg = (
             f"⚠️ *Kamil slack-poller CRASHED*\n"
             f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M')} PKT\n"
