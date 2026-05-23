@@ -388,6 +388,7 @@ def check_healer_log_size():
 def main():
     check_healer_log_size()
     log("=== Self-healer run ===")
+    klog("healer_run", component="self-healer", services=[s["name"] for s in SERVICES])
 
     token = load_slack_token()
     if not token:
@@ -401,6 +402,7 @@ def main():
                 all_healthy = False
         except Exception as e:
             log(f"Healer error checking {service['name']}: {e}")
+            klog_error(context=f"healer-check-{service['name']}", exc=e, component="self-healer")
 
     if all_healthy:
         log("All services healthy.")
