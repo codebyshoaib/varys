@@ -620,6 +620,18 @@ def main():
     for job in new_jobs:
         save_job_to_notion(job)
 
+    # ── Auto-apply to high-score jobs ─────────────────────────────────────────
+    if new_jobs:
+        try:
+            from auto_apply import run as auto_apply_run
+            apply_stats = auto_apply_run(new_jobs, bot_token)
+            if apply_stats.get("applied", 0) or apply_stats.get("pending", 0):
+                log(f"Auto-apply: {apply_stats['applied']} applied, "
+                    f"{apply_stats['pending']} pending approval, "
+                    f"{apply_stats['skipped']} skipped")
+        except Exception as e:
+            log(f"Auto-apply error: {e}")
+
     # What internet slot was explored this run
     slot_name = ""
     try:
