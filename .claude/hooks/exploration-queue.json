@@ -1,0 +1,182 @@
+{
+  "_comment": "Kamil explores one slot every 30 min. Rotates forever. Each slot = one source to mine for paid work.",
+  "_managed_by": "job-finder.py reads this and increments current_index",
+  "current_index": 1,
+  "slots": [
+    {
+      "id": "reddit_forhire",
+      "name": "Reddit r/forhire [HIRING]",
+      "description": "People posting HIRING notices \u2014 budgets, scopes, Django/Python/AI",
+      "source": "reddit",
+      "subreddit": "forhire",
+      "filter": "[hiring]"
+    },
+    {
+      "id": "remotive_dev",
+      "name": "Remotive \u2014 remote dev jobs with salary",
+      "description": "Remote-only job board with salary ranges. Filter for Python/Django/AI",
+      "source": "remotive"
+    },
+    {
+      "id": "hn_hiring",
+      "name": "HN Who's Hiring (May 2026)",
+      "description": "Hacker News monthly hiring thread \u2014 startups actively hiring right now",
+      "source": "hn_hiring"
+    },
+    {
+      "id": "github_bounties",
+      "name": "GitHub Issues with bounty labels",
+      "description": "Open source issues with cash bounties attached \u2014 fix a bug, get paid",
+      "source": "github_bounty"
+    },
+    {
+      "id": "reddit_entrepreneur",
+      "name": "Reddit r/entrepreneur \u2014 need a dev",
+      "description": "Founders posting 'I need a developer for X' \u2014 warm leads, real problems",
+      "source": "reddit",
+      "subreddit": "entrepreneur"
+    },
+    {
+      "id": "reddit_sideproject",
+      "name": "Reddit r/SideProject \u2014 technical co-founder needed",
+      "description": "People with ideas needing technical help, often paid or equity",
+      "source": "reddit",
+      "subreddit": "SideProject"
+    },
+    {
+      "id": "reddit_webdev_hiring",
+      "name": "Reddit r/webdev \u2014 hiring posts",
+      "description": "Web developers looking for contractors in r/webdev",
+      "source": "reddit",
+      "subreddit": "webdev"
+    },
+    {
+      "id": "reddit_django_problems",
+      "name": "Reddit r/django \u2014 paid help requests",
+      "description": "Django users stuck on problems, willing to pay for solution",
+      "source": "reddit",
+      "subreddit": "django"
+    },
+    {
+      "id": "reddit_python_help",
+      "name": "Reddit r/learnpython \u2014 will pay for help",
+      "description": "Python learners posting 'will pay someone to fix this'",
+      "source": "reddit",
+      "subreddit": "learnpython"
+    },
+    {
+      "id": "reddit_AIdev",
+      "name": "Reddit r/LLMDevs / r/AIAssistants \u2014 AI dev contracts",
+      "description": "AI builders looking for help with Claude/LLM integrations",
+      "source": "reddit",
+      "subreddit": "LLMDevs"
+    },
+    {
+      "id": "remotive_ai",
+      "name": "Remotive \u2014 AI/ML jobs",
+      "description": "AI-specific remote jobs with salary",
+      "source": "remotive_ai"
+    },
+    {
+      "id": "github_bounty_ai",
+      "name": "GitHub \u2014 AI/LLM bounties",
+      "description": "Bounties on Claude, LLM, automation repos",
+      "source": "github_bounty",
+      "query": "bounty+claude+ai+is:open+is:issue"
+    },
+    {
+      "id": "reddit_startups",
+      "name": "Reddit r/startups \u2014 hiring technical",
+      "description": "Early-stage startups looking for engineers",
+      "source": "reddit",
+      "subreddit": "startups"
+    },
+    {
+      "id": "reddit_forhire_2",
+      "name": "Reddit r/forhire \u2014 second pass (sort by hot)",
+      "description": "r/forhire hot posts \u2014 highest engagement hiring posts",
+      "source": "reddit",
+      "subreddit": "forhire",
+      "sort": "hot"
+    },
+    {
+      "id": "reddit_devops",
+      "name": "Reddit r/devops \u2014 paid help/contracts",
+      "description": "DevOps people looking for AWS/Terraform contractors",
+      "source": "reddit",
+      "subreddit": "devops"
+    },
+    {
+      "id": "remotive_fullstack",
+      "name": "Remotive \u2014 full-stack remote",
+      "description": "Full-stack remote jobs with salary",
+      "source": "remotive",
+      "category": "software-dev"
+    },
+    {
+      "id": "github_bounty_python",
+      "name": "GitHub \u2014 Python/Django bounties",
+      "description": "Open issues with money attached on Python/Django repos",
+      "source": "github_bounty",
+      "query": "label:bounty+language:python+is:open"
+    },
+    {
+      "id": "reddit_forhire_night",
+      "name": "Reddit r/forhire \u2014 overnight posts",
+      "description": "Fresh HIRING posts from the last 6 hours",
+      "source": "reddit",
+      "subreddit": "forhire",
+      "hours": 6
+    },
+    {
+      "id": "hn_ask_help",
+      "name": "HN Ask: who can help with X",
+      "description": "HN ask threads where people need technical help",
+      "source": "hn_ask"
+    },
+    {
+      "id": "reddit_machinelearning",
+      "name": "Reddit r/MachineLearning \u2014 contracts",
+      "description": "ML engineers looking for contractors on AI projects",
+      "source": "reddit",
+      "subreddit": "MachineLearning"
+    },
+    {
+      "id": "reddit_reactjs_hiring",
+      "name": "Reddit r/reactjs \u2014 hiring",
+      "description": "React job posts and contract requests",
+      "source": "reddit",
+      "subreddit": "reactjs"
+    },
+    {
+      "id": "remotive_engineer",
+      "name": "Remotive \u2014 backend engineer jobs",
+      "description": "Backend-specific remote jobs",
+      "source": "remotive",
+      "category": "software-dev"
+    },
+    {
+      "id": "reddit_aws_contracts",
+      "name": "Reddit r/aws \u2014 contract work",
+      "description": "AWS users needing Terraform/ECS/infrastructure help",
+      "source": "reddit",
+      "subreddit": "aws"
+    },
+    {
+      "id": "github_bounty_react",
+      "name": "GitHub \u2014 React/TypeScript bounties",
+      "description": "Open bounties on React projects",
+      "source": "github_bounty",
+      "query": "label:bounty+react+typescript+is:open+is:issue"
+    },
+    {
+      "id": "reddit_forhire_weekly",
+      "name": "Reddit r/forhire \u2014 weekly view",
+      "description": "Best of r/forhire this week",
+      "source": "reddit",
+      "subreddit": "forhire",
+      "sort": "top",
+      "hours": 168
+    }
+  ]
+}

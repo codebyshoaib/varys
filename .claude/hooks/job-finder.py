@@ -441,8 +441,139 @@ def main():
 
     seen = load_seen()
 
-    # Fetch from all sources
+    # ── Internet exploration (one slot per 30-min run) ────────────────────────
+    internet_jobs = []
+    try:
+        from internet_scanner import scan_all as internet_scan_all
+        from internet_scanner import scan_reddit_hiring, scan_remotive, scan_hn_hiring, scan_github_bounties, scan_reddit_problems
+
+        # Load exploration queue and pick current slot
+        queue_file = Path(__file__).parent / "exploration-queue.json"
+        if queue_file.exists():
+            queue = json.loads(queue_file.read_text())
+            slots = queue.get("slots", [])
+            idx   = queue.get("current_index", 0) % len(slots)
+            slot  = slots[idx]
+
+            log(f"Exploring slot {idx+1}/{len(slots)}: {slot['name']}")
+
+            # Route to correct scanner based on source
+            source = slot.get("source", "")
+            if source == "reddit" or source.startswith("reddit"):
+                sub   = slot.get("subreddit", "forhire")
+                hours = slot.get("hours", 48)
+                # Use generic reddit scan for this subreddit
+                from internet_scanner import http_get, has_paid_signal, has_stack_signal, extract_rate, is_recent
+                url  = f"https://www.reddit.com/r/{sub}/new.json?limit=25"
+                data = http_get(url)
+                if data:
+                    try:
+                        posts = json.loads(data)["data"]["children"]
+                        for p in posts:
+                            post  = p["data"]
+                            title = post.get("title", "")
+                            body  = post.get("selftext", "")
+                            ts    = post.get("created_utc", 0)
+                            full  = f"{title} {body}"
+                            url_p = f"https://reddit.com{post.get('permalink','')}"
+                            if not is_recent(ts, hours=hours):
+                                continue
+                            # For hiring subs: look for hiring intent
+                            # For tech subs: look for paid signals
+                            is_relevant = (
+                                has_paid_signal(full) or
+                                "[hiring]" in title.lower() or
+                                "looking for" in title.lower() or
+                                "need a dev" in title.lower() or
+                                "need developer" in title.lower()
+                            )
+                            if not is_relevant:
+                                continue
+                            if not has_stack_signal(full) and "python" not in full.lower() and "django" not in full.lower():
+                                continue
+                            internet_jobs.append({
+                                "title":       title[:120],
+                                "url":         url_p,
+                                "description": body[:400],
+                                "platform":    "other",
+                                "rate":        extract_rate(full),
+                                "company":     f"r/{sub}",
+                                "source":      f"reddit-{sub}",
+                            })
+                    except Exception as e:
+                        log(f"Reddit parse error: {e}")
+
+            elif source == "hn_hiring":
+                internet_jobs.extend(scan_hn_hiring())
+
+            elif source == "github_bounty":
+                from internet_scanner import http_get
+                import urllib.parse as _up
+                q   = slot.get("query", "label:bounty+python+is:open+is:issue")
+                url = f"https://api.github.com/search/issues?q={_up.quote(q)}&sort=created&per_page=15"
+                data = http_get(url, headers={"Accept": "application/vnd.github+json"})
+                if data:
+                    try:
+                        items = json.loads(data).get("items", [])
+                        from internet_scanner import extract_rate, has_paid_signal
+                        for item in items:
+                            title = item.get("title", "")
+                            body  = (item.get("body") or "")[:300]
+                            full  = f"{title} {body}"
+                            rate  = extract_rate(full)
+                            if not has_paid_signal(full) and "$" not in full:
+                                continue
+                            internet_jobs.append({
+                                "title":       f"[Bounty] {title[:100]}",
+                                "url":         item.get("html_url", ""),
+                                "description": body,
+                                "platform":    "other",
+                                "rate":        rate or "bounty",
+                                "company":     item.get("repository_url","").split("/")[-1],
+                                "source":      "github-bounty",
+                            })
+                    except Exception as e:
+                        log(f"GitHub bounty parse error: {e}")
+
+            elif source in ("remotive", "remotive_ai"):
+                internet_jobs.extend(scan_remotive())
+
+            elif source == "hn_ask":
+                # HN Ask threads needing help
+                data = http_get("https://hn.algolia.com/api/v1/search_by_date?query=django+python+help&tags=ask_hn&hitsPerPage=10")
+                if data:
+                    try:
+                        import re as _re
+                        hits = json.loads(data).get("hits", [])
+                        from internet_scanner import extract_rate
+                        for h in hits:
+                            text = h.get("title","") + " " + (h.get("story_text") or "")
+                            if not any(kw in text.lower() for kw in ["paid","will pay","hire","bounty","$"]):
+                                continue
+                            internet_jobs.append({
+                                "title":       h.get("title","")[:100],
+                                "url":         f"https://news.ycombinator.com/item?id={h.get('objectID','')}",
+                                "description": (h.get("story_text") or "")[:300],
+                                "platform":    "other",
+                                "rate":        extract_rate(text),
+                                "company":     "Hacker News",
+                                "source":      "hn-ask",
+                            })
+                    except Exception as e:
+                        log(f"HN ask parse error: {e}")
+
+            log(f"Internet scan [{slot['name']}]: {len(internet_jobs)} found")
+
+            # Advance index for next run
+            queue["current_index"] = (idx + 1) % len(slots)
+            queue_file.write_text(json.dumps(queue, indent=2))
+
+    except Exception as e:
+        log(f"Internet scanner error: {e}")
+
+    # Fetch from all job board sources
     raw_jobs = []
+    raw_jobs += internet_jobs  # add internet scan results
     # RemoteOK — works reliably via /api?tag=
     raw_jobs += fetch_remoteok("django")
     raw_jobs += fetch_remoteok("python")
@@ -489,33 +620,55 @@ def main():
     for job in new_jobs:
         save_job_to_notion(job)
 
+    # What internet slot was explored this run
+    slot_name = ""
+    try:
+        queue_file = Path(__file__).parent / "exploration-queue.json"
+        if queue_file.exists():
+            q     = json.loads(queue_file.read_text())
+            slots = q.get("slots", [])
+            prev_idx = (q.get("current_index", 1) - 1) % len(slots)
+            slot_name = slots[prev_idx]["name"]
+    except Exception:
+        pass
+
     # Log to Axiom
     klog("job_finder_run",
          component="job-finder",
          raw_fetched=len(raw_jobs),
          new_qualifying=len(new_jobs),
-         sources=["upwork", "remoteok", "weworkremotely", "freelancer"])
+         internet_found=len(internet_jobs),
+         slot_explored=slot_name)
 
     # Only DM top N if there are new jobs
     dm_jobs = new_jobs[:MAX_JOBS_PER_DM]
     if not dm_jobs:
+        # Still tell Kamal what we explored
+        if slot_name:
+            slack_post(bot_token, {"channel": KAMAL_DM,
+                "text": f"🔍 *Explored:* {slot_name}\n_No new qualifying work found this pass. Back in 30 min._\n🤖 Kamil"})
         log("No new qualifying jobs this run — skipping DM.")
         return 0
 
     # Build Slack DM
     today = datetime.now().strftime("%Y-%m-%d")
-    lines = [f"🏠 *Job Hunt — {today}* _(goal: house fund)_\n"]
+    time_now = datetime.now().strftime("%H:%M")
+    lines = [f"🏠 *{time_now} — Found work ({slot_name or 'job boards'})*\n"]
 
     for i, job in enumerate(dm_jobs, 1):
         title   = job["title"][:80]
         company = f" — {job['company']}" if job.get("company") else ""
-        rate    = job.get("rate", "Rate not listed")
+        rate    = job.get("rate") or "Rate not listed"
         url     = job["url"]
         why     = job["why"]
         score   = job["score"]
+        src     = job.get("source", "")
 
-        lines.append(f"*{i}. {title}{company}*")
-        lines.append(f"   💰 {rate}  |  🎯 Score: {score}/100")
+        # Source emoji
+        src_emoji = "🌐" if src.startswith("reddit") or src in ("hn-hiring","github-bounty","hn-ask") else "📋"
+
+        lines.append(f"*{i}. {src_emoji} {title}{company}*")
+        lines.append(f"   💰 {rate}  |  🎯 {score}/100")
         lines.append(f"   ✅ {why}")
         lines.append(f"   🔗 {url}")
         lines.append("")
