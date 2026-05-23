@@ -24,6 +24,9 @@ import urllib.request
 from datetime import datetime
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).parent))
+from kamil_log import klog, klog_error
+
 PORTFOLIO_REPO   = Path.home() / "Documents" / "free_work" / "portfolio-data"
 PORTFOLIO_JSON   = PORTFOLIO_REPO / "portfolio.json"
 KAMIL_DIR        = Path(__file__).parent.parent.parent
@@ -313,6 +316,8 @@ def run():
 
     if not summaries:
         log("Portfolio already optimal for current job demand — no changes")
+        klog("portfolio_check", component="portfolio-updater",
+             changes=0, top_skills=dict(list(sorted(job_skills.items(), key=lambda x: -x[1])[:5])))
         if token:
             top = ", ".join(f"{k}({v})" for k, v in
                             sorted(job_skills.items(), key=lambda x: -x[1])[:5])
@@ -335,6 +340,10 @@ def run():
 
     # Commit and push
     pushed = commit_and_push(summaries)
+    klog("portfolio_updated", component="portfolio-updater",
+         changes=len(summaries), pushed=pushed,
+         summaries=summaries,
+         top_skills=dict(list(sorted(job_skills.items(), key=lambda x: -x[1])[:5])))
 
     # Log to Notion Master Plan history
     log_to_notion_history(summaries, job_skills, token)

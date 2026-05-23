@@ -20,6 +20,9 @@ import subprocess
 import urllib.request
 from datetime import datetime
 from pathlib import Path
+import sys
+sys.path.insert(0, str(Path(__file__).parent))
+from kamil_log import klog, klog_error
 
 OPENOUTREACH_DB  = Path.home() / ".openoutreach" / "data" / "db.sqlite3"
 STATE_FILE       = Path("/tmp/kamil-openoutreach-state.json")
@@ -165,7 +168,13 @@ def run(token: str) -> int:
 
     if "error" in data:
         print(f"[openoutreach-monitor] DB error: {data['error']}", flush=True)
+        klog_error(context="openoutreach-db", exc=Exception(data["error"]), component="openoutreach-monitor")
         return 0
+
+    klog("openoutreach_run", component="openoutreach-monitor",
+         stats=data.get("stats", {}),
+         new_connections=len(data.get("new_connections", [])),
+         new_replies=len(data.get("new_replies", [])))
 
     seen_connected = set(state.get("last_connected_ids", []))
     seen_replies   = set(state.get("last_reply_ids", []))
@@ -217,13 +226,28 @@ def run(token: str) -> int:
         lines.append("🤖 Kamil")
         slack_dm(token, "\n".join(lines))
 
-    # Weekly stats DM (only if stats changed significantly)
+    # Log new connections and replies to Axiom
+    if new_connections:
+        for c in new_connections:
+            name = f"{c.get('first_name','')} {c.get('last_name','')}".strip()
+            klog("linkedin_connection_accepted", component="openoutreach-monitor",
+                 name=name, headline=c.get("headline","")[:80],
+                 company=c.get("company",""), state=c.get("state",""))
+    if new_replies:
+        for r in new_replies:
+            klog("linkedin_reply_received", component="openoutreach-monitor",
+                 content_preview=r.get("content","")[:100])
+
+    # Stats logging
     stats = data.get("stats", {})
     if stats:
         sent      = stats.get("PENDING", 0) + stats.get("CONNECTED", 0) + stats.get("COMPLETED", 0)
         connected = stats.get("CONNECTED", 0) + stats.get("COMPLETED", 0)
         rate      = round(connected / sent * 100) if sent > 0 else 0
         print(f"[openoutreach-monitor] Stats: {sent} sent, {connected} connected ({rate}% acceptance)", flush=True)
+        klog("openoutreach_stats", component="openoutreach-monitor",
+             sent=sent, connected=connected, acceptance_rate_pct=rate,
+             qualified=stats.get("QUALIFIED", 0), pending=stats.get("PENDING", 0))
 
     state["last_connected_ids"] = list(seen_connected)
     state["last_reply_ids"]     = list(seen_replies)

@@ -15,9 +15,13 @@ never block the main listener thread.
 import json
 import os
 import subprocess
+import sys
 import threading
 from datetime import datetime
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent))
+from kamil_log import klog
 
 HEALTH_DB   = "27e287b7-a3d1-46c6-b5e8-eb0d862d746f"
 KAMIL_DIR   = Path(__file__).parent.parent.parent
@@ -78,6 +82,8 @@ def _async(fn, *args, **kwargs):
 
 def log_error(service: str, error: str, context: str = "", session_id: str = None):
     """Log a detected error. Status=detected, Severity=critical."""
+    klog("health_error", component="kamil-health", service=service,
+         error=error[:200], ctx=context, severity="critical")
     _async(_write_to_notion,
            event         = f"Error in {service}: {error[:80]}",
            service       = service,
@@ -90,6 +96,8 @@ def log_error(service: str, error: str, context: str = "", session_id: str = Non
 
 def log_healed(service: str, root_cause: str, fix: str, session_id: str = None):
     """Log a successful self-heal. Status=auto-fixed, Severity=healed."""
+    klog("health_healed", component="kamil-health", service=service,
+         root_cause=root_cause[:200], fix=fix[:200], severity="healed")
     _async(_write_to_notion,
            event       = f"Self-healed: {service}",
            service     = service,
@@ -102,6 +110,8 @@ def log_healed(service: str, root_cause: str, fix: str, session_id: str = None):
 
 def log_needs_manual(service: str, root_cause: str, attempted: str, session_id: str = None):
     """Log when self-heal couldn't fix it."""
+    klog("health_needs_manual", component="kamil-health", service=service,
+         root_cause=root_cause[:200], attempted=attempted[:200], severity="warning")
     _async(_write_to_notion,
            event       = f"Needs manual fix: {service}",
            service     = service,
@@ -114,6 +124,8 @@ def log_needs_manual(service: str, root_cause: str, attempted: str, session_id: 
 
 def log_health(event: str, service: str = "other", details: str = "", session_id: str = None):
     """Log a general health/info event."""
+    klog("health_info", component="kamil-health", service=service,
+         summary=event[:200], details=details[:200], severity="info")
     _async(_write_to_notion,
            event      = event,
            service    = service,

@@ -64,6 +64,9 @@ import threading
 import uuid
 from datetime import datetime
 from pathlib import Path
+import sys
+sys.path.insert(0, str(Path(__file__).parent))
+from kamil_log import klog
 
 HEALTH_DB  = "27e287b7-a3d1-46c6-b5e8-eb0d862d746f"
 KAMIL_DIR  = Path(__file__).parent.parent.parent
@@ -189,6 +192,11 @@ def log_action(action_type: str, event: str, evidence: str,
                  INITIAL_SCORES.get((action_type, "sent"), 50))
     sid        = session_id or _SESSION_ID
 
+    # Log to Axiom synchronously — fast, always works
+    klog("eval_action", component=service, action_type=action_type,
+         action_id=action_id, score=score, signal=signal,
+         summary=event[:100], evidence=evidence[:150])
+
     _async(_run_notion_write,
            action_id=action_id,
            action_type=action_type,
@@ -225,6 +233,10 @@ def record_reaction(action_id: str, reacted: bool, boost: int = 30):
 
     final_score = min(100, current_score + boost) if reacted else current_score
     reacted_str = "yes" if reacted else "no"
+
+    klog("eval_reaction", component="eval-tracker",
+         action_id=action_id, reacted=reacted_str,
+         score_before=current_score, score_after=final_score)
 
     _async(_run_notion_update,
            action_id=action_id,
