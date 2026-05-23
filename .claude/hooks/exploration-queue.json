@@ -1,7 +1,7 @@
 {
   "_comment": "Kamil explores one slot every 30 min. Rotates forever. Each slot = one source to mine for paid work.",
   "_managed_by": "job-finder.py reads this and increments current_index",
-  "current_index": 5,
+  "current_index": 6,
   "slots": [
     {
       "id": "reddit_forhire",
