@@ -1,0 +1,404 @@
+#!/usr/bin/env python3
+"""
+notebooklm_handler.py — Kamil's NotebookLM integration.
+
+Triggered when Kamal says:
+  "nlm research [topic]"      → deep research + sources added to notebook
+  "nlm podcast [topic]"       → audio overview (podcast) created
+  "nlm slides [topic]"        → slide deck created
+  "nlm mindmap [topic]"       → mindmap created
+  "nlm quiz [topic]"          → quiz created
+  "nlm ask [notebook] [q]"    → query existing notebook, get cited answer
+  "nlm create [topic]"        → create new notebook on topic
+  "nlm list"                  → list all notebooks
+
+All results DMed back to Kamal on Slack.
+Everything logged to Axiom.
+"""
+
+import json
+import os
+import re
+import subprocess
+import sys
+import urllib.request
+from datetime import datetime
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent))
+from kamil_log import klog, klog_error
+
+KAMIL_DIR  = Path(__file__).parent.parent.parent
+KAMAL_DM   = "D0B415M06SK"
+SLACK_CFG  = Path.home() / ".claude" / "hooks" / ".slack"
+
+# Default notebook — Instagram one has content, use as fallback
+DEFAULT_NOTEBOOK = "76624bf5-82ce-4f11-b379-e07f308c6c4a"
+
+# Notebook aliases Kamil remembers
+ALIASES = {
+    "instagram": "76624bf5-82ce-4f11-b379-e07f308c6c4a",
+    "work":      "a2e6473a-bc3c-4737-b1b9-3c67e1fb94ae",
+}
+
+
+def load_token() -> str:
+    if SLACK_CFG.exists():
+        for line in SLACK_CFG.read_text().splitlines():
+            if line.startswith("BOT_TOKEN="):
+                return line.split("=", 1)[1].strip()
+    return ""
+
+
+def slack_dm(token: str, text: str) -> str:
+    data = json.dumps({"channel": KAMAL_DM, "text": text}).encode()
+    req  = urllib.request.Request(
+        "https://slack.com/api/chat.postMessage", data=data,
+        headers={"Authorization": f"Bearer {token}",
+                 "Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as r:
+            return json.loads(r.read()).get("ts", "")
+    except Exception:
+        return ""
+
+
+def run_nlm(args: list[str], timeout: int = 180) -> tuple[bool, str]:
+    """Run nlm CLI command. Returns (success, output)."""
+    try:
+        result = subprocess.run(
+            ["nlm"] + args,
+            capture_output=True, text=True, timeout=timeout,
+        )
+        out = result.stdout.strip() or result.stderr.strip()
+        return result.returncode == 0, out
+    except subprocess.TimeoutExpired:
+        return False, "Timed out — NotebookLM is taking too long. Try again."
+    except Exception as e:
+        return False, str(e)
+
+
+def resolve_notebook(name: str) -> str:
+    """Resolve notebook name/alias to ID."""
+    name_lower = name.lower().strip()
+    if name_lower in ALIASES:
+        return ALIASES[name_lower]
+    # If it looks like a UUID already
+    if re.match(r'^[0-9a-f-]{36}$', name_lower):
+        return name_lower
+    # Search by title
+    ok, out = run_nlm(["list", "notebooks", "--json"])
+    if ok:
+        try:
+            notebooks = json.loads(out)
+            for nb in notebooks:
+                if name_lower in nb.get("title", "").lower():
+                    return nb["id"]
+        except Exception:
+            pass
+    return DEFAULT_NOTEBOOK
+
+
+def list_notebooks(token: str):
+    ok, out = run_nlm(["list", "notebooks", "--json"])
+    if not ok:
+        slack_dm(token, f"⚠️ Could not list notebooks: {out[:200]}\n🤖 Kamil")
+        return
+
+    try:
+        notebooks = json.loads(out)
+        lines = ["📚 *Your NotebookLM notebooks:*\n"]
+        for nb in notebooks:
+            title   = nb.get("title") or "Untitled"
+            sources = nb.get("source_count", 0)
+            nid     = nb.get("id", "")[:8]
+            lines.append(f"• *{title}* — {sources} sources `[{nid}...]`")
+        lines.append("\n_Say \"nlm ask [notebook name] [question]\" to query one._\n🤖 Kamil")
+        slack_dm(token, "\n".join(lines))
+    except Exception:
+        slack_dm(token, f"Notebooks:\n{out[:500]}\n🤖 Kamil")
+
+    klog("notebooklm_list", component="notebooklm", action="list")
+
+
+def ask_notebook(notebook_ref: str, question: str, token: str):
+    """Query a notebook and get a cited answer."""
+    nb_id = resolve_notebook(notebook_ref)
+    slack_dm(token, f"🔍 Querying NotebookLM: _{question[:80]}_...\n🤖 Kamil")
+
+    ok, out = run_nlm(["query", "notebook", nb_id, question, "--json"])
+
+    if ok:
+        try:
+            data   = json.loads(out)
+            answer = data.get("value", {}).get("answer", out)[:1500]
+        except Exception:
+            answer = out[:1500]
+        slack_dm(token, f"🧠 *NotebookLM answer:*\n\n{answer}\n\n🤖 Kamil")
+        klog("notebooklm_query", component="notebooklm",
+             action="ask", notebook=nb_id, question=question[:100])
+    else:
+        slack_dm(token, f"⚠️ Query failed: {out[:300]}\n🤖 Kamil")
+
+
+def create_notebook(topic: str, token: str) -> str | None:
+    """Create a new notebook on a topic, do deep research, return notebook ID."""
+    slack_dm(token, f"📓 Creating NotebookLM notebook: *{topic}*...\n🤖 Kamil")
+
+    ok, out = run_nlm(["notebook", "create", "--json", "--title", topic], timeout=60)
+    if not ok:
+        slack_dm(token, f"⚠️ Could not create notebook: {out[:200]}\n🤖 Kamil")
+        return None
+
+    try:
+        nb_id = json.loads(out).get("id") or json.loads(out).get("notebook_id")
+    except Exception:
+        # Try to extract UUID from output
+        m = re.search(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', out)
+        nb_id = m.group(0) if m else None
+
+    if nb_id:
+        klog("notebooklm_create", component="notebooklm",
+             action="create", topic=topic, notebook_id=nb_id)
+    return nb_id
+
+
+def deep_research(topic: str, token: str, notebook_id: str = None):
+    """Run deep research on a topic, add sources to notebook, DM summary."""
+    nb_id = notebook_id
+    if not nb_id:
+        nb_id = create_notebook(topic, token)
+        if not nb_id:
+            return
+
+    slack_dm(token, f"🔬 Running deep research on *{topic}*... (this takes 1-3 min)\n🤖 Kamil")
+
+    ok, out = run_nlm(["research", "start", nb_id,
+                        "--query", topic, "--confirm"], timeout=240)
+
+    if ok:
+        slack_dm(token,
+            f"✅ *Research complete:* {topic}\n\n"
+            f"{out[:800]}\n\n"
+            f"_Say \"nlm ask {nb_id[:8]} [question]\" to query the results._\n🤖 Kamil")
+        klog("notebooklm_research", component="notebooklm",
+             action="research", topic=topic, notebook=nb_id)
+    else:
+        slack_dm(token, f"⚠️ Research failed: {out[:300]}\n🤖 Kamil")
+
+
+def create_podcast(topic: str, token: str, notebook_ref: str = None,
+                   fmt: str = "deep_dive"):
+    """Create audio overview (podcast) from notebook."""
+    nb_id = resolve_notebook(notebook_ref) if notebook_ref else DEFAULT_NOTEBOOK
+
+    # If topic given but no notebook, create one first
+    if topic and not notebook_ref:
+        new_id = create_notebook(topic, token)
+        if new_id:
+            nb_id = new_id
+
+    slack_dm(token, f"🎙️ Creating podcast for *{topic or 'notebook'}*... (2-5 min)\n🤖 Kamil")
+
+    ok, out = run_nlm([
+        "audio", "create", nb_id,
+        "--format", fmt,
+        "--focus", topic if topic else "",
+        "--confirm",
+    ], timeout=360)
+
+    if ok:
+        # Try to get download link
+        ok2, dl = run_nlm(["download", "--json", nb_id], timeout=60)
+        download_info = f"\n_Download: {dl[:200]}_" if ok2 else ""
+        slack_dm(token,
+            f"🎙️ *Podcast ready:* {topic}\n\n"
+            f"{out[:600]}{download_info}\n🤖 Kamil")
+        klog("notebooklm_podcast", component="notebooklm",
+             action="podcast", topic=topic, notebook=nb_id, format=fmt)
+    else:
+        slack_dm(token, f"⚠️ Podcast failed: {out[:300]}\n🤖 Kamil")
+
+
+def create_slides(topic: str, token: str, notebook_ref: str = None):
+    """Create slide deck from notebook."""
+    nb_id = resolve_notebook(notebook_ref) if notebook_ref else DEFAULT_NOTEBOOK
+
+    if topic and not notebook_ref:
+        new_id = create_notebook(topic, token)
+        if new_id:
+            nb_id = new_id
+
+    slack_dm(token, f"📊 Creating slides for *{topic or 'notebook'}*... (2-4 min)\n🤖 Kamil")
+
+    ok, out = run_nlm([
+        "slides", "create", nb_id,
+        "--focus", topic if topic else "",
+        "--confirm",
+    ], timeout=300)
+
+    if ok:
+        # Try export to Google Slides
+        ok2, exp = run_nlm(["export", nb_id, "--format", "slides"], timeout=60)
+        export_info = f"\n_Google Slides: {exp[:200]}_" if ok2 else ""
+        slack_dm(token,
+            f"📊 *Slides ready:* {topic}\n\n"
+            f"{out[:600]}{export_info}\n🤖 Kamil")
+        klog("notebooklm_slides", component="notebooklm",
+             action="slides", topic=topic, notebook=nb_id)
+    else:
+        slack_dm(token, f"⚠️ Slides failed: {out[:300]}\n🤖 Kamil")
+
+
+def create_mindmap(topic: str, token: str, notebook_ref: str = None):
+    nb_id = resolve_notebook(notebook_ref) if notebook_ref else DEFAULT_NOTEBOOK
+    if topic and not notebook_ref:
+        new_id = create_notebook(topic, token)
+        if new_id:
+            nb_id = new_id
+
+    slack_dm(token, f"🗺️ Creating mindmap for *{topic}*...\n🤖 Kamil")
+    ok, out = run_nlm(["mindmap", "create", nb_id,
+                        "--focus", topic, "--confirm"], timeout=240)
+    if ok:
+        slack_dm(token, f"🗺️ *Mindmap ready:* {topic}\n\n{out[:600]}\n🤖 Kamil")
+        klog("notebooklm_mindmap", component="notebooklm",
+             action="mindmap", topic=topic, notebook=nb_id)
+    else:
+        slack_dm(token, f"⚠️ Mindmap failed: {out[:300]}\n🤖 Kamil")
+
+
+def create_quiz(topic: str, token: str, notebook_ref: str = None):
+    nb_id = resolve_notebook(notebook_ref) if notebook_ref else DEFAULT_NOTEBOOK
+    if topic and not notebook_ref:
+        new_id = create_notebook(topic, token)
+        if new_id:
+            nb_id = new_id
+
+    slack_dm(token, f"📝 Creating quiz for *{topic}*...\n🤖 Kamil")
+    ok, out = run_nlm(["quiz", "create", nb_id,
+                        "--focus", topic, "--confirm"], timeout=240)
+    if ok:
+        slack_dm(token, f"📝 *Quiz ready:* {topic}\n\n{out[:1000]}\n🤖 Kamil")
+        klog("notebooklm_quiz", component="notebooklm",
+             action="quiz", topic=topic, notebook=nb_id)
+    else:
+        slack_dm(token, f"⚠️ Quiz failed: {out[:300]}\n🤖 Kamil")
+
+
+def handle(text: str, token: str):
+    """
+    Parse Kamal's message and route to the right NotebookLM action.
+
+    Trigger patterns (case-insensitive):
+      nlm list
+      nlm ask [notebook] [question]
+      nlm research [topic]
+      nlm create [topic]
+      nlm podcast [topic]
+      nlm slides [topic]
+      nlm mindmap [topic]
+      nlm quiz [topic]
+      nlm brief [topic]        → short podcast
+      nlm debate [topic]       → debate format podcast
+    """
+    text_lower = text.lower().strip()
+
+    # Strip "nlm" prefix
+    body = re.sub(r'^nlm\s*', '', text_lower, flags=re.IGNORECASE).strip()
+    body_orig = re.sub(r'^nlm\s*', '', text, flags=re.IGNORECASE).strip()
+
+    if body.startswith("list"):
+        list_notebooks(token)
+
+    elif body.startswith("ask"):
+        # "ask [notebook_ref] [question]" or "ask [question]"
+        rest  = body_orig[3:].strip()
+        parts = rest.split(" ", 2)
+        if len(parts) >= 2:
+            # Check if first word is a notebook ref (alias or short UUID)
+            first = parts[0].lower()
+            if first in ALIASES or re.match(r'^[0-9a-f]{8}', first):
+                notebook_ref = parts[0]
+                question     = " ".join(parts[1:])
+            else:
+                notebook_ref = DEFAULT_NOTEBOOK
+                question     = rest
+        else:
+            notebook_ref = DEFAULT_NOTEBOOK
+            question     = rest
+        ask_notebook(notebook_ref, question, token)
+
+    elif body.startswith("research"):
+        topic = body_orig[8:].strip()
+        deep_research(topic, token)
+
+    elif body.startswith("create"):
+        topic = body_orig[6:].strip()
+        nb_id = create_notebook(topic, token)
+        if nb_id:
+            slack_dm(token,
+                f"✅ *Notebook created:* {topic}\n"
+                f"ID: `{nb_id}`\n"
+                f"_Say \"nlm research {topic}\" to populate it with sources._\n🤖 Kamil")
+
+    elif body.startswith("podcast") or body.startswith("audio"):
+        topic = re.sub(r'^(?:podcast|audio)\s*', '', body_orig, flags=re.IGNORECASE).strip()
+        create_podcast(topic, token, fmt="deep_dive")
+
+    elif body.startswith("brief"):
+        topic = body_orig[5:].strip()
+        create_podcast(topic, token, fmt="brief")
+
+    elif body.startswith("debate"):
+        topic = body_orig[6:].strip()
+        create_podcast(topic, token, fmt="debate")
+
+    elif body.startswith("slides"):
+        topic = body_orig[6:].strip()
+        create_slides(topic, token)
+
+    elif body.startswith("mindmap"):
+        topic = body_orig[7:].strip()
+        create_mindmap(topic, token)
+
+    elif body.startswith("quiz"):
+        topic = body_orig[4:].strip()
+        create_quiz(topic, token)
+
+    else:
+        # Unknown — show help
+        slack_dm(token,
+            "🧠 *NotebookLM commands:*\n\n"
+            "• `nlm list` — show your notebooks\n"
+            "• `nlm ask [topic] [question]` — query a notebook\n"
+            "• `nlm research [topic]` — deep research, add sources\n"
+            "• `nlm create [topic]` — create new notebook\n"
+            "• `nlm podcast [topic]` — generate audio podcast\n"
+            "• `nlm brief [topic]` — short podcast\n"
+            "• `nlm debate [topic]` — debate format podcast\n"
+            "• `nlm slides [topic]` — create slide deck\n"
+            "• `nlm mindmap [topic]` — create mindmap\n"
+            "• `nlm quiz [topic]` — create quiz\n\n"
+            "🤖 Kamil")
+
+
+def is_notebooklm_command(text: str) -> bool:
+    """True if message starts with 'nlm' trigger."""
+    return bool(re.match(r'^\s*nlm\s+\w', text, re.IGNORECASE))
+
+
+if __name__ == "__main__":
+    token = load_token()
+    # Quick smoke test
+    print("Testing NotebookLM connection...")
+    ok, out = run_nlm(["login", "--check"])
+    print(f"Auth: {'✅' if ok else '❌'} {out[:100]}")
+
+    ok, out = run_nlm(["list", "notebooks", "--json"])
+    if ok:
+        notebooks = json.loads(out)
+        print(f"Notebooks: {len(notebooks)}")
+        for nb in notebooks:
+            print(f"  - {nb.get('title','Untitled')} ({nb.get('source_count',0)} sources)")

@@ -48,6 +48,7 @@ from kamil_eval import log_to_eval
 from kamil_health import log_response_quality, log_critique
 from kamil_eval_tracker import (eval_conversation, eval_proactive_dm,
                                  record_reaction, expire_pending)
+from notebooklm_handler import handle as nlm_handle, is_notebooklm_command
 
 # ── Config ────────────────────────────────────────────────────────────────────
 SLACK_CONFIG = Path.home() / ".claude" / "hooks" / ".slack"
@@ -568,6 +569,17 @@ def dispatch(text: str, web: WebClient, channel: str, thread_ts: str, source: st
 
     # Expire old pending evals (no reaction within 35 min = reacted:no)
     expire_pending(max_age_minutes=35)
+
+    # ── NotebookLM fast-path — bypass Claude for nlm commands ────────────────
+    if sender_id == KAMAL_USER_ID and is_notebooklm_command(clean):
+        cfg       = load_config()
+        bot_token_cfg = cfg.get("BOT_TOKEN")
+        threading.Thread(
+            target=nlm_handle,
+            args=(clean, bot_token_cfg),
+            daemon=True,
+        ).start()
+        return
 
     threading.Thread(
         target=handle_message,
