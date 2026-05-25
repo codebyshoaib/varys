@@ -67,6 +67,34 @@ def slack_dm(token: str, text: str) -> str:
         return ""
 
 
+ARTIFACT_ICONS = {
+    "audio":      "🎙️",
+    "slide_deck": "📊",
+    "video":      "🎬",
+    "mind_map":   "🗺️",
+    "report":     "📋",
+    "flashcards": "🃏",
+    "quiz":       "📝",
+    "infographic":"🖼️",
+    "data_table": "📈",
+}
+
+ARTIFACT_EXTS = {
+    "audio":      ".m4a",
+    "slide_deck": ".pdf",
+    "video":      ".mp4",
+    "mind_map":   ".json",
+    "report":     ".md",
+    "flashcards": ".txt",
+    "quiz":       ".txt",
+    "infographic":".png",
+    "data_table": ".csv",
+}
+
+# Text artifacts we can post inline to Slack
+TEXT_ARTIFACTS = {"flashcards", "quiz", "report", "mind_map", "data_table"}
+
+
 def run_nlm(args: list[str], timeout: int = 180) -> tuple[bool, str]:
     """Run nlm CLI command. Returns (success, output)."""
     try:
@@ -80,6 +108,173 @@ def run_nlm(args: list[str], timeout: int = 180) -> tuple[bool, str]:
         return False, "Timed out — NotebookLM is taking too long. Try again."
     except Exception as e:
         return False, str(e)
+
+
+def upload_file_to_slack(token: str, channel: str, filepath: str,
+                          title: str, comment: str) -> bool:
+    """Upload a file to Slack using files:write scope."""
+    import urllib.parse
+    try:
+        with open(filepath, "rb") as f:
+            file_data = f.read()
+
+        # Step 1: get upload URL
+        params = urllib.parse.urlencode({
+            "filename": os.path.basename(filepath),
+            "length": len(file_data),
+        })
+        req = urllib.request.Request(
+            f"https://slack.com/api/files.getUploadURLExternal?{params}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        with urllib.request.urlopen(req, timeout=10) as r:
+            resp = json.loads(r.read())
+
+        if not resp.get("ok"):
+            return False
+
+        upload_url = resp["upload_url"]
+        file_id    = resp["file_id"]
+
+        # Step 2: upload file bytes
+        req2 = urllib.request.Request(upload_url, data=file_data, method="POST")
+        req2.add_header("Content-Type", "application/octet-stream")
+        with urllib.request.urlopen(req2, timeout=30) as r:
+            pass
+
+        # Step 3: complete upload + share to channel
+        payload = json.dumps({
+            "files":           [{"id": file_id, "title": title}],
+            "channel_id":      channel,
+            "initial_comment": comment,
+        }).encode()
+        req3 = urllib.request.Request(
+            "https://slack.com/api/files.completeUploadExternal",
+            data=payload,
+            headers={"Authorization": f"Bearer {token}",
+                     "Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req3, timeout=10) as r:
+            result = json.loads(r.read())
+        return result.get("ok", False)
+
+    except Exception as e:
+        print(f"[nlm] file upload error: {e}", file=sys.stderr)
+        return False
+
+
+def poll_and_post_artifact(nb_id: str, artifact_type: str,
+                            token: str, channel: str,
+                            label: str, max_wait: int = 600):
+    """
+    Background thread: polls until artifact is complete, downloads it,
+    posts to Slack. This is how Kamil knows when it's done.
+    """
+    import time
+    icon    = ARTIFACT_ICONS.get(artifact_type, "✅")
+    ext     = ARTIFACT_EXTS.get(artifact_type, ".bin")
+    outfile = f"/tmp/nlm_{nb_id[:8]}_{artifact_type}{ext}"
+    waited  = 0
+    poll_interval = 15  # seconds
+
+    while waited < max_wait:
+        # Check status
+        ok, out = run_nlm(["status", "artifacts", nb_id, "--json"], timeout=30)
+        if ok:
+            try:
+                artifacts = json.loads(out)
+                for a in artifacts:
+                    if a.get("type") == artifact_type:
+                        status = a.get("status", "")
+                        if status == "completed":
+                            # Download it
+                            dl_ok, dl_out = run_nlm(
+                                ["download", artifact_type.replace("_", "-"),
+                                 nb_id, "--output", outfile, "--no-progress"],
+                                timeout=120
+                            )
+                            if dl_ok and os.path.exists(outfile):
+                                _post_artifact_to_slack(
+                                    token, channel, artifact_type,
+                                    outfile, icon, label, nb_id
+                                )
+                            else:
+                                # Download failed — post link instead
+                                slack_dm(token,
+                                    f"{icon} *{label}* ✅ ready in NotebookLM\n"
+                                    f"_Open notebook to view/download_\n🤖 Kamil")
+                            return
+                        elif status == "failed":
+                            slack_dm(token,
+                                f"{icon} *{label}* ⚠️ generation failed\n🤖 Kamil")
+                            return
+            except Exception:
+                pass
+
+        time.sleep(poll_interval)
+        waited += poll_interval
+
+    slack_dm(token,
+        f"{icon} *{label}* ⏱️ still generating after {max_wait//60}min — "
+        f"check NotebookLM directly\n🤖 Kamil")
+
+
+def _post_artifact_to_slack(token: str, channel: str, artifact_type: str,
+                              filepath: str, icon: str, label: str, nb_id: str):
+    """Post a downloaded artifact to Slack — text inline, files as upload."""
+    if artifact_type in TEXT_ARTIFACTS:
+        # Read and format for Slack
+        try:
+            raw = open(filepath).read()
+            try:
+                data = json.loads(raw)
+                # Format flashcards
+                if artifact_type == "flashcards":
+                    cards = data.get("cards", [])[:10]  # first 10
+                    lines = [f"{icon} *{label}* ✅ ({len(data.get('cards',[]))} cards)\n"]
+                    for i, c in enumerate(cards, 1):
+                        lines.append(f"*Q{i}:* {c['front']}")
+                        lines.append(f"*A:* {c['back']}\n")
+                    lines.append(f"_({len(data.get('cards',[]))-10} more — full file at {filepath})_\n🤖 Kamil")
+                    slack_dm(token, "\n".join(lines))
+                    return
+                # Format quiz
+                elif artifact_type == "quiz":
+                    qs = data.get("questions", [])[:5]
+                    lines = [f"{icon} *{label}* ✅\n"]
+                    for i, q in enumerate(qs, 1):
+                        lines.append(f"*Q{i}:* {q.get('question','')}")
+                        opts = q.get("options", [])
+                        for opt in opts:
+                            lines.append(f"  • {opt}")
+                        lines.append("")
+                    lines.append("🤖 Kamil")
+                    slack_dm(token, "\n".join(lines))
+                    return
+                else:
+                    content = str(data)[:1000]
+            except Exception:
+                content = raw[:1000]
+
+            slack_dm(token, f"{icon} *{label}* ✅\n```{content}```\n🤖 Kamil")
+
+        except Exception as e:
+            slack_dm(token, f"{icon} *{label}* ✅ (read error: {e})\n🤖 Kamil")
+
+    else:
+        # Binary file (audio, video, image, pdf) — try upload
+        uploaded = upload_file_to_slack(
+            token, channel, filepath,
+            title=label,
+            comment=f"{icon} *{label}* — generated by NotebookLM from Taleemabad harness data\n🤖 Kamil"
+        )
+        if not uploaded:
+            # No files:write scope — post instructions
+            slack_dm(token,
+                f"{icon} *{label}* ✅ ready!\n"
+                f"_File upload needs `files:write` scope on the Kamil Slack app._\n"
+                f"Fix: api.slack.com/apps → Kamil → OAuth Scopes → add `files:write` → Reinstall\n"
+                f"File saved at: `{filepath}`\n🤖 Kamil")
 
 
 def resolve_notebook(name: str) -> str:
