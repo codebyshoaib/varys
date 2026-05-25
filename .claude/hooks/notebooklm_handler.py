@@ -390,33 +390,30 @@ def create_podcast(topic: str, token: str, notebook_ref: str = None,
                    fmt: str = "deep_dive"):
     """Create audio overview (podcast) from notebook."""
     nb_id = resolve_notebook(notebook_ref) if notebook_ref else DEFAULT_NOTEBOOK
-
-    # If topic given but no notebook, create one first
     if topic and not notebook_ref:
         new_id = create_notebook(topic, token)
         if new_id:
             nb_id = new_id
 
-    slack_dm(token, f"🎙️ Creating podcast for *{topic or 'notebook'}*... (2-5 min)\n🤖 Kamil")
+    slack_dm(token, f"🎙️ Generating podcast for *{topic or 'notebook'}*...\n_I'll post it here when it's ready (2-5 min)_\n🤖 Kamil")
 
     ok, out = run_nlm([
-        "audio", "create", nb_id,
-        "--format", fmt,
-        "--focus", topic if topic else "",
-        "--confirm",
-    ], timeout=360)
+        "audio", "create", nb_id, "--format", fmt,
+        "--focus", topic if topic else "", "--confirm",
+    ], timeout=60)  # just trigger it, don't wait
 
-    if ok:
-        # Try to get download link
-        ok2, dl = run_nlm(["download", "--json", nb_id], timeout=60)
-        download_info = f"\n_Download: {dl[:200]}_" if ok2 else ""
-        slack_dm(token,
-            f"🎙️ *Podcast ready:* {topic}\n\n"
-            f"{out[:600]}{download_info}\n🤖 Kamil")
+    if ok or "started" in out.lower() or "creating" in out.lower():
         klog("notebooklm_podcast", component="notebooklm",
              action="podcast", topic=topic, notebook=nb_id, format=fmt)
+        # Background poller — posts to Slack when done
+        import threading
+        threading.Thread(
+            target=poll_and_post_artifact,
+            args=(nb_id, "audio", token, KAMAL_DM, f"Podcast: {topic or 'notebook'}"),
+            daemon=True,
+        ).start()
     else:
-        slack_dm(token, f"⚠️ Podcast failed: {out[:300]}\n🤖 Kamil")
+        slack_dm(token, f"⚠️ Podcast failed to start: {out[:300]}\n🤖 Kamil")
 
 
 def create_slides(topic: str, token: str, notebook_ref: str = None):
