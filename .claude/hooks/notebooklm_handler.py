@@ -39,6 +39,9 @@ DEFAULT_NOTEBOOK = "76624bf5-82ce-4f11-b379-e07f308c6c4a"
 ALIASES = {
     "instagram": "76624bf5-82ce-4f11-b379-e07f308c6c4a",
     "work":      "a2e6473a-bc3c-4737-b1b9-3c67e1fb94ae",
+    "taleemabad": "a03e5a92-d706-4ffb-9bd7-a3498dc7779d",
+    "harness":    "a03e5a92-d706-4ffb-9bd7-a3498dc7779d",
+    "reddit":     "1a76701b-9e16-411f-9c2e-ea73223a8695",
 }
 
 
