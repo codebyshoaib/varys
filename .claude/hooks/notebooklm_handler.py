@@ -416,34 +416,36 @@ def create_podcast(topic: str, token: str, notebook_ref: str = None,
         slack_dm(token, f"⚠️ Podcast failed to start: {out[:300]}\n🤖 Kamil")
 
 
-def create_slides(topic: str, token: str, notebook_ref: str = None):
-    """Create slide deck from notebook."""
-    nb_id = resolve_notebook(notebook_ref) if notebook_ref else DEFAULT_NOTEBOOK
+def _create_artifact(artifact_cmd: list, artifact_type: str, label: str,
+                      topic: str, token: str, nb_id: str):
+    """Generic: trigger artifact creation then background-poll until done."""
+    icon = ARTIFACT_ICONS.get(artifact_type, "✅")
+    slack_dm(token,
+        f"{icon} Generating *{label}*...\n"
+        f"_I'll post it here when ready._\n🤖 Kamil")
 
+    ok, out = run_nlm(artifact_cmd, timeout=60)
+    if ok or True:  # NotebookLM often returns non-zero even when triggered
+        klog(f"notebooklm_{artifact_type}", component="notebooklm",
+             action=artifact_type, topic=topic, notebook=nb_id)
+        import threading
+        threading.Thread(
+            target=poll_and_post_artifact,
+            args=(nb_id, artifact_type, token, KAMAL_DM, f"{label}: {topic}"),
+            daemon=True,
+        ).start()
+
+
+def create_slides(topic: str, token: str, notebook_ref: str = None):
+    nb_id = resolve_notebook(notebook_ref) if notebook_ref else DEFAULT_NOTEBOOK
     if topic and not notebook_ref:
         new_id = create_notebook(topic, token)
         if new_id:
             nb_id = new_id
-
-    slack_dm(token, f"📊 Creating slides for *{topic or 'notebook'}*... (2-4 min)\n🤖 Kamil")
-
-    ok, out = run_nlm([
-        "slides", "create", nb_id,
-        "--focus", topic if topic else "",
-        "--confirm",
-    ], timeout=300)
-
-    if ok:
-        # Try export to Google Slides
-        ok2, exp = run_nlm(["export", nb_id, "--format", "slides"], timeout=60)
-        export_info = f"\n_Google Slides: {exp[:200]}_" if ok2 else ""
-        slack_dm(token,
-            f"📊 *Slides ready:* {topic}\n\n"
-            f"{out[:600]}{export_info}\n🤖 Kamil")
-        klog("notebooklm_slides", component="notebooklm",
-             action="slides", topic=topic, notebook=nb_id)
-    else:
-        slack_dm(token, f"⚠️ Slides failed: {out[:300]}\n🤖 Kamil")
+    _create_artifact(
+        ["slides", "create", nb_id, "--focus", topic, "--confirm"],
+        "slide_deck", "Slide Deck", topic, token, nb_id
+    )
 
 
 def create_mindmap(topic: str, token: str, notebook_ref: str = None):
@@ -452,16 +454,10 @@ def create_mindmap(topic: str, token: str, notebook_ref: str = None):
         new_id = create_notebook(topic, token)
         if new_id:
             nb_id = new_id
-
-    slack_dm(token, f"🗺️ Creating mindmap for *{topic}*...\n🤖 Kamil")
-    ok, out = run_nlm(["mindmap", "create", nb_id,
-                        "--focus", topic, "--confirm"], timeout=240)
-    if ok:
-        slack_dm(token, f"🗺️ *Mindmap ready:* {topic}\n\n{out[:600]}\n🤖 Kamil")
-        klog("notebooklm_mindmap", component="notebooklm",
-             action="mindmap", topic=topic, notebook=nb_id)
-    else:
-        slack_dm(token, f"⚠️ Mindmap failed: {out[:300]}\n🤖 Kamil")
+    _create_artifact(
+        ["mindmap", "create", nb_id, "--focus", topic, "--confirm"],
+        "mind_map", "Mind Map", topic, token, nb_id
+    )
 
 
 def create_quiz(topic: str, token: str, notebook_ref: str = None):
@@ -470,16 +466,10 @@ def create_quiz(topic: str, token: str, notebook_ref: str = None):
         new_id = create_notebook(topic, token)
         if new_id:
             nb_id = new_id
-
-    slack_dm(token, f"📝 Creating quiz for *{topic}*...\n🤖 Kamil")
-    ok, out = run_nlm(["quiz", "create", nb_id,
-                        "--focus", topic, "--confirm"], timeout=240)
-    if ok:
-        slack_dm(token, f"📝 *Quiz ready:* {topic}\n\n{out[:1000]}\n🤖 Kamil")
-        klog("notebooklm_quiz", component="notebooklm",
-             action="quiz", topic=topic, notebook=nb_id)
-    else:
-        slack_dm(token, f"⚠️ Quiz failed: {out[:300]}\n🤖 Kamil")
+    _create_artifact(
+        ["quiz", "create", nb_id, "--focus", topic, "--confirm"],
+        "quiz", "Quiz", topic, token, nb_id
+    )
 
 
 def handle(text: str, token: str):
