@@ -2,20 +2,84 @@
 
 Kamal's personal AI agent. **Notion is the primary brain** — all context lives in Notion databases, queryable by filter. Slack is monitored automatically. Every session starts with a full briefing.
 
-## Architecture (v2.2 — MCP-first)
+## Architecture (v2.3 — MCP-first + NotebookLM + Job Hunter)
 
 ```
-Notion (brain)      → 7 databases: My PRs, Team People, Slack Inbox, Work Log, Projects, Harness, Learning Log
+Notion (brain)      → 8 databases: My PRs, Team People, Slack Inbox, Work Log, Projects, Harness, Learning Log, Job Tracker
 Slack (feed)        → slack-poller.py reads channels every 30min → writes to /tmp/kamil-slack-inbox.json
                     → posts formatted summary DM to Kamal after every run
                     → on crash: DMs Kamal immediately via Slack
 kamil-listener      → Socket Mode daemon, handles DMs + @Kamil mentions in any channel
                     → action-first: never asks what tools can answer, fetches full thread context
+                    → "nlm ..." commands → routed to NotebookLM instantly (bypasses Claude)
+                    → "apply 1/2/3" → auto-apply via Gmail/GitHub
 SessionStart hook   → surfaces unsynced Slack items + tells Claude to fetch Notion via MCP
 Notion reads/writes → ALL done via mcp__claude_ai_Notion__* tools — no API key needed
 Stop hook           → writes Work Log to Notion via MCP
 vault/              → legacy Obsidian (kept for history, no longer primary)
+NotebookLM          → nlm CLI (auth: oyekamalkhan@gmail.com) — research, podcast, slides, mindmap, quiz
+                    → Notebook: "Reddit Channels for Jobs" (298 sources, ID: 1a76701b-...)
+Job Hunter          → job-finder.py cron every 30min — 42 internet slots × 30min = full scan every 21hrs
+                    → internet-scanner.py — Reddit, HN, GitHub bounties, Remotive
+                    → auto-apply.py — Gmail MCP (email) + GitHub API (bounties), score ≥75 auto-applies
+                    → openoutreach-monitor.py — LinkedIn connections via OpenOutreach Docker
+OpenOutreach        → Docker container, LinkedIn outreach (20/day), Groq llama qualification
 ```
+
+## NotebookLM Skills (trigger with "nlm" prefix on Slack)
+
+Kamil knows how to use NotebookLM for deep research, content creation, and learning. Trigger any of these from Slack DM:
+
+| Command | What happens |
+|---|---|
+| `nlm list` | Show all notebooks |
+| `nlm ask [notebook] [question]` | Query notebook with citations |
+| `nlm research [topic]` | Deep research (~40 sources, 5 min) |
+| `nlm create [topic]` | Create new notebook |
+| `nlm podcast [topic]` | Full audio deep-dive podcast |
+| `nlm brief [topic]` | Short podcast |
+| `nlm debate [topic]` | Debate format podcast |
+| `nlm slides [topic]` | Slide deck |
+| `nlm mindmap [topic]` | Visual mindmap |
+| `nlm quiz [topic]` | Quiz from sources |
+
+**Key notebooks:**
+- `instagram` — Profitable Instagram Niches (10 sources)
+- `1a76701b` — Reddit Jobs/Startup channels (298 sources, deep research)
+
+## House Fund — Freelance Income System
+
+**Goal:** Kamal buys a house. Kamil runs the entire pipeline autonomously.
+
+```
+Every 30 min:
+  job-finder.py runs →
+    1. OpenOutreach monitor (LinkedIn connections accepted?)
+    2. Internet scan (1 of 42 slots: Reddit/HN/GitHub/Remotive)
+    3. Job boards (RemoteOK, Jobicy, WWR)
+    4. Score all → deduplicate → save to Notion Job Tracker
+    5. Auto-apply score≥75 via Gmail/GitHub
+    6. DM Kamal top 3 new finds
+
+Monday 9am PKT:
+  Weekly report → eval scores, portfolio update, humor review
+
+Daily 8:30am PKT:
+  Book coaching DM (Leaders Eat Last / Five Dysfunctions)
+
+Daily 8am PKT (remote routine):
+  Job finder remote routine (backup to local cron)
+```
+
+**Exploration queue:** 42 slots including r/forhire, r/cofounder, r/cofounderhunt,
+r/indiehackers, r/SaaS, r/startups, r/FreelanceProgramming, r/WorkOnline,
+r/RemoteJobs, r/Upwork, r/PakistaniTech, HN Who's Hiring, GitHub bounties, Remotive, and more.
+
+**Reply triggers:**
+- `"apply 1/2/3"` → Kamil writes + sends proposal
+- `"followup [name]"` → writes LinkedIn follow-up message
+- `"approve"` → auto-applies to pending 60-74 score jobs
+- `"nlm research [topic]"` → NotebookLM deep research
 
 ## Auto-Start Behavior
 

@@ -177,6 +177,125 @@
       "subreddit": "forhire",
       "sort": "top",
       "hours": 168
+    },
+    {
+      "id": "reddit_cofounder",
+      "name": "Reddit r/cofounder \u2014 find startup partners",
+      "source": "reddit",
+      "subreddit": "cofounder",
+      "hours": 72
+    },
+    {
+      "id": "reddit_cofounderhunt",
+      "name": "Reddit r/cofounderhunt \u2014 co-founder hunt",
+      "source": "reddit",
+      "subreddit": "cofounderhunt",
+      "hours": 72
+    },
+    {
+      "id": "reddit_indiehackers",
+      "name": "Reddit r/indiehackers \u2014 indie SaaS builders",
+      "source": "reddit",
+      "subreddit": "indiehackers",
+      "hours": 48
+    },
+    {
+      "id": "reddit_SaaS",
+      "name": "Reddit r/SaaS \u2014 founders needing tech help",
+      "source": "reddit",
+      "subreddit": "SaaS",
+      "hours": 48
+    },
+    {
+      "id": "reddit_workonline",
+      "name": "Reddit r/WorkOnline \u2014 online work opportunities",
+      "source": "reddit",
+      "subreddit": "WorkOnline",
+      "hours": 24
+    },
+    {
+      "id": "reddit_sidehustle",
+      "name": "Reddit r/sidehustle \u2014 side income ideas",
+      "source": "reddit",
+      "subreddit": "sidehustle",
+      "hours": 48
+    },
+    {
+      "id": "reddit_slavelabour",
+      "name": "Reddit r/slavelabour \u2014 quick gigs",
+      "source": "reddit",
+      "subreddit": "slavelabour",
+      "hours": 12
+    },
+    {
+      "id": "reddit_jobbit",
+      "name": "Reddit r/jobbit \u2014 tech talent marketplace",
+      "source": "reddit",
+      "subreddit": "jobbit",
+      "hours": 48
+    },
+    {
+      "id": "reddit_EntrepreneurRideAlong",
+      "name": "Reddit r/EntrepreneurRideAlong \u2014 startup ride-along",
+      "source": "reddit",
+      "subreddit": "EntrepreneurRideAlong",
+      "hours": 48
+    },
+    {
+      "id": "reddit_GrowthHacking",
+      "name": "Reddit r/GrowthHacking \u2014 growth + hiring",
+      "source": "reddit",
+      "subreddit": "GrowthHacking",
+      "hours": 48
+    },
+    {
+      "id": "reddit_freelanceprogramming",
+      "name": "Reddit r/FreelanceProgramming \u2014 freelance dev work",
+      "source": "reddit",
+      "subreddit": "FreelanceProgramming",
+      "hours": 24
+    },
+    {
+      "id": "reddit_developersIndia",
+      "name": "Reddit r/developersIndia \u2014 South Asian devs remote work",
+      "source": "reddit",
+      "subreddit": "developersIndia",
+      "hours": 48
+    },
+    {
+      "id": "reddit_cscareerquestions_hiring",
+      "name": "Reddit r/cscareerquestions \u2014 startup hiring threads",
+      "source": "reddit",
+      "subreddit": "cscareerquestions",
+      "hours": 72
+    },
+    {
+      "id": "reddit_remotework",
+      "name": "Reddit r/remotework \u2014 remote jobs",
+      "source": "reddit",
+      "subreddit": "remotework",
+      "hours": 24
+    },
+    {
+      "id": "reddit_RemoteJobs",
+      "name": "Reddit r/RemoteJobs \u2014 dedicated remote jobs",
+      "source": "reddit",
+      "subreddit": "RemoteJobs",
+      "hours": 24
+    },
+    {
+      "id": "reddit_upwork",
+      "name": "Reddit r/Upwork \u2014 Upwork tips and job leads",
+      "source": "reddit",
+      "subreddit": "Upwork",
+      "hours": 24
+    },
+    {
+      "id": "reddit_PakistaniTech",
+      "name": "Reddit r/PakistaniTech \u2014 Pakistani tech community",
+      "source": "reddit",
+      "subreddit": "PakistaniTech",
+      "hours": 48
     }
   ]
 }
