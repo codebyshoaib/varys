@@ -1,356 +1,401 @@
 #!/usr/bin/env python3
 """
-image_generator.py — Generates vertical social media images in the
-@trainwithkale style: soft purple bg, bold black text, split panel,
-question top / answer bottom.
+image_generator.py — Vertical social media image generator.
 
-No API keys. No external services. Runs locally with PIL.
+Produces Instagram/TikTok-ready 1080x1350 images (4:5 portrait).
+Inspired by @trainwithkale style: bold Impact/Anton font, split panels,
+soft lavender bg for fitness, dark bg for tech.
+
+Post types:
+  qa      — Split panel: question top, answer bottom (most viral format)
+  steps   — Numbered progression list with circles
+  info    — Title + numbered tips (great for tech carousels)
+  tip     — Single bold tip with context
 
 Usage:
-    python3 image_generator.py \
-        --question "BEST ABS EXERCISE?" \
-        --answer "HANGING LEG RAISES" \
-        --handle "@oykamal" \
-        --output /tmp/post.png \
-        --type fitness   # or: tech, info, steps
-
-For step-by-step posts (carousel style):
-    python3 image_generator.py \
-        --title "PULL-UP PROGRESSION" \
-        --steps "Dead Hangs,Scapular Pulls,Negative Pull-ups,Band Assisted,Full Pull-up" \
-        --handle "@oykamal" \
-        --output /tmp/post.png \
-        --type steps
+  python3 image_generator.py --type qa \
+      --question "BEST PULL EXERCISE?" --answer "DEAD HANG" \
+      --handle "@oykamal" --palette fitness --output /tmp/post.png
 """
 
 import argparse
-import math
-import textwrap
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
-# ── Colour palettes ───────────────────────────────────────────────────────────
+# ─── Fonts ────────────────────────────────────────────────────────────────────
 
-PALETTES = {
-    "fitness": {
-        "bg":          (195, 185, 215),   # soft lavender (matches reference)
-        "panel_top":   (195, 185, 215),
-        "panel_bot":   (180, 170, 202),
-        "text_main":   (10,  10,  10),
-        "text_answer": (10,  10,  10),
-        "accent":      (220, 50,  50),    # red accent
-        "divider":     (150, 140, 175),
-        "handle":      (80,  70,  100),
-    },
-    "tech": {
-        "bg":          (15,  15,  25),    # dark
-        "panel_top":   (20,  20,  35),
-        "panel_bot":   (25,  25,  45),
-        "text_main":   (255, 255, 255),
-        "text_answer": (100, 200, 255),   # blue accent for tech
-        "accent":      (100, 200, 255),
-        "divider":     (50,  50,  80),
-        "handle":      (150, 150, 200),
-    },
-    "info": {
-        "bg":          (245, 245, 250),
-        "panel_top":   (245, 245, 250),
-        "panel_bot":   (235, 235, 245),
-        "text_main":   (20,  20,  40),
-        "text_answer": (20,  20,  40),
-        "accent":      (80,  60,  200),
-        "divider":     (200, 195, 220),
-        "handle":      (100, 90,  150),
-    },
+FONT_PATHS = {
+    "heavy":  ["/tmp/Anton-Regular.ttf",
+               "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
+               "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"],
+    "bold":   ["/tmp/Oswald-Bold.ttf",
+               "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
+               "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"],
+    "regular":["/usr/share/fonts/truetype/freefont/FreeSans.ttf",
+               "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"],
 }
 
-
-def load_font(size: int, bold: bool = True) -> ImageFont.FreeTypeFont:
-    paths = [
-        "/tmp/Montserrat-Black.ttf",
-        "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
-        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
-        "/usr/share/fonts/truetype/ubuntu/Ubuntu-B.ttf",
-    ]
-    for p in paths:
-        if Path(p).exists():
+def font(style: str, size: int) -> ImageFont.FreeTypeFont:
+    for path in FONT_PATHS.get(style, FONT_PATHS["bold"]):
+        if Path(path).exists():
             try:
-                return ImageFont.truetype(p, size)
+                return ImageFont.truetype(path, size)
             except Exception:
                 continue
     return ImageFont.load_default()
 
+# ─── Palettes ─────────────────────────────────────────────────────────────────
 
-def wrap_text(text: str, font: ImageFont.FreeTypeFont,
-              max_width: int, draw: ImageDraw.ImageDraw) -> list[str]:
-    words  = text.split()
-    lines  = []
-    line   = ""
-    for word in words:
+PALETTES = {
+    "fitness": {
+        "bg_top":    (200, 190, 220),   # soft lavender top
+        "bg_bot":    (175, 163, 200),   # deeper lavender bottom
+        "divider":   (140, 128, 170),
+        "text_q":    (15,  12,  30),    # near black for question
+        "text_a":    (15,  12,  30),    # near black for answer
+        "accent":    (210, 45,  45),    # red accent bar + numbers
+        "tag":       (90,  75, 120),    # handle colour
+        "tag_bg":    (160, 148, 188),   # handle pill bg
+        "tip_bg":    (185, 175, 210),   # card bg
+    },
+    "tech": {
+        "bg_top":    (12,  12,  22),
+        "bg_bot":    (20,  18,  38),
+        "divider":   (50,  45,  80),
+        "text_q":    (240, 240, 255),
+        "text_a":    (90, 190, 255),    # blue for answer
+        "accent":    (90, 190, 255),
+        "tag":       (140, 140, 200),
+        "tag_bg":    (35,  30,  60),
+        "tip_bg":    (25,  22,  45),
+    },
+    "purple": {
+        "bg_top":    (88,  50, 160),
+        "bg_bot":    (55,  25, 110),
+        "divider":   (120, 80, 200),
+        "text_q":    (255, 255, 255),
+        "text_a":    (255, 220, 80),    # gold for answer
+        "accent":    (255, 200, 50),
+        "tag":       (200, 180, 255),
+        "tag_bg":    (70,  40, 130),
+        "tip_bg":    (75,  42, 145),
+    },
+}
+
+# ─── Helpers ──────────────────────────────────────────────────────────────────
+
+W, H = 1080, 1350  # 4:5 portrait — Instagram + TikTok perfect
+
+def new_canvas(palette: dict) -> tuple[Image.Image, ImageDraw.ImageDraw]:
+    img  = Image.new("RGBA", (W, H), palette["bg_top"])
+    draw = ImageDraw.Draw(img)
+    # Vertical gradient: draw top→bottom bands
+    for y in range(H):
+        t   = y / H
+        r   = int(palette["bg_top"][0] * (1-t) + palette["bg_bot"][0] * t)
+        g   = int(palette["bg_top"][1] * (1-t) + palette["bg_bot"][1] * t)
+        b   = int(palette["bg_top"][2] * (1-t) + palette["bg_bot"][2] * t)
+        draw.line([(0, y), (W, y)], fill=(r, g, b))
+    return img, draw
+
+def wrap(text: str, fnt: ImageFont.FreeTypeFont,
+         max_w: int, draw: ImageDraw.ImageDraw) -> list[str]:
+    lines, line = [], ""
+    for word in text.split():
         test = (line + " " + word).strip()
-        w    = draw.textlength(test, font=font)
-        if w <= max_width:
+        if draw.textlength(test, font=fnt) <= max_w:
             line = test
         else:
-            if line:
-                lines.append(line)
+            if line: lines.append(line)
             line = word
-    if line:
-        lines.append(line)
-    return lines
+    if line: lines.append(line)
+    return lines or [""]
 
-
-def draw_text_block(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFont,
-                    color: tuple, cx: int, cy: int, max_width: int,
-                    align: str = "center", shadow: bool = True) -> int:
-    """Draw wrapped text centred at cx,cy. Returns bottom y."""
-    lines   = wrap_text(text, font, max_width, draw)
-    lh      = font.size + 8
-    total_h = len(lines) * lh
-    y       = cy - total_h // 2
+def draw_text(draw: ImageDraw.ImageDraw, text: str, fnt: ImageFont.FreeTypeFont,
+              color: tuple, cx: int, cy: int, max_w: int,
+              align: str = "center", stroke: int = 0,
+              stroke_color: tuple = (0, 0, 0)) -> int:
+    """Draw text block centred at (cx, cy). Returns bottom Y."""
+    lines  = wrap(text, fnt, max_w, draw)
+    lh     = int(fnt.size * 1.15)
+    total  = len(lines) * lh
+    y      = cy - total // 2
 
     for line in lines:
-        w = draw.textlength(line, font=font)
-        if align == "center":
-            x = cx - w // 2
-        elif align == "left":
-            x = cx
-        else:
-            x = cx - w
-
-        if shadow:
-            draw.text((x + 3, y + 3), line, font=font,
-                      fill=(0, 0, 0, 120))
-        draw.text((x, y), line, font=font, fill=color)
+        w = draw.textlength(line, font=fnt)
+        x = {"center": cx - w//2, "left": cx, "right": cx - w}.get(align, cx - w//2)
+        if stroke:
+            draw.text((x, y), line, font=fnt,
+                      fill=stroke_color, stroke_width=stroke, stroke_fill=stroke_color)
+        draw.text((x, y), line, font=fnt, fill=color)
         y += lh
-
     return y
 
+def draw_handle(draw: ImageDraw.ImageDraw, handle: str, palette: dict):
+    """Bottom-right handle pill."""
+    fnt = font("bold", 38)
+    tw  = int(draw.textlength(handle, font=fnt))
+    pad = 18
+    rh  = fnt.size + pad * 2
+    rw  = tw + pad * 3
+    rx  = W - rw - 40
+    ry  = H - rh - 40
+    # Pill
+    draw.rounded_rectangle([rx, ry, rx+rw, ry+rh], radius=rh//2,
+                            fill=(*palette["tag_bg"][:3], 200))
+    draw.text((rx + pad*1.5, ry + pad), handle, font=fnt, fill=palette["tag"])
 
-def make_qa_post(question: str, answer: str, handle: str,
-                 palette: dict, size: tuple = (1080, 1350)) -> Image.Image:
+def draw_accent_bar(draw: ImageDraw.ImageDraw, palette: dict, side: str = "left"):
+    """Accent colour bar on edge."""
+    if side == "left":
+        draw.rectangle([0, 0, 16, H], fill=palette["accent"])
+    elif side == "top":
+        draw.rectangle([0, 0, W, 18], fill=palette["accent"])
+    elif side == "both":
+        draw.rectangle([0, 0, 16, H], fill=palette["accent"])
+        draw.rectangle([0, 0, W, 18], fill=palette["accent"])
+
+# ─── Post types ───────────────────────────────────────────────────────────────
+
+def make_qa(question: str, answer: str, handle: str, palette: dict) -> Image.Image:
     """
-    Split-panel post: question on top, answer on bottom.
-    Matches the @trainwithkale reference images exactly in layout.
+    Split-panel: bold question top half, bold answer bottom half.
+    Exact @trainwithkale layout.
     """
-    W, H   = size
-    img    = Image.new("RGB", (W, H), palette["bg"])
-    draw   = ImageDraw.Draw(img)
-    mid    = H // 2
+    img, draw = new_canvas(palette)
+    mid = H // 2
 
-    # Top panel background
-    draw.rectangle([0, 0, W, mid], fill=palette["panel_top"])
-    # Bottom panel (slightly darker)
-    draw.rectangle([0, mid, W, H], fill=palette["panel_bot"])
-    # Divider line
-    draw.rectangle([0, mid - 3, W, mid + 3], fill=palette["divider"])
+    # Darker bottom panel
+    for y in range(mid, H):
+        t  = (y - mid) / (H - mid)
+        r  = int(palette["bg_top"][0] * (1 - t*0.15))
+        g  = int(palette["bg_top"][1] * (1 - t*0.15))
+        b  = int(palette["bg_top"][2] * (1 - t*0.08))
+        draw.line([(0, y), (W, y)], fill=(max(0,r), max(0,g), max(0,b)))
 
-    # ── Question text (top panel) ─────────────────────────────
-    q_font = load_font(110)
-    draw_text_block(draw, question, q_font, palette["text_main"],
-                    cx=W // 2, cy=mid // 2, max_width=W - 120, shadow=True)
+    # Divider
+    draw.rectangle([0, mid-4, W, mid+4], fill=palette["divider"])
 
-    # ── Answer text (bottom panel) ────────────────────────────
-    a_font = load_font(130)
-    draw_text_block(draw, answer, a_font, palette["text_answer"],
-                    cx=W // 2, cy=mid + (H - mid) // 2, max_width=W - 80, shadow=True)
+    # Question — giant Anton, top panel
+    q_fnt = font("heavy", 148)
+    draw_text(draw, question, q_fnt, palette["text_q"],
+              cx=W//2, cy=mid//2, max_w=W-100, stroke=4,
+              stroke_color=(0,0,0) if palette["text_q"][0] > 100 else (255,255,255))
 
-    # ── Accent bar on left edge ───────────────────────────────
-    draw.rectangle([0, 0, 12, H], fill=palette["accent"])
+    # Answer — even bigger, bottom panel
+    a_fnt = font("heavy", 170)
+    draw_text(draw, answer, a_fnt, palette["text_a"],
+              cx=W//2, cy=mid + (H-mid)//2, max_w=W-60, stroke=5,
+              stroke_color=(0,0,0) if palette["text_a"][0] > 100 else (20,20,20))
 
-    # ── Handle watermark ─────────────────────────────────────
-    h_font = load_font(42, bold=False)
-    draw.text((W - 20, H - 60), handle, font=h_font,
-              fill=palette["handle"], anchor="rs")
-
-    return img
+    draw_accent_bar(draw, palette, "left")
+    draw_handle(draw, handle, palette)
+    return img.convert("RGB")
 
 
-def make_steps_post(title: str, steps: list[str], handle: str,
-                    palette: dict, size: tuple = (1080, 1350)) -> Image.Image:
-    """
-    Vertical steps/progression post with numbered list.
-    """
-    W, H  = size
-    img   = Image.new("RGB", (W, H), palette["bg"])
-    draw  = ImageDraw.Draw(img)
-
-    # Subtle gradient effect (draw bands)
-    for i in range(H):
-        t = i / H
-        r = int(palette["bg"][0] * (1 - t * 0.08))
-        g = int(palette["bg"][1] * (1 - t * 0.08))
-        b = int(palette["bg"][2] * (1 - t * 0.05))
-        draw.line([(0, i), (W, i)], fill=(r, g, b))
-
-    # Accent bar
-    draw.rectangle([0, 0, 14, H], fill=palette["accent"])
+def make_steps(title: str, steps: list[str], handle: str,
+               palette: dict, subtitle: str = "") -> Image.Image:
+    """Numbered progression steps with accent circles."""
+    img, draw = new_canvas(palette)
+    draw_accent_bar(draw, palette, "left")
 
     # Title
-    t_font = load_font(100)
-    title_y = draw_text_block(draw, title, t_font, palette["text_main"],
-                               cx=W // 2, cy=130, max_width=W - 140, shadow=True)
+    t_fnt  = font("heavy", 110)
+    title_bottom = draw_text(draw, title, t_fnt, palette["text_q"],
+                              cx=W//2, cy=140, max_w=W-130, stroke=3,
+                              stroke_color=(0,0,0) if palette["text_q"][0]>100 else (255,255,255))
 
-    # Divider under title
-    draw.rectangle([60, title_y + 20, W - 60, title_y + 26],
+    if subtitle:
+        s_fnt = font("bold", 52)
+        draw.text((W//2, title_bottom+14), subtitle, font=s_fnt,
+                  fill=palette["accent"], anchor="mt")
+        title_bottom += 70
+
+    # Thick accent line under title
+    lx = 70
+    draw.rectangle([lx, title_bottom+22, W-lx, title_bottom+30],
                    fill=palette["accent"])
 
     # Steps
-    s_font  = load_font(62)
-    n_font  = load_font(72)
-    step_h  = (H - title_y - 120) // max(len(steps), 1)
-    y       = title_y + 60
+    n   = len(steps)
+    avail = H - title_bottom - 130
+    step_h = avail // max(n, 1)
+    y     = title_bottom + 58
+    s_fnt = font("bold", 60)
+    n_fnt = font("heavy", 64)
 
     for i, step in enumerate(steps, 1):
-        cx = W // 2
-        # Number circle
-        circle_r = 44
-        circle_x = 90
-        draw.ellipse([circle_x - circle_r, y - circle_r,
-                      circle_x + circle_r, y + circle_r],
+        mid_y = y + step_h // 2
+        # Circle
+        cr = 48
+        cx = 88
+        # Shadow circle
+        draw.ellipse([cx-cr+3, mid_y-cr+3, cx+cr+3, mid_y+cr+3],
+                     fill=(*palette["divider"], 120))
+        draw.ellipse([cx-cr, mid_y-cr, cx+cr, mid_y+cr],
                      fill=palette["accent"])
-        num_w = draw.textlength(str(i), font=n_font)
-        draw.text((circle_x - num_w // 2, y - n_font.size // 2),
-                  str(i), font=n_font, fill=(255, 255, 255))
+        nw = draw.textlength(str(i), font=n_fnt)
+        draw.text((cx - nw//2, mid_y - n_fnt.size//2),
+                  str(i), font=n_fnt, fill=(255,255,255))
 
         # Step text
-        lines = wrap_text(step, s_font, W - 200, draw)
-        line_y = y - (len(lines) * (s_font.size + 6)) // 2
-        for line in lines:
-            draw.text((160, line_y), line, font=s_font,
-                      fill=palette["text_main"])
-            line_y += s_font.size + 6
+        lines = wrap(step, s_fnt, W - 200, draw)
+        lh    = int(s_fnt.size * 1.2)
+        ty    = mid_y - (len(lines) * lh)//2
+        for ln in lines:
+            draw.text((155, ty), ln, font=s_fnt, fill=palette["text_q"])
+            ty += lh
 
-        # Connector line to next step
-        if i < len(steps):
-            draw.rectangle([86, y + circle_r, 94, y + step_h - circle_r],
+        # Connector
+        if i < n:
+            draw.rectangle([cx-4, mid_y+cr, cx+4, mid_y+step_h-cr],
                            fill=palette["divider"])
         y += step_h
 
-    # Handle
-    h_font = load_font(40)
-    draw.text((W - 20, H - 55), handle, font=h_font,
-              fill=palette["handle"], anchor="rs")
-
-    return img
+    draw_handle(draw, handle, palette)
+    return img.convert("RGB")
 
 
-def make_info_post(title: str, points: list[str], handle: str,
-                   palette: dict, subtitle: str = "",
-                   size: tuple = (1080, 1350)) -> Image.Image:
-    """
-    Info/tips post with bold title and bullet points.
-    Good for tech content.
-    """
-    W, H  = size
-    img   = Image.new("RGB", (W, H), palette["bg"])
-    draw  = ImageDraw.Draw(img)
-
-    # Background gradient
-    for i in range(H):
-        t = i / H
-        r = int(palette["bg"][0] + (palette["panel_bot"][0] - palette["bg"][0]) * t)
-        g = int(palette["bg"][1] + (palette["panel_bot"][1] - palette["bg"][1]) * t)
-        b = int(palette["bg"][2] + (palette["panel_bot"][2] - palette["bg"][2]) * t)
-        draw.line([(0, i), (W, i)], fill=(max(0,min(255,r)), max(0,min(255,g)), max(0,min(255,b))))
-
-    # Top accent band
-    draw.rectangle([0, 0, W, 18], fill=palette["accent"])
-    draw.rectangle([0, 0, 14, H], fill=palette["accent"])
+def make_info(title: str, points: list[str], handle: str,
+              palette: dict, subtitle: str = "") -> Image.Image:
+    """Bold title + numbered tips. Great for tech content."""
+    img, draw = new_canvas(palette)
+    draw_accent_bar(draw, palette, "both")
 
     # Title
-    t_font   = load_font(108)
-    title_y  = draw_text_block(draw, title, t_font, palette["text_main"],
-                                cx=W // 2, cy=150, max_width=W - 140, shadow=False)
+    t_fnt = font("heavy", 118)
+    ty    = draw_text(draw, title, t_fnt, palette["text_q"],
+                       cx=W//2, cy=155, max_w=W-130, stroke=3,
+                       stroke_color=(0,0,0) if palette["text_q"][0]>100 else (30,30,30))
 
     if subtitle:
-        sub_font = load_font(52)
-        draw.text((W // 2, title_y + 20), subtitle, font=sub_font,
+        sf = font("bold", 50)
+        draw.text((W//2, ty+16), subtitle, font=sf,
                   fill=palette["accent"], anchor="mt")
-        title_y += 80
+        ty += 72
 
     # Divider
-    draw.rectangle([60, title_y + 30, W - 60, title_y + 36],
-                   fill=palette["accent"])
+    draw.rectangle([60, ty+26, W-60, ty+34], fill=palette["accent"])
 
     # Points
-    p_font   = load_font(58)
-    num_font = load_font(58)
-    avail_h  = H - title_y - 140
-    item_h   = avail_h // max(len(points), 1)
-    y        = title_y + 70
+    n      = len(points)
+    avail  = H - ty - 120
+    item_h = avail // max(n, 1)
+    y      = ty + 60
+    p_fnt  = font("bold", 54)
+    i_fnt  = font("heavy", 56)
 
     for i, point in enumerate(points, 1):
-        # Number
-        num_txt = f"{i}."
-        draw.text((70, y), num_txt, font=num_font, fill=palette["accent"])
+        mid_y = y + item_h//2
+
+        # Number badge
+        bw, bh = 72, 72
+        bx = 56
+        draw.rounded_rectangle([bx, mid_y-bh//2, bx+bw, mid_y+bh//2],
+                                radius=14, fill=palette["accent"])
+        nw = draw.textlength(str(i), font=i_fnt)
+        draw.text((bx + bw//2 - nw//2, mid_y - i_fnt.size//2),
+                  str(i), font=i_fnt, fill=(255, 255, 255))
 
         # Point text
-        lines  = wrap_text(point, p_font, W - 200, draw)
-        for j, line in enumerate(lines):
-            draw.text((160, y + j * (p_font.size + 8)), line,
-                      font=p_font, fill=palette["text_main"])
+        lines = wrap(point, p_fnt, W - 190, draw)
+        lh    = int(p_fnt.size * 1.18)
+        ty2   = mid_y - (len(lines) * lh)//2
+        for ln in lines:
+            draw.text((148, ty2), ln, font=p_fnt, fill=palette["text_q"])
+            ty2 += lh
+
+        # Thin separator
+        if i < n:
+            sep_y = y + item_h - 8
+            draw.rectangle([56, sep_y, W-56, sep_y+2],
+                           fill=(*palette["divider"], 100))
         y += item_h
 
-    # Handle
-    h_font = load_font(40)
-    draw.text((W - 20, H - 55), handle, font=h_font,
-              fill=palette["handle"], anchor="rs")
-
-    return img
+    draw_handle(draw, handle, palette)
+    return img.convert("RGB")
 
 
-def generate(post_type: str, output: str, handle: str = "@oykamal",
-             question: str = "", answer: str = "", title: str = "",
-             steps: list = None, points: list = None,
-             subtitle: str = "", palette_name: str = "fitness") -> str:
-    """Main entry point — generate image and save to output path."""
+def make_tip(tip: str, context: str, handle: str, palette: dict) -> Image.Image:
+    """Single bold tip with context line. Very shareable."""
+    img, draw = new_canvas(palette)
+    draw_accent_bar(draw, palette, "left")
+
+    # Large quote mark
+    q_fnt = font("heavy", 300)
+    draw.text((50, -30), "“", font=q_fnt,
+              fill=(*palette["accent"][:3], 60))
+
+    # Tip text — massive
+    t_fnt = font("heavy", 120)
+    ty    = draw_text(draw, tip, t_fnt, palette["text_q"],
+                       cx=W//2, cy=H//2 - 60, max_w=W-120, stroke=3,
+                       stroke_color=(0,0,0) if palette["text_q"][0]>100 else (30,30,30))
+
+    # Context
+    if context:
+        c_fnt = font("bold", 52)
+        draw.text((W//2, ty + 40), context, font=c_fnt,
+                  fill=palette["accent"], anchor="mt")
+
+    # Bottom accent line
+    draw.rectangle([80, H-130, W-80, H-122], fill=palette["accent"])
+
+    draw_handle(draw, handle, palette)
+    return img.convert("RGB")
+
+
+# ─── Entry point ──────────────────────────────────────────────────────────────
+
+def generate(post_type: str, output: str, palette_name: str = "fitness",
+             handle: str = "@oykamal", question: str = "", answer: str = "",
+             title: str = "", subtitle: str = "", tip: str = "", context: str = "",
+             steps: list = None, points: list = None) -> str:
     palette = PALETTES.get(palette_name, PALETTES["fitness"])
-    size    = (1080, 1350)  # 4:5 vertical — perfect for Instagram + TikTok
-
     if post_type == "qa":
-        img = make_qa_post(question, answer, handle, palette, size)
+        img = make_qa(question.upper(), answer.upper(), handle, palette)
     elif post_type == "steps":
-        img = make_steps_post(title, steps or [], handle, palette, size)
+        img = make_steps(title.upper(), steps or [], handle, palette, subtitle)
     elif post_type == "info":
-        img = make_info_post(title, points or [], handle, palette,
-                             subtitle=subtitle, size=size)
+        img = make_info(title.upper(), points or [], handle, palette, subtitle)
+    elif post_type == "tip":
+        img = make_tip(tip, context, handle, palette)
     else:
-        raise ValueError(f"Unknown post type: {post_type}")
-
-    img.save(output, "PNG", quality=95)
+        raise ValueError(f"Unknown type: {post_type}")
+    img.save(output, "PNG", quality=95, optimize=True)
     return output
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--type", default="qa",
-                        choices=["qa", "steps", "info"])
-    parser.add_argument("--question", default="")
-    parser.add_argument("--answer",   default="")
-    parser.add_argument("--title",    default="")
-    parser.add_argument("--subtitle", default="")
-    parser.add_argument("--steps",    default="")   # comma-separated
-    parser.add_argument("--points",   default="")   # comma-separated
-    parser.add_argument("--handle",   default="@oykamal")
-    parser.add_argument("--palette",  default="fitness",
-                        choices=["fitness", "tech", "info"])
-    parser.add_argument("--output",   default="/tmp/social-post.png")
-    args = parser.parse_args()
-
-    steps_list  = [s.strip() for s in args.steps.split(",")  if s.strip()]
-    points_list = [p.strip() for p in args.points.split(",") if p.strip()]
+    p = argparse.ArgumentParser()
+    p.add_argument("--type",     default="qa",
+                   choices=["qa","steps","info","tip"])
+    p.add_argument("--question", default="")
+    p.add_argument("--answer",   default="")
+    p.add_argument("--title",    default="")
+    p.add_argument("--subtitle", default="")
+    p.add_argument("--tip",      default="")
+    p.add_argument("--context",  default="")
+    p.add_argument("--steps",    default="")
+    p.add_argument("--points",   default="")
+    p.add_argument("--handle",   default="@oykamal")
+    p.add_argument("--palette",  default="fitness",
+                   choices=["fitness","tech","purple"])
+    p.add_argument("--output",   default="/tmp/social-post.png")
+    args = p.parse_args()
 
     out = generate(
         post_type    = args.type,
         output       = args.output,
+        palette_name = args.palette,
         handle       = args.handle,
         question     = args.question,
         answer       = args.answer,
         title        = args.title,
         subtitle     = args.subtitle,
-        steps        = steps_list,
-        points       = points_list,
-        palette_name = args.palette,
+        tip          = args.tip,
+        context      = args.context,
+        steps        = [s.strip() for s in args.steps.split(",") if s.strip()],
+        points       = [s.strip() for s in args.points.split(",") if s.strip()],
     )
     print(f"Saved: {out}")
