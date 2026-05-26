@@ -49,6 +49,7 @@ from kamil_health import log_response_quality, log_critique
 from kamil_eval_tracker import (eval_conversation, eval_proactive_dm,
                                  record_reaction, expire_pending)
 from notebooklm_handler import handle as nlm_handle, is_notebooklm_command
+from linkedin_poster import post_to_linkedin
 
 # ── Config ────────────────────────────────────────────────────────────────────
 SLACK_CONFIG = Path.home() / ".claude" / "hooks" / ".slack"
@@ -681,6 +682,26 @@ BOT_TOKEN is in ~/.claude/hooks/.slack"""
                 start_new_session=True,
             )
             log(f"Content pipeline started — fitness: {fit_topic[:40]} | tech: {tech_topic[:40]}")
+
+            # Also post today's tech caption to LinkedIn directly
+            # (fitness goes to Instagram/TikTok only, tech goes to all platforms)
+            from datetime import date as _d
+            _day = _d.today().day
+            TECH_CAPTIONS = [
+                "5 Claude prompts that replaced 80% of my Stack Overflow usage 🤖\n\nAfter 1 year building production Django at Taleemabad (10K+ DAU), these prompts save me 3+ hours every week:\n\n1️⃣ Review this code for security vulnerabilities\n2️⃣ Write tests with edge cases\n3️⃣ Refactor without changing behavior\n4️⃣ Explain this error 3 ways\n5️⃣ What breaks if I change X?\n\nSpecificity beats vagueness. Every time.\n\n#ClaudeAI #SoftwareEngineering #Python #Django #AITools #DeveloperProductivity",
+                "I built a personal AI agent that works 24/7 on my behalf 🤖\n\nKamil monitors Slack, reviews PRs, finds freelance work, posts content, and heals itself when it crashes.\n\nBuilt with Claude API, Python, and MCP.\n\nThe stack: Slack SDK + Notion MCP + GitHub CLI + NotebookLM + LinkedIn API\n\nMore details in my next post.\n\n#AIAgents #ClaudeAI #BuildInPublic #Python #SoftwareEngineering",
+                "Django multi-tenant architecture — the pattern that scales 🏗️\n\nAt Taleemabad we serve 10K+ daily active users across multiple tenants.\n\nThe key: every single query is scoped by tenant_id in middleware. No exceptions.\n\n→ Middleware injects tenant context\n→ Custom QuerySet filters automatically\n→ Migrations are tenant-aware\n→ APIs return only tenant data\n\nOne mistake = data leak. Zero tolerance.\n\n#Django #Python #SoftwareArchitecture #MultiTenant #Backend",
+                "Why I switched from ChatGPT to Claude for production code 🔄\n\nAfter using both for 2+ years on real Django/Python projects:\n\nClaude wins on:\n→ Longer context (whole files, not snippets)\n→ More careful with breaking changes\n→ Better at explaining WHY, not just what\n→ Follows constraints more reliably\n\nBoth are tools. Know when to use which.\n\n#ClaudeAI #ChatGPT #AITools #Developer #Python",
+                "How I reduced API latency by 40% at Taleemabad ⚡\n\nReal numbers from production Django:\n\nBefore: 800ms avg response\nAfter: 480ms avg response\n\nWhat worked:\n1. N+1 query elimination (select_related + prefetch_related)\n2. Redis caching for hot endpoints\n3. PostgreSQL index optimization\n4. Pagination on all list endpoints\n\nNone of it was magic. All of it was measurement first.\n\n#Django #Python #PerformanceOptimization #Backend #PostgreSQL",
+                "MCP (Model Context Protocol) explained simply 🔌\n\nIf you're building AI agents, you need to understand this.\n\nMCP = a standard way for AI to talk to external tools.\n\nInstead of writing custom integrations for every tool, you write one MCP server and any AI can use it.\n\nI use MCP to connect Claude to: Notion, Slack, Gmail, LinkedIn, GitHub, NotebookLM.\n\nOne protocol. Unlimited integrations.\n\n#MCP #ClaudeAI #AIAgents #Developer #BuildInPublic",
+                "Building offline-first apps: what I learned at Taleemabad 📱\n\nWe serve teachers in areas with poor connectivity.\nThe app must work offline. Always.\n\nOur stack: Dexie.js (IndexedDB) + Django backend\n\nThe hard parts:\n→ Conflict resolution (who wins: local or server?)\n→ Sync ordering (dependencies matter)\n→ Data size limits (IndexedDB isn't infinite)\n→ Testing offline scenarios\n\nOffline-first is an architecture decision. Make it early.\n\n#OfflineFirst #Django #React #EdTech #MobileFirst",
+                "Zero-downtime database migrations: a practical guide 🗄️\n\nWe run 99.99% uptime on Taleemabad. Migrations can't take down the site.\n\nThe pattern:\n1. Add column as nullable (deploy)\n2. Backfill data in batches (background job)\n3. Make column required (deploy)\n4. Drop old column (deploy)\n\n4 deploys. Zero downtime. Millions of rows.\n\nNever rename columns. Never do both schema + data in one migration.\n\n#Django #PostgreSQL #DevOps #ZeroDowntime #Backend",
+                "How I use NotebookLM for deep technical research 📚\n\nBefore building any feature, I run:\nnlm research '[topic]' --mode deep\n\nIt pulls 40+ real sources in 5 minutes.\n\nThen: nlm slides, nlm podcast, nlm quiz\n\nI've used it for: Django patterns, AWS architecture, AI agent design, PostgreSQL optimization.\n\n40 sources > 1 Stack Overflow answer.\n\n#NotebookLM #Research #Developer #AITools #Learning",
+                "AWS ECS Fargate vs traditional servers — when to use each 🖥️\n\nAt Taleemabad we moved from EC2 to ECS Fargate.\n\nWhen Fargate wins:\n→ Variable load (scale to zero)\n→ No desire to manage OS patches\n→ Container-native apps\n→ Cost matters at low traffic\n\nWhen EC2 wins:\n→ Predictable high load (reserved instances cheaper)\n→ GPU workloads\n→ Very specific OS requirements\n\nWe use Fargate. Taleemabad team stays small.\n\n#AWS #ECS #Fargate #DevOps #CloudArchitecture",
+            ]
+            linkedin_caption = TECH_CAPTIONS[_day % 10]
+            li_result = post_to_linkedin(linkedin_caption)
+            log(f"LinkedIn auto-post: {li_result}")
 
         except Exception as e:
             log(f"Content pipeline error: {e}")

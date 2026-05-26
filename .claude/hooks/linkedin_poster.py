@@ -1,0 +1,178 @@
+#!/usr/bin/env python3
+"""
+linkedin_poster.py — Post text + image to LinkedIn on Kamal's behalf.
+
+Uses LinkedIn UGC Posts API with w_member_social scope.
+Token valid 2 months — stored in ~/.claude/hooks/.linkedin
+"""
+
+import json
+import sys
+import urllib.request
+import urllib.parse
+from pathlib import Path
+
+LINKEDIN_CFG = Path.home() / ".claude" / "hooks" / ".linkedin"
+API_BASE     = "https://api.linkedin.com/v2"
+
+
+def load_token() -> str:
+    if LINKEDIN_CFG.exists():
+        for line in LINKEDIN_CFG.read_text().splitlines():
+            if line.startswith("LINKEDIN_ACCESS_TOKEN="):
+                return line.split("=", 1)[1].strip()
+    return ""
+
+
+def get_person_urn(token: str) -> str:
+    req = urllib.request.Request(
+        f"{API_BASE}/userinfo",
+        headers={"Authorization": f"Bearer {token}"}
+    )
+    with urllib.request.urlopen(req, timeout=10) as r:
+        data = json.loads(r.read())
+    return f"urn:li:person:{data['sub']}"
+
+
+def upload_image(token: str, person_urn: str, image_path: str) -> str:
+    """Upload image and return asset URN."""
+    headers = {
+        "Authorization":  f"Bearer {token}",
+        "Content-Type":   "application/json",
+        "X-Restli-Protocol-Version": "2.0.0",
+    }
+
+    # Step 1: Register upload
+    reg_body = json.dumps({
+        "registerUploadRequest": {
+            "recipes": ["urn:li:digitalmediaRecipe:feedshare-image"],
+            "owner": person_urn,
+            "serviceRelationships": [{
+                "relationshipType": "OWNER",
+                "identifier": "urn:li:userGeneratedContent"
+            }]
+        }
+    }).encode()
+
+    req = urllib.request.Request(
+        f"{API_BASE}/assets?action=registerUpload",
+        data=reg_body, headers=headers
+    )
+    with urllib.request.urlopen(req, timeout=15) as r:
+        reg = json.loads(r.read())
+
+    upload_url = reg["value"]["uploadMechanism"][
+        "com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest"]["uploadUrl"]
+    asset_urn  = reg["value"]["asset"]
+
+    # Step 2: Upload image bytes
+    with open(image_path, "rb") as f:
+        img_data = f.read()
+
+    ul_req = urllib.request.Request(
+        upload_url, data=img_data,
+        headers={"Authorization": f"Bearer {token}"},
+        method="PUT"
+    )
+    with urllib.request.urlopen(ul_req, timeout=30):
+        pass
+
+    return asset_urn
+
+
+def post_text(token: str, text: str, visibility: str = "PUBLIC") -> dict:
+    """Post text-only to LinkedIn."""
+    person_urn = get_person_urn(token)
+    headers = {
+        "Authorization":  f"Bearer {token}",
+        "Content-Type":   "application/json",
+        "X-Restli-Protocol-Version": "2.0.0",
+    }
+    payload = json.dumps({
+        "author":         person_urn,
+        "lifecycleState": "PUBLISHED",
+        "specificContent": {
+            "com.linkedin.ugc.ShareContent": {
+                "shareCommentary":    {"text": text},
+                "shareMediaCategory": "NONE"
+            }
+        },
+        "visibility": {
+            "com.linkedin.ugc.MemberNetworkVisibility": visibility
+        }
+    }).encode()
+
+    req = urllib.request.Request(
+        f"{API_BASE}/ugcPosts",
+        data=payload, headers=headers
+    )
+    with urllib.request.urlopen(req, timeout=15) as r:
+        return json.loads(r.read())
+
+
+def post_image(token: str, text: str, image_path: str,
+               visibility: str = "PUBLIC") -> dict:
+    """Post text + image to LinkedIn."""
+    person_urn = get_person_urn(token)
+    asset_urn  = upload_image(token, person_urn, image_path)
+
+    headers = {
+        "Authorization":  f"Bearer {token}",
+        "Content-Type":   "application/json",
+        "X-Restli-Protocol-Version": "2.0.0",
+    }
+    payload = json.dumps({
+        "author":         person_urn,
+        "lifecycleState": "PUBLISHED",
+        "specificContent": {
+            "com.linkedin.ugc.ShareContent": {
+                "shareCommentary":    {"text": text},
+                "shareMediaCategory": "IMAGE",
+                "media": [{
+                    "status":      "READY",
+                    "description": {"text": ""},
+                    "media":       asset_urn,
+                    "title":       {"text": ""}
+                }]
+            }
+        },
+        "visibility": {
+            "com.linkedin.ugc.MemberNetworkVisibility": visibility
+        }
+    }).encode()
+
+    req = urllib.request.Request(
+        f"{API_BASE}/ugcPosts",
+        data=payload, headers=headers
+    )
+    with urllib.request.urlopen(req, timeout=15) as r:
+        return json.loads(r.read())
+
+
+def post_to_linkedin(text: str, image_path: str = None) -> str:
+    """Main entry point. Returns post URL or error."""
+    token = load_token()
+    if not token:
+        return "❌ No LinkedIn token — run OAuth flow first"
+    try:
+        if image_path and Path(image_path).exists():
+            result = post_image(token, text, image_path)
+        else:
+            result = post_text(token, text)
+
+        post_id = result.get("id", "")
+        return f"✅ Posted to LinkedIn | ID: {post_id}"
+    except urllib.error.HTTPError as e:
+        body = e.read().decode()
+        return f"❌ LinkedIn API error {e.code}: {body[:200]}"
+    except Exception as e:
+        return f"❌ Error: {e}"
+
+
+if __name__ == "__main__":
+    import argparse
+    p = argparse.ArgumentParser()
+    p.add_argument("--text",  required=True)
+    p.add_argument("--image", default=None)
+    args = p.parse_args()
+    print(post_to_linkedin(args.text, args.image))
