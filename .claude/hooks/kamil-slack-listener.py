@@ -570,6 +570,10 @@ def dispatch(text: str, web: WebClient, channel: str, thread_ts: str, source: st
     # Expire old pending evals (no reaction within 35 min = reacted:no)
     expire_pending(max_age_minutes=35)
 
+    # ── First message of the day — run content pipeline if not done yet ──────
+    if sender_id == KAMAL_USER_ID and not is_third_party:
+        _maybe_run_daily_content()
+
     # ── NotebookLM fast-path — bypass Claude for nlm commands ────────────────
     if sender_id == KAMAL_USER_ID and is_notebooklm_command(clean):
         cfg       = load_config()
@@ -587,6 +591,101 @@ def dispatch(text: str, web: WebClient, channel: str, thread_ts: str, source: st
               sender_id, sender_name, is_third_party, is_dm),
         daemon=True,
     ).start()
+
+
+_content_ran_today = Path("/tmp/kamil-content-ran.txt")
+
+def _maybe_run_daily_content():
+    """
+    Run the social media content pipeline once per day — triggered on
+    Kamal's first Slack message of the day, regardless of time.
+    Skips if already ran today.
+    """
+    from datetime import date
+    today = str(date.today())
+
+    # Already ran today?
+    if _content_ran_today.exists():
+        if _content_ran_today.read_text().strip() == today:
+            return
+
+    # Mark as ran immediately so parallel messages don't trigger twice
+    _content_ran_today.write_text(today)
+
+    log("First message of the day — running content pipeline")
+
+    def run_pipeline():
+        try:
+            import subprocess, os
+            from datetime import date as d
+            day   = d.today().day
+            cfg   = load_config()
+            token = cfg.get("BOT_TOKEN", "")
+
+            FITNESS_TOPICS = [
+                "Calisthenics pull-up progression for beginners",
+                "Swimming freestyle breathing technique mistakes to avoid",
+                "Hiking essential gear for Pakistan mountain trails",
+                "Cycling training zones explained simply",
+                "Calisthenics perfect push-up form breakdown",
+                "Swimming 4-week beginner workout plan",
+                "Hiking how to read trail maps and elevation",
+                "Cycling how to climb hills without burning out",
+                "Calisthenics handstand progression from zero",
+                "Swimming open water vs pool swimming differences",
+            ]
+            TECH_TOPICS = [
+                "5 Claude prompts every developer must know 2026",
+                "How to build a personal AI agent what I learned",
+                "Django multi-tenant architecture explained simply",
+                "Why I switched from ChatGPT to Claude for coding",
+                "How I reduced API latency 40 percent at Taleemabad",
+                "MCP Model Context Protocol explained for developers",
+                "Building offline-first apps with Dexie.js and Django",
+                "Zero-downtime database migrations practical guide",
+                "How to use NotebookLM for deep technical research",
+                "AWS ECS Fargate vs traditional servers when to use each",
+            ]
+
+            fit_topic  = FITNESS_TOPICS[day % 10]
+            tech_topic = TECH_TOPICS[day % 10]
+
+            nvm = 'export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"'
+            env = os.environ.copy()
+            kamil_dir = str(KAMIL_DIR)
+
+            prompt = f"""You are Kamil. Run today's social media content pipeline.
+
+FITNESS TOPIC: {fit_topic}
+TECH TOPIC: {tech_topic}
+
+Do this for EACH topic:
+1. `nlm notebook create "[TOPIC]"` → get notebook ID
+2. `nlm research start "[TOPIC] tips guide educational" --notebook-id [ID] --mode deep --auto-import`
+3. `nlm slides create [ID] --focus "[TOPIC]" --confirm`
+4. Wait for slides (poll `nlm status artifacts [ID]` until completed)
+5. `nlm download slide-deck [ID] --output /tmp/[fitness|tech]-today-slides.pdf`
+6. Convert PDF to PNGs: `pdftoppm -r 150 -png /tmp/[...].pdf /tmp/[fitness|tech]-slide-today`
+7. Upload each slide PNG to Slack channel D0B415M06SK using BOT_TOKEN from ~/.claude/hooks/.slack
+   Format: "🏃 Slide N/total — [topic]" or "💻 Slide N/total — [topic]"
+8. Post caption message with title, description, hashtags for Instagram + TikTok (fitness) and Instagram + TikTok + LinkedIn + YouTube (tech)
+
+English only. Both accounts every day.
+BOT_TOKEN is in ~/.claude/hooks/.slack"""
+
+            env["KAMIL_CONTENT_PROMPT"] = prompt
+            subprocess.Popen(
+                ["bash", "-c", f'{nvm} && claude --dangerously-skip-permissions --print -p "$KAMIL_CONTENT_PROMPT"'],
+                cwd=kamil_dir, env=env,
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+            log(f"Content pipeline started — fitness: {fit_topic[:40]} | tech: {tech_topic[:40]}")
+
+        except Exception as e:
+            log(f"Content pipeline error: {e}")
+
+    threading.Thread(target=run_pipeline, daemon=True).start()
 
 
 def _check_pending_reactions(channel: str, ts: str):
