@@ -32,7 +32,7 @@ KNOWN_DBS = {
     "c976d58ea4e34b0585f245529cdc4528": "People Intelligence",
     "94017dd157b44f3ca96423ad2ad989da": "Eval Log",
     "27e287b7a3d146c6b5e8eb0d862d746f": "Health Log",
-    "36bd8747b3b1810da374e059835f00cd": "Content Calendar",
+    "68792d2dfff84691a4f646f5a8126149": "Content Calendar",
     # Page IDs
     "364d8747b3b1813d8ac8c248800f0a4d": "Kamal's Agent Brain (page)",
     "365d8747b3b181b281b8ef5820e15881": "Kamil Self-Questions (page)",
