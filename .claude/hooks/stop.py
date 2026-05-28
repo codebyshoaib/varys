@@ -142,6 +142,26 @@ def main():
         print("[stop] MemPalace sync failed; continuing", file=sys.stderr)
         # Don't exit
 
+    # 4. Update notion-map.md with session activity summary
+    try:
+        today = datetime.now().strftime("%Y-%m-%d")
+        log_file = workspace_root / "vault" / "logs" / f"{today}.md"
+        if log_file.exists():
+            lines = [l.strip() for l in log_file.read_text().splitlines()
+                     if l.strip().startswith("-")]
+            summary = " | ".join(lines[-3:]) if lines else "session ended"
+        else:
+            summary = "session ended"
+        run_cmd(
+            ["python3",
+             str(workspace_root / ".claude" / "hooks" / "notion-map-updater.py"),
+             "--mode", "session", "--summary", summary[:200]],
+            cwd=str(workspace_root)
+        )
+        print("[stop] notion-map.md updated", file=sys.stderr)
+    except Exception as e:
+        print(f"[stop] notion-map update failed (non-fatal): {e}", file=sys.stderr)
+
     print("[stop] Stop hook completed", file=sys.stderr)
     return 0
 
