@@ -3,7 +3,7 @@
 > Auto-updated: session end (stop hook) + 2am daily cron via `notion-map-updater.py`.
 > To regenerate manually: `python3 .claude/hooks/notion-map-updater.py --mode daily`
 
-Last full scan: <!-- LAST_SCAN -->
+Last full scan: 2026-05-28 12:20
 
 ---
 
@@ -127,4 +127,6 @@ Last full scan: <!-- LAST_SCAN -->
 
 ## Activity Log
 <!-- ACTIVITY_LOG_START -->
+- 2026-05-28 12:20 — smoke test
+- 2026-05-28 12:20 — Daily scan: 21 IDs across hooks | ⚠️ UNKNOWN `2e46d119159e46349195a7343e590dbe` in kamil_eval.py | ⚠️ UNKNOWN `2e46d119159e463491954a7343e590db` in notion-map-updater.py | ⚠️ UNKNOWN `76624bf582ce4f11b379e07f308c6c4a` in notebooklm_handler.py | ⚠️ UNKNOWN `a2e6473abc3c4737b1b93c67e1fb94ae` in notebooklm_handler.py | ⚠️ UNKNOWN `a03e5a92d7064ffb9bd7a3498dc7779d` in notebooklm_handler.py | ⚠️ UNKNOWN `1a76701b9e16411f9c2eea73223a8695` in notebooklm_handler.py
 <!-- ACTIVITY_LOG_END -->
