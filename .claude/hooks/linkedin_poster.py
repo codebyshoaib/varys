@@ -41,8 +41,6 @@ def upload_image(token: str, person_urn: str, image_path: str) -> str:
         "Content-Type":   "application/json",
         "X-Restli-Protocol-Version": "2.0.0",
     }
-
-    # Step 1: Register upload
     reg_body = json.dumps({
         "registerUploadRequest": {
             "recipes": ["urn:li:digitalmediaRecipe:feedshare-image"],
@@ -53,7 +51,6 @@ def upload_image(token: str, person_urn: str, image_path: str) -> str:
             }]
         }
     }).encode()
-
     req = urllib.request.Request(
         f"{API_BASE}/assets?action=registerUpload",
         data=reg_body, headers=headers
@@ -65,18 +62,13 @@ def upload_image(token: str, person_urn: str, image_path: str) -> str:
         "com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest"]["uploadUrl"]
     asset_urn  = reg["value"]["asset"]
 
-    # Step 2: Upload image bytes
     with open(image_path, "rb") as f:
         img_data = f.read()
-
-    ul_req = urllib.request.Request(
-        upload_url, data=img_data,
-        headers={"Authorization": f"Bearer {token}"},
-        method="PUT"
-    )
-    with urllib.request.urlopen(ul_req, timeout=30):
+    ul_req = urllib.request.Request(upload_url, data=img_data,
+                                    headers={"Authorization": f"Bearer {token}"},
+                                    method="PUT")
+    with urllib.request.urlopen(ul_req, timeout=60):
         pass
-
     return asset_urn
 
 
@@ -115,7 +107,6 @@ def post_image(token: str, text: str, image_path: str,
     """Post text + image to LinkedIn."""
     person_urn = get_person_urn(token)
     asset_urn  = upload_image(token, person_urn, image_path)
-
     headers = {
         "Authorization":  f"Bearer {token}",
         "Content-Type":   "application/json",
@@ -140,7 +131,6 @@ def post_image(token: str, text: str, image_path: str,
             "com.linkedin.ugc.MemberNetworkVisibility": visibility
         }
     }).encode()
-
     req = urllib.request.Request(
         f"{API_BASE}/ugcPosts",
         data=payload, headers=headers
