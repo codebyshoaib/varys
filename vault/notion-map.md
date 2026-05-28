@@ -20,6 +20,7 @@ Last full scan: 2026-05-28 12:21
 | Eval Log | `94017dd157b44f3ca96423ad2ad989da` | Conversation quality scores (Good/Partial/Wrong) |
 | Health Log | `27e287b7a3d146c6b5e8eb0d862d746f` | Operational health, errors, self-heals |
 | Content Calendar | `68792d2dfff84691a4f646f5a8126149` | Social media topics (Pending/In Progress/Done) |
+| Content Log | `630d86afb17746f9ad6f9bc78afefa02` | Every post generated — topic, caption, hashtags, NLM ID, LinkedIn ID, score |
 
 ---
 
@@ -203,4 +204,5 @@ Last full scan: 2026-05-28 12:21
 - 2026-05-28 18:00 — session ended
 - 2026-05-28 18:29 — session ended
 - 2026-05-28 18:29 — session ended
+- 2026-05-28 18:30 — session ended
 <!-- ACTIVITY_LOG_END -->

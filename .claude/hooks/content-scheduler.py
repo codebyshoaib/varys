@@ -36,8 +36,15 @@ SLACK_CFG         = Path.home() / ".claude" / "hooks" / ".slack"
 KAMAL_DM          = "D0B415M06SK"
 NLM               = "/home/oye/.local/bin/nlm"
 NOTION_CONTENT_DB = "68792d2dfff84691a4f646f5a8126149"
+NOTION_CONTENT_LOG = "630d86afb17746f9ad6f9bc78afefa02"  # Content Log DB
 
 HANDLES = {"fitness": "@oykamal", "tech": "@oykamal", "vlog": "@oykamal"}
+
+TRACK_CHANNEL = {
+    "fitness": "kamalkeexercies",
+    "tech":    "kamalkecoding",
+    "vlog":    "oykamal",
+}
 
 # ─── Slack ────────────────────────────────────────────────────────────────────
 
@@ -187,6 +194,31 @@ def notion_update_page(page_id: str, properties: dict):
             r.read()
     except Exception as e:
         print(f"[scheduler] Notion update error: {e}")
+
+
+def log_to_content_log(topic: str, track: str, score: int, reason: str,
+                        caption: str, hashtags: str, nb_id: str,
+                        li_post_id: str, vlog_angle: str,
+                        platforms: list[str], status: str = "Generated"):
+    """Write a row to the Notion Content Log DB after every run."""
+    channel = TRACK_CHANNEL.get(track, "oykamal")
+    props = {
+        "Topic":           {"title":        [{"text": {"content": topic}}]},
+        "Channel":         {"select":       {"name": channel}},
+        "Track":           {"select":       {"name": track}},
+        "Status":          {"select":       {"name": status}},
+        "EngagementScore": {"number":       score},
+        "EngagementReason":{"rich_text":    [{"text": {"content": reason[:800]}}]},
+        "Caption":         {"rich_text":    [{"text": {"content": caption[:1800]}}]},
+        "Hashtags":        {"rich_text":    [{"text": {"content": hashtags[:400]}}]},
+        "NLMNotebookID":   {"rich_text":    [{"text": {"content": nb_id or ""}}]},
+        "LinkedInPostID":  {"rich_text":    [{"text": {"content": li_post_id or ""}}]},
+        "VlogAngle":       {"rich_text":    [{"text": {"content": vlog_angle or ""}}]},
+        "Platforms":       {"multi_select": [{"name": p} for p in platforms]},
+        "PostedDate":      {"date":         {"start": date.today().isoformat()}},
+    }
+    notion_create_page(NOTION_CONTENT_LOG, props)
+    print(f"[scheduler] Logged to Content Log: {topic}")
 
 
 def prop_text(page: dict, key: str) -> str:
@@ -515,6 +547,25 @@ def run_fitness_or_tech(track: str, token: str):
                      title=f"{topic} — branded",
                      comment=f"🎨 Branded image for *{topic}*")
 
+    # Extract hashtags from caption for logging
+    hashtag_line = " ".join(w for w in caption.split() if w.startswith("#"))
+
+    # Vlog cross-link angle for @oykamal
+    vlog_angle = f"Behind the build: the moment that made '{topic}' worth posting — what was happening in Islamabad when this was created."
+
+    # Log everything to Notion Content Log
+    platforms = ["TikTok", "Instagram", "YouTube Shorts", "Facebook"]
+    if track == "tech" and li_result and "✅" in li_result:
+        platforms.append("LinkedIn")
+
+    log_to_content_log(
+        topic=topic, track=track, score=score, reason=reason,
+        caption=caption, hashtags=hashtag_line, nb_id=nb_id or "",
+        li_post_id=li_result if li_result and "urn:" in li_result else "",
+        vlog_angle=vlog_angle, platforms=platforms,
+        status="Posted" if (image_path or li_result) else "Generated",
+    )
+
     klog("content_posted", component="content-scheduler",
          topic=topic, track=track, score=score,
          linkedin=bool(li_result), nlm=bool(nb_id))
@@ -544,6 +595,15 @@ def run_vlog(token: str):
         f"Score: {score}/100 — {reason}\n\n"
         f"{script}\n\n"
         f"📱 Film today → post to YouTube/TikTok/Reels/Shorts\n🤖 Kamil")
+
+    # Log vlog to Content Log
+    log_to_content_log(
+        topic=topic, track="vlog", score=score, reason=reason,
+        caption=script[:1800], hashtags="", nb_id="",
+        li_post_id="", vlog_angle=script[:400],
+        platforms=["TikTok", "Instagram", "YouTube Shorts", "Facebook"],
+        status="Generated",
+    )
 
     klog("vlog_script", component="content-scheduler", topic=topic, score=score)
 
