@@ -122,6 +122,13 @@ def slack_upload(token: str, filepath: str, title: str, comment: str = ""):
 # ─── Notion ───────────────────────────────────────────────────────────────────
 
 def _notion_token() -> str:
+    # 1. Check ~/.claude/hooks/.notion (primary — set by oauth/manual)
+    notion_cfg = Path.home() / ".claude" / "hooks" / ".notion"
+    if notion_cfg.exists():
+        for line in notion_cfg.read_text().splitlines():
+            if line.startswith("NOTION_API_KEY="):
+                return line.split("=", 1)[1].strip()
+    # 2. Check MCP settings
     for path in [KAMIL_DIR / ".claude" / "settings.json",
                  Path.home() / ".claude" / "settings.json"]:
         if not path.exists():
@@ -135,6 +142,7 @@ def _notion_token() -> str:
                             return v
         except Exception:
             pass
+    # 3. Env var fallback
     return os.environ.get("NOTION_TOKEN", "")
 
 
