@@ -15,8 +15,8 @@ Kamil runs a daily content pipeline at 11am PKT across 3 tracks (fitness, tech, 
 
 | Track | Niche | NLM | Image | LinkedIn | Slack |
 |---|---|---|---|---|---|
-| `fitness` | Calisthenics, swimming, hiking, cycling | ✅ research + slides + infographic | ✅ 1080x1350 | ❌ manual | ✅ image + caption |
-| `tech` | Claude, coding, AI agents, Django | ✅ research + slides + infographic | ✅ 1080x1350 | ✅ auto-post | ✅ image + caption |
+| `fitness` | Calisthenics, swimming, hiking, cycling | ✅ slides + infographic + mindmap (visual-first) | ✅ 3 images | ❌ manual | ✅ 3 images + caption |
+| `tech` | Claude, coding, AI agents, Django | ✅ slides + infographic + mindmap (visual-first) | ✅ 3 images | ✅ auto-post | ✅ 3 images + caption |
 | `vlog` | Daily Islamabad life (Casey Neistat style) | ❌ not needed | ❌ not needed | ❌ manual | ✅ script only |
 
 ---
@@ -71,9 +71,18 @@ FOR EACH TRACK (fitness or tech — alternating) + vlog:
 3a. IF fitness or tech:
    → nlm notebook create [topic]
    → nlm research [topic] → sources added (~40 sources)
-   → nlm slides [topic] + nlm studio infographic [topic] → async generation
-   → image_generator.py → branded 1080x1350 image (fitness=lavender, tech=dark)
-   → Claude writes caption: hook line + 3–5 bullets + CTA + 4 live-researched hashtags
+   → nlm slides [topic]       → slide deck (visual-first, minimal text per slide)
+   → nlm studio infographic [topic] → single visual summary image
+   → nlm mindmap [topic]      → visual mindmap (great for carousels)
+   → vertical_converter.py    → convert NLM infographic to 1080x1350 portrait
+   → image_generator.py       → branded 1080x1350 image (fitness=lavender, tech=dark)
+   
+   VISUAL-FIRST RULES (applied to all NLM artifacts):
+   - Slides: max 6 words per slide, large visuals, bold single stat or icon per frame
+   - Infographic: diagram/chart/roadmap format — no paragraph text
+   - Mindmap: branches not bullets — visual hierarchy over lists
+   - Caption: hook line + 3 visual cues ("swipe to see", "save this roadmap") + CTA + 4 live hashtags
+   - Images sent to Slack: infographic + mindmap + branded image (3 files per post)
 
 3b. IF tech:
    → linkedin_poster.py → auto-post image + caption to LinkedIn
@@ -84,9 +93,10 @@ FOR EACH TRACK (fitness or tech — alternating) + vlog:
    → No image, no NLM
 
 4. SLACK DM TO KAMAL
-   → fitness/tech: image file + caption + score + reason + "post to IG/TikTok"
-   → tech: also "✅ already posted to LinkedIn"
+   → fitness/tech: 3 image files (infographic + mindmap + branded image) + caption + score + reason
+   → tech: also "✅ already posted to LinkedIn" (LinkedIn gets branded image)
    → vlog: script text + "film this today"
+   → NOTE: NLM slides + mindmap sent as files when ready (async poll, posted when done)
 
 5. NOTION UPDATE
    → Status = Done, PostedDate = today, NLMNotebookID = [id if applicable]
