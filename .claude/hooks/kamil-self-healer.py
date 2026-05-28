@@ -57,6 +57,14 @@ SERVICES = [
         "start_cmd": None,  # poller is cron-driven, not a daemon
         "check_process": None,
     },
+    {
+        "name": "content-scheduler",
+        "script": str(HOOKS_DIR / "content-scheduler.py"),
+        "log": "/tmp/kamil-content.log",
+        "pid_file": None,
+        "start_cmd": None,  # cron-driven, not a daemon
+        "check_process": None,
+    },
 ]
 
 # Error patterns that signal a real problem (not just noise)
