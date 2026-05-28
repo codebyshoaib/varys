@@ -39,10 +39,6 @@ NOTION_CONTENT_DB = "68792d2dfff84691a4f646f5a8126149"
 
 HANDLES = {"fitness": "@oykamal", "tech": "@oykamal", "vlog": "@oykamal"}
 
-
-def todays_ft_track() -> str:
-    return "fitness" if date.today().toordinal() % 2 == 0 else "tech"
-
 # ─── Slack ────────────────────────────────────────────────────────────────────
 
 def load_slack_token() -> str:
@@ -267,34 +263,50 @@ def run_nlm(args: list, timeout: int = 300) -> tuple[bool, str]:
 
 
 def nlm_create_notebook(topic: str) -> str | None:
-    ok, out = run_nlm(["notebook", "create", "--json", "--title", topic], timeout=60)
+    """Create NLM notebook. Correct syntax: nlm notebook create "Title" """
+    import re as _re
+    ok, out = run_nlm(["notebook", "create", topic], timeout=60)
     if ok:
-        try:
-            return json.loads(out).get("id")
-        except Exception:
-            import re
-            m = re.search(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', out)
-            return m.group(0) if m else None
+        m = _re.search(r'ID:\s*([0-9a-f-]{36})', out)
+        if m:
+            return m.group(1)
+        m = _re.search(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', out)
+        return m.group(0) if m else None
     print(f"[scheduler] NLM notebook create failed: {out[:100]}")
     return None
 
 
 def nlm_research(nb_id: str, topic: str):
-    ok, _ = run_nlm(["research", "start", nb_id, "--query", topic, "--confirm"], timeout=300)
-    print(f"[scheduler] NLM research: {'ok' if ok else 'failed'}")
+    """Research + auto-import sources. Correct syntax: nlm research start QUERY --notebook-id ID --mode deep --auto-import"""
+    ok, out = run_nlm([
+        "research", "start", topic,
+        "--notebook-id", nb_id,
+        "--mode", "deep",
+        "--auto-import",
+    ], timeout=420)
+    print(f"[scheduler] NLM research: {'ok' if ok else 'failed'} — {out[:80]}")
 
 
 def nlm_trigger_visuals(nb_id: str, topic: str):
-    """Trigger slides + infographic + mindmap generation in NLM (async)."""
-    for artifact_type in ["slide_deck", "infographic", "mind_map"]:
-        run_nlm(["studio", "create", nb_id, "--type", artifact_type,
-                 "--focus", topic, "--confirm"], timeout=60)
+    """Trigger slides + infographic + mindmap. Correct syntax verified from nlm --help."""
+    # slides: nlm slides create NOTEBOOK_ID --focus TOPIC --confirm
+    run_nlm(["slides", "create", nb_id, "--focus", topic, "--confirm"], timeout=60)
+    # infographic: nlm infographic create NOTEBOOK_ID --focus TOPIC --confirm
+    run_nlm(["infographic", "create", nb_id, "--focus", topic, "--confirm"], timeout=60)
+    # mindmap: nlm mindmap create NOTEBOOK_ID --confirm (no --focus option)
+    run_nlm(["mindmap", "create", nb_id, "--confirm"], timeout=60)
     print(f"[scheduler] NLM visuals triggered (slides+infographic+mindmap)")
 
 
 def nlm_poll_and_send(nb_id: str, artifact_type: str, topic: str,
-                       token: str, max_wait: int = 600):
+                       token: str, max_wait: int = 900):
     """Background thread: poll until artifact ready, download, upload to Slack as-is."""
+    # Download commands verified: nlm download slide-deck|infographic|mind-map NB_ID --output FILE
+    dl_cmd_map = {
+        "slide_deck":  "slide-deck",
+        "infographic": "infographic",
+        "mind_map":    "mind-map",
+    }
     ext_map = {"slide_deck": ".pdf", "infographic": ".png", "mind_map": ".json"}
     ext     = ext_map.get(artifact_type, ".bin")
     outfile = f"/tmp/nlm-{nb_id[:8]}-{artifact_type}{ext}"
@@ -303,23 +315,23 @@ def nlm_poll_and_send(nb_id: str, artifact_type: str, topic: str,
     waited  = 0
 
     while waited < max_wait:
-        ok, out = run_nlm(["studio", "list", nb_id, "--json"], timeout=30)
+        ok, out = run_nlm(["studio", "status", nb_id], timeout=30)
         if ok:
             try:
                 for a in json.loads(out):
                     if a.get("type") == artifact_type:
                         status = a.get("status", "")
                         if status == "completed":
+                            dl_cmd = dl_cmd_map.get(artifact_type, artifact_type)
                             dl_ok, _ = run_nlm(
-                                ["download", artifact_type.replace("_", "-"),
-                                 nb_id, "--output", outfile, "--no-progress"],
+                                ["download", dl_cmd, nb_id, "--output", outfile],
                                 timeout=120,
                             )
                             if dl_ok and Path(outfile).exists():
                                 slack_upload(
                                     token, outfile,
                                     title=f"{topic} — {artifact_type.replace('_', ' ')}",
-                                    comment=f"{icon} *{topic}* — {artifact_type.replace('_', ' ')} (visual-first)\n🤖 Kamil",
+                                    comment=f"{icon} *{topic}* — {artifact_type.replace('_', ' ')}\n🤖 Kamil",
                                 )
                             else:
                                 slack_dm(token, f"{icon} *{topic}* — {artifact_type} ready in NotebookLM (download failed)\n🤖 Kamil")
@@ -538,15 +550,20 @@ def run_vlog(token: str):
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
 def run():
-    token    = load_slack_token()
-    ft_track = todays_ft_track()
-    print(f"[scheduler] Starting {datetime.now().isoformat()} — ft_track={ft_track}")
+    """Run ALL 3 tracks every day in parallel — NLM gives 3 daily slots."""
+    token = load_slack_token()
+    print(f"[scheduler] Starting {datetime.now().isoformat()} — running fitness + tech + vlog in parallel")
 
-    ft_thread   = threading.Thread(target=run_fitness_or_tech, args=(ft_track, token))
-    vlog_thread = threading.Thread(target=run_vlog, args=(token,))
-    ft_thread.start()
+    fitness_thread = threading.Thread(target=run_fitness_or_tech, args=("fitness", token))
+    tech_thread    = threading.Thread(target=run_fitness_or_tech, args=("tech", token))
+    vlog_thread    = threading.Thread(target=run_vlog, args=(token,))
+
+    fitness_thread.start()
+    tech_thread.start()
     vlog_thread.start()
-    ft_thread.join()
+
+    fitness_thread.join()
+    tech_thread.join()
     vlog_thread.join()
 
     print(f"[scheduler] Done {datetime.now().isoformat()}")
