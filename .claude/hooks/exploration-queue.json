@@ -296,6 +296,117 @@
       "source": "reddit",
       "subreddit": "PakistaniTech",
       "hours": 48
+    },
+    {
+      "id": "reddit_startup_ideas",
+      "name": "Reddit r/startupideas \u2014 startup ideas needing builders",
+      "description": "People posting startup ideas looking for technical co-founders or paid help to build MVPs",
+      "source": "reddit",
+      "subreddit": "startupideas",
+      "hours": 48
+    },
+    {
+      "id": "reddit_entrepreneur_eic",
+      "name": "Reddit r/Entrepreneur \u2014 looking for engineer in charge",
+      "description": "Founders explicitly looking for EIC / CTO / lead engineer \u2014 equity + cash deals",
+      "source": "reddit",
+      "subreddit": "Entrepreneur",
+      "filter": "engineer|CTO|technical|co-founder|EIC",
+      "hours": 72
+    },
+    {
+      "id": "reddit_findacofounder",
+      "name": "Reddit r/findacofounder \u2014 find technical co-founders",
+      "description": "Non-technical founders actively looking for technical co-founders \u2014 equity deals",
+      "source": "reddit",
+      "subreddit": "findacofounder",
+      "hours": 72
+    },
+    {
+      "id": "reddit_microsaas",
+      "name": "Reddit r/microsaas \u2014 micro SaaS builders needing devs",
+      "description": "Micro SaaS founders looking for developers to build or maintain their product",
+      "source": "reddit",
+      "subreddit": "microsaas",
+      "hours": 48
+    },
+    {
+      "id": "reddit_nocode_devneeded",
+      "name": "Reddit r/nocode \u2014 outgrown no-code, need real dev",
+      "description": "No-code founders who hit limits and need a real developer to rebuild \u2014 hot leads",
+      "source": "reddit",
+      "subreddit": "nocode",
+      "filter": "developer|hire|help|build",
+      "hours": 48
+    },
+    {
+      "id": "reddit_alphaandbeta",
+      "name": "Reddit r/alphaandbeta \u2014 startup beta testers + builders",
+      "description": "Early stage startups launching, often looking for early technical team members",
+      "source": "reddit",
+      "subreddit": "alphaandbeta",
+      "hours": 72
+    },
+    {
+      "id": "reddit_indiehackers_collabs",
+      "name": "Reddit r/IndieBiz \u2014 indie business collabs",
+      "description": "Indie business owners looking for technical partners and paid help",
+      "source": "reddit",
+      "subreddit": "IndieBiz",
+      "hours": 48
+    },
+    {
+      "id": "hn_who_wants_to_be_hired",
+      "name": "HN \u2014 Who Wants to Be Hired (monthly)",
+      "description": "Hacker News monthly thread \u2014 post your skills, get hired. Also mine for client leads.",
+      "source": "hn_hiring",
+      "query": "who wants to be hired",
+      "hours": 168
+    },
+    {
+      "id": "reddit_ecommerce_devneeded",
+      "name": "Reddit r/ecommerce \u2014 need dev/automation",
+      "description": "E-commerce sellers needing Python automation, scraping, Shopify integrations",
+      "source": "reddit",
+      "subreddit": "ecommerce",
+      "filter": "developer|automation|script|help|hire",
+      "hours": 48
+    },
+    {
+      "id": "reddit_aitools_builders",
+      "name": "Reddit r/ChatGPT \u2014 need AI developer",
+      "description": "Non-technical people wanting custom AI tools built \u2014 high value leads",
+      "source": "reddit",
+      "subreddit": "ChatGPT",
+      "filter": "hire|build|developer|custom|API",
+      "hours": 24
+    },
+    {
+      "id": "reddit_digitalnomad_gigs",
+      "name": "Reddit r/digitalnomad \u2014 remote gigs",
+      "description": "Digital nomad community posting remote contract work and gigs",
+      "source": "reddit",
+      "subreddit": "digitalnomad",
+      "filter": "hire|work|contract|remote",
+      "hours": 48
+    },
+    {
+      "id": "reddit_claudeai_builders",
+      "name": "Reddit r/ClaudeAI \u2014 need help building with Claude",
+      "description": "People stuck on Claude API integrations willing to pay for help",
+      "source": "reddit",
+      "subreddit": "ClaudeAI",
+      "filter": "help|build|hire|contract|paid",
+      "hours": 24
+    },
+    {
+      "id": "reddit_passive_income_tech",
+      "name": "Reddit r/passive_income \u2014 need tech to automate",
+      "description": "People wanting automation/tools built for passive income \u2014 paid projects",
+      "source": "reddit",
+      "subreddit": "passive_income",
+      "filter": "automate|build|developer|tool|script",
+      "hours": 48
     }
   ]
 }
