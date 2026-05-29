@@ -519,19 +519,76 @@ def main():
                             url_p = f"https://reddit.com{post.get('permalink','')}"
                             if not is_recent(ts, hours=hours):
                                 continue
-                            # For hiring subs: look for hiring intent
-                            # For tech subs: look for paid signals
-                            is_relevant = (
-                                has_paid_signal(full) or
-                                "[hiring]" in title.lower() or
-                                "looking for" in title.lower() or
-                                "need a dev" in title.lower() or
-                                "need developer" in title.lower()
-                            )
+                            # Broad relevance — Kamal is open to any work
+                            slot_id = slot.get("id", "")
+                            full_lower = full.lower()
+
+                            # Startup/cofounder/EIC channels — look for opportunity signals
+                            STARTUP_SLOTS = {
+                                "reddit_cofounder", "reddit_cofounderhunt", "reddit_findacofounder",
+                                "reddit_startup_ideas", "reddit_entrepreneur_eic", "reddit_startupninjas",
+                                "reddit_microsaas", "reddit_nocode_devneeded", "reddit_alphaandbeta",
+                                "reddit_indiehackers", "reddit_indiehackers_collabs", "reddit_SaaS",
+                                "reddit_sideproject", "reddit_EntrepreneurRideAlong",
+                            }
+                            # Micro-task channels — anything with a price
+                            MICROTASK_SLOTS = {
+                                "reddit_slavelabour", "reddit_donedirtcheap", "reddit_hireforgigs",
+                                "reddit_hiringph", "reddit_jobs4bitcoin", "reddit_sidehustle",
+                            }
+                            # Broad tech channels — any technical work
+                            BROAD_TECH_SLOTS = {
+                                "reddit_webdeveloperjobs", "reddit_pythonjobs", "reddit_remotepython",
+                                "reddit_javascriptjobs", "reddit_mljobs", "reddit_bigdatajobs",
+                                "reddit_developerjobs", "reddit_devopsjobs", "reddit_requestabot",
+                                "reddit_claudeai_builders", "reddit_aitools_builders",
+                                "reddit_gamedevclassifieds", "reddit_designjobs",
+                                "reddit_ecommerce_devneeded", "reddit_passive_income_tech",
+                                "reddit_freelance_forhire", "reddit_forhirefreelance",
+                                "reddit_developers_hire", "reddit_freelanceprogramming",
+                                "reddit_remotearmy", "reddit_jobs4bitcoin",
+                            }
+
+                            if slot_id in STARTUP_SLOTS:
+                                # For startup channels: look for founder/builder/technical signals
+                                is_relevant = any(w in full_lower for w in [
+                                    "technical", "developer", "engineer", "cto", "cofounder",
+                                    "co-founder", "build", "mvp", "equity", "looking for",
+                                    "need help", "startup", "saas", "app", "website", "paid",
+                                    "eic", "technical lead", "full stack", "backend", "python",
+                                ])
+                            elif slot_id in MICROTASK_SLOTS:
+                                # For micro-task channels: anything with a price is relevant
+                                is_relevant = has_paid_signal(full) or "$" in full or "pay" in full_lower
+                            elif slot_id in BROAD_TECH_SLOTS:
+                                # For tech boards: any hiring post
+                                is_relevant = (
+                                    has_paid_signal(full) or
+                                    "[hiring]" in title.lower() or
+                                    "looking for" in full_lower or
+                                    "need a" in full_lower or
+                                    "hiring" in full_lower or
+                                    "contract" in full_lower or
+                                    "freelance" in full_lower or
+                                    "remote" in full_lower
+                                )
+                            else:
+                                # Default: paid signal + any tech mention
+                                is_relevant = (
+                                    has_paid_signal(full) or
+                                    "[hiring]" in title.lower() or
+                                    "looking for" in title.lower() or
+                                    "need a dev" in title.lower() or
+                                    "need developer" in title.lower()
+                                )
+
                             if not is_relevant:
                                 continue
-                            if not has_stack_signal(full) and "python" not in full.lower() and "django" not in full.lower():
-                                continue
+
+                            # Stack signal check — relaxed for startup/microtask channels
+                            if slot_id not in STARTUP_SLOTS and slot_id not in MICROTASK_SLOTS:
+                                if not has_stack_signal(full) and "python" not in full_lower and "django" not in full_lower and "developer" not in full_lower and "engineer" not in full_lower:
+                                    continue
                             internet_jobs.append({
                                 "title":       title[:120],
                                 "url":         url_p,
