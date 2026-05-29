@@ -45,36 +45,77 @@ MIN_SCORE_TO_DM = 50
 # Max jobs per DM to avoid noise
 MAX_JOBS_PER_DM = 3
 
-# Scoring weights
+# Scoring weights — Kamal is open to ANY work, broad scoring
 SCORE_WEIGHTS = {
-    "django":       30,
-    "python":       20,
-    "react":        20,
-    "typescript":   10,
-    "ai agent":     35,
-    "claude":       35,
-    "anthropic":    35,
-    "llm":          25,
-    "automation":   20,
-    "n8n":          15,
-    "edtech":       15,
-    "lms":          15,
-    "education":    10,
-    "rest api":     10,
-    "fastapi":      15,
-    "senior":       10,
+    # Core stack — highest priority
+    "django":        30,
+    "python":        25,
+    "claude":        35,
+    "ai agent":      35,
+    "anthropic":     35,
+    "llm":           25,
+    "automation":    20,
+    # Web development
+    "react":         20,
+    "typescript":    15,
+    "javascript":    15,
+    "next.js":       15,
+    "node":          15,
+    "fastapi":       15,
+    "rest api":      10,
+    "api":           8,
+    # Infrastructure / DevOps
+    "docker":        15,
+    "aws":           15,
+    "terraform":     15,
+    "kubernetes":    15,
+    "devops":        15,
+    "ci/cd":         10,
+    # Data / AI
+    "machine learning": 20,
+    "data engineering": 20,
+    "scraping":      15,
+    "n8n":           15,
+    "langchain":     20,
+    "openai":        20,
+    # Startup / co-founder signals
+    "co-founder":    25,
+    "cofounder":     25,
+    "cto":           25,
+    "eic":           25,
+    "equity":        20,
+    "technical lead": 20,
+    "mvp":           15,
+    "startup":       10,
+    # Domain
+    "edtech":        15,
+    "lms":           15,
+    "education":     10,
+    "senior":        10,
+    # Quick gig signals
+    "bot":           15,
+    "script":        10,
+    "freelance":     8,
+    "remote":        8,
+    "contract":      8,
+    "crypto":        10,
+    "bitcoin":       10,
+    "bounty":        15,
 }
 
 SCORE_PENALTIES = {
-    "wordpress":   -20,
-    "php":         -20,
-    "java ":       -15,
-    "ruby":        -15,
-    "ios":         -20,
-    "android":     -20,
-    "us only":     -10,
-    "us citizen":  -30,
-    "clearance":   -30,
+    "wordpress":    -20,
+    "php":          -20,
+    "java ":        -15,
+    "ruby":         -15,
+    "ios":          -15,
+    "android":      -15,
+    "us only":      -10,
+    "us citizen":   -30,
+    "clearance":    -30,
+    "in-person":    -20,
+    "on-site":      -20,
+    "full time only": -10,
 }
 
 LOW_BUDGET_PATTERNS = [

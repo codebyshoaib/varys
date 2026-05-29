@@ -407,6 +407,183 @@
       "subreddit": "passive_income",
       "filter": "automate|build|developer|tool|script",
       "hours": 48
+    },
+    {
+      "id": "reddit_freelance_forhire",
+      "name": "Reddit r/freelance_forhire \u2014 high volume freelance board",
+      "description": "High-volume freelance board, fewer restrictions than r/forhire. Entry-level to complex React/Django contracts $15-60/hr",
+      "source": "reddit",
+      "subreddit": "freelance_forhire",
+      "hours": 24
+    },
+    {
+      "id": "reddit_hireforgigs",
+      "name": "Reddit r/hireforgigs \u2014 one-off projects and transient tasks",
+      "description": "Sister channel to r/forhire for short-term, single-task gigs. Quick wins.",
+      "source": "reddit",
+      "subreddit": "hireforgigs",
+      "hours": 12
+    },
+    {
+      "id": "reddit_developers_hire",
+      "name": "Reddit r/developers_hire \u2014 startup dev matching",
+      "description": "Startups sourcing website developers for fast-turnaround projects, $20-30/hr",
+      "source": "reddit",
+      "subreddit": "developers_hire",
+      "hours": 24
+    },
+    {
+      "id": "reddit_forhirefreelance",
+      "name": "Reddit r/ForHireFreelance \u2014 multi-stack specialists",
+      "description": "Flutter, Next.js, Python/Django specialists. Smaller board but quality leads.",
+      "source": "reddit",
+      "subreddit": "ForHireFreelance",
+      "hours": 48
+    },
+    {
+      "id": "reddit_freelancing",
+      "name": "Reddit r/freelancing \u2014 weekly networking threads",
+      "description": "Weekly threads for dev networking, rate discussions, collaborative projects",
+      "source": "reddit",
+      "subreddit": "freelancing",
+      "hours": 168
+    },
+    {
+      "id": "reddit_webdeveloperjobs",
+      "name": "Reddit r/WebDeveloperJobs \u2014 frontend/backend/fullstack",
+      "description": "React, Next.js, Node.js, TypeScript, Python/Django. Quick fixes to full API integrations.",
+      "source": "reddit",
+      "subreddit": "WebDeveloperJobs",
+      "hours": 24
+    },
+    {
+      "id": "reddit_pythonjobs",
+      "name": "Reddit r/PythonJobs \u2014 Python/Django/FastAPI contracts",
+      "description": "Highly relevant for backend engineers, scraping specialists, Django/FastAPI devs",
+      "source": "reddit",
+      "subreddit": "PythonJobs",
+      "hours": 24
+    },
+    {
+      "id": "reddit_remotepython",
+      "name": "Reddit r/remotepython \u2014 remote Python contracts",
+      "description": "Remote-only Python/Django contracts. Direct competitors to Upwork but commission-free.",
+      "source": "reddit",
+      "subreddit": "remotepython",
+      "hours": 24
+    },
+    {
+      "id": "reddit_javascriptjobs",
+      "name": "Reddit r/JavascriptJobs \u2014 JS/React/Node contracts",
+      "description": "Frontend and Node.js backend engineers, modern React and TypeScript",
+      "source": "reddit",
+      "subreddit": "JavascriptJobs",
+      "hours": 24
+    },
+    {
+      "id": "reddit_mljobs",
+      "name": "Reddit r/MachineLearningJobs \u2014 AI/ML contracts",
+      "description": "AI agent integrations, data engineers, quantitative developers",
+      "source": "reddit",
+      "subreddit": "MachineLearningJobs",
+      "hours": 48
+    },
+    {
+      "id": "reddit_developerjobs",
+      "name": "Reddit r/DeveloperJobs \u2014 AI testing and code audit roles",
+      "description": "Junior to senior engineers, plus AI testing/training/annotation roles $20-65+/hr",
+      "source": "reddit",
+      "subreddit": "DeveloperJobs",
+      "hours": 24
+    },
+    {
+      "id": "reddit_startupninjas",
+      "name": "Reddit r/StartupNinjas \u2014 early-stage startup devs",
+      "description": "Founders sourcing devs without paying agency rates. Equity + cash deals.",
+      "source": "reddit",
+      "subreddit": "StartupNinjas",
+      "hours": 72
+    },
+    {
+      "id": "reddit_remotearmy",
+      "name": "Reddit r/remotearmy \u2014 remote engineering roles",
+      "description": "Backend, data analytics, full-stack engineers in distributed teams",
+      "source": "reddit",
+      "subreddit": "remotearmy",
+      "hours": 48
+    },
+    {
+      "id": "reddit_devopsjobs",
+      "name": "Reddit r/devopsjobs \u2014 DevOps/SRE/cloud contracts",
+      "description": "Highest-paying category. Terraform, Docker, K8s, CI/CD, AI platform engineering. Contract + FT.",
+      "source": "reddit",
+      "subreddit": "devopsjobs",
+      "hours": 48
+    },
+    {
+      "id": "reddit_devops_selfpromo",
+      "name": "Reddit r/devops \u2014 Weekly Self-Promotion Thread",
+      "description": "Cloud engineers pitching consulting, cost-optimization audits, automation scripts to technical professionals",
+      "source": "reddit",
+      "subreddit": "devops",
+      "filter": "Self-Promotion|hiring|contract",
+      "hours": 168
+    },
+    {
+      "id": "reddit_requestabot",
+      "name": "Reddit r/RequestABot \u2014 Python bot contracts",
+      "description": "Moderators paying for custom Reddit bots using PRAW. Flair managers, spam filters, auto-reply bots.",
+      "source": "reddit",
+      "subreddit": "RequestABot",
+      "hours": 48
+    },
+    {
+      "id": "reddit_donedirtcheap",
+      "name": "Reddit r/DoneDirtCheap \u2014 micro tasks $2-50",
+      "description": "Quick gigs via $bid bot. Background removal, data entry, Zapier setups, chatbot flows, Excel macros.",
+      "source": "reddit",
+      "subreddit": "DoneDirtCheap",
+      "hours": 12
+    },
+    {
+      "id": "reddit_hiringph",
+      "name": "Reddit r/HiringPH \u2014 virtual assistant marketplace",
+      "description": "VA and admin roles. Template-based posting with transparent salary ranges.",
+      "source": "reddit",
+      "subreddit": "HiringPH",
+      "hours": 48
+    },
+    {
+      "id": "reddit_jobs4bitcoin",
+      "name": "Reddit r/Jobs4Bitcoins \u2014 crypto-paid contracts",
+      "description": "All services paid in Bitcoin/crypto \u2014 bypasses banking friction. Good for Pakistan.",
+      "source": "reddit",
+      "subreddit": "Jobs4Bitcoins",
+      "hours": 48
+    },
+    {
+      "id": "reddit_gamedevclassifieds",
+      "name": "Reddit r/gameDevClassifieds \u2014 game dev contracts",
+      "description": "Story engines, game UI, technical design specs. Programming + scripting + visual design.",
+      "source": "reddit",
+      "subreddit": "gameDevClassifieds",
+      "hours": 72
+    },
+    {
+      "id": "reddit_designjobs",
+      "name": "Reddit r/DesignJobs \u2014 UI/UX and visual design contracts",
+      "description": "Brand identity, user experience layouts, client-facing material design",
+      "source": "reddit",
+      "subreddit": "DesignJobs",
+      "hours": 48
+    },
+    {
+      "id": "reddit_bigdatajobs",
+      "name": "Reddit r/BigDataJobs \u2014 data engineering contracts",
+      "description": "Data pipelines, analytics, AI data annotation $20-65+/hr",
+      "source": "reddit",
+      "subreddit": "BigDataJobs",
+      "hours": 72
     }
   ]
 }
