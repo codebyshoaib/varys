@@ -40,82 +40,103 @@ KAMAL_DM      = "D0B415M06SK"
 JOBS_DB       = "0d69c6ff-83d8-44c7-94c2-d341c4ded8d7"
 
 # Only DM jobs with score >= this
-MIN_SCORE_TO_DM = 50
+# Baseline is 50, so 55+ means at least one relevant signal found
+MIN_SCORE_TO_DM = 55
 
 # Max jobs per DM to avoid noise
 MAX_JOBS_PER_DM = 3
 
-# Scoring weights — Kamal is open to ANY work, broad scoring
+# Scoring weights — Kamal does ANY digital work (laptop or mobile)
+# Higher score = better match. Baseline score = 50 for any remote digital job.
 SCORE_WEIGHTS = {
-    # Core stack — highest priority
-    "django":        30,
-    "python":        25,
-    "claude":        35,
-    "ai agent":      35,
-    "anthropic":     35,
-    "llm":           25,
-    "automation":    20,
-    # Web development
-    "react":         20,
-    "typescript":    15,
-    "javascript":    15,
-    "next.js":       15,
-    "node":          15,
-    "fastapi":       15,
-    "rest api":      10,
-    "api":           8,
-    # Infrastructure / DevOps
-    "docker":        15,
-    "aws":           15,
-    "terraform":     15,
-    "kubernetes":    15,
-    "devops":        15,
-    "ci/cd":         10,
-    # Data / AI
+    # AI / Claude — highest value work
+    "claude":           35,
+    "ai agent":         35,
+    "anthropic":        35,
+    "llm":              25,
+    "langchain":        20,
+    "openai":           20,
+    "automation":       20,
     "machine learning": 20,
     "data engineering": 20,
-    "scraping":      15,
-    "n8n":           15,
-    "langchain":     20,
-    "openai":        20,
-    # Startup / co-founder signals
-    "co-founder":    25,
-    "cofounder":     25,
-    "cto":           25,
-    "eic":           25,
-    "equity":        20,
-    "technical lead": 20,
-    "mvp":           15,
-    "startup":       10,
-    # Domain
-    "edtech":        15,
-    "lms":           15,
-    "education":     10,
-    "senior":        10,
-    # Quick gig signals
-    "bot":           15,
-    "script":        10,
-    "freelance":     8,
-    "remote":        8,
-    "contract":      8,
-    "crypto":        10,
-    "bitcoin":       10,
-    "bounty":        15,
+    # Core dev stack
+    "django":           25,
+    "python":           20,
+    "react":            20,
+    "typescript":       15,
+    "javascript":       15,
+    "next.js":          15,
+    "node":             15,
+    "fastapi":          15,
+    "rest api":         10,
+    "api":              8,
+    "scraping":         15,
+    "n8n":              15,
+    # DevOps / Cloud
+    "docker":           15,
+    "aws":              15,
+    "terraform":        15,
+    "kubernetes":       15,
+    "devops":           15,
+    "ci/cd":            10,
+    "linux":            10,
+    # Frontend
+    "frontend":         12,
+    "vue":              10,
+    "css":              8,
+    "html":             8,
+    "ui":               8,
+    "ux":               8,
+    # Mobile / general digital
+    "flutter":          12,
+    "figma":            10,
+    "wordpress":        8,
+    "shopify":          10,
+    "webflow":          10,
+    "zapier":           12,
+    "make.com":         12,
+    "airtable":         10,
+    "notion":           8,
+    # Content / writing / VA
+    "copywriting":      8,
+    "content":          8,
+    "social media":     8,
+    "virtual assistant": 8,
+    "data entry":       6,
+    "transcription":    6,
+    "video editing":    10,
+    "thumbnail":        8,
+    # Startup / co-founder / EIC
+    "co-founder":       25,
+    "cofounder":        25,
+    "cto":              25,
+    "eic":              25,
+    "equity":           20,
+    "technical lead":   20,
+    "mvp":              15,
+    "startup":          10,
+    # Job signals
+    "bot":              15,
+    "script":           10,
+    "crypto":           10,
+    "bitcoin":          10,
+    "bounty":           15,
+    "remote":           5,
+    "freelance":        5,
+    "contract":         5,
+    "paid":             5,
 }
 
 SCORE_PENALTIES = {
-    "wordpress":    -20,
-    "php":          -20,
-    "java ":        -15,
-    "ruby":         -15,
-    "ios":          -15,
-    "android":      -15,
-    "us only":      -10,
+    # Hard blockers — genuinely can't do
     "us citizen":   -30,
     "clearance":    -30,
-    "in-person":    -20,
-    "on-site":      -20,
-    "full time only": -10,
+    "in-person":    -25,
+    "on-site":      -25,
+    "must relocate": -25,
+    # Light penalties — possible but less ideal
+    "us only":      -10,
+    "full time only": -5,
 }
 
 LOW_BUDGET_PATTERNS = [
@@ -186,7 +207,11 @@ def save_seen(seen: set):
 
 def score_job(title: str, description: str, rate_text: str = "") -> int:
     text = (title + " " + description + " " + rate_text).lower()
-    score = 0
+
+    # Baseline: any remote/digital/freelance job starts at 50
+    # Kamal will do ANY work that needs a laptop or mobile
+    score = 50
+
     for kw, weight in SCORE_WEIGHTS.items():
         if kw in text:
             score += weight
@@ -586,9 +611,7 @@ def main():
                                 continue
 
                             # Stack signal check — relaxed for startup/microtask channels
-                            if slot_id not in STARTUP_SLOTS and slot_id not in MICROTASK_SLOTS:
-                                if not has_stack_signal(full) and "python" not in full_lower and "django" not in full_lower and "developer" not in full_lower and "engineer" not in full_lower:
-                                    continue
+                            # No stack filter — Kamal does any digital/remote work
                             internet_jobs.append({
                                 "title":       title[:120],
                                 "url":         url_p,
