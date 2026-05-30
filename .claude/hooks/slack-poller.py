@@ -527,7 +527,11 @@ def main():
             else:
                 # Slack is quiet — use this time to explore a self-question
                 log("Slack quiet — exploring self-question.")
-                explore_self_question(dm_token, dm_channel)
+                load1, _, _ = os.getloadavg()
+                if load1 < 2.0:
+                    explore_self_question(dm_token, dm_channel)
+                else:
+                    log(f"Skipping self-question — system load too high ({load1:.1f})")
         else:
             log("Could not open DM channel.")
 
