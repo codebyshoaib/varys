@@ -855,13 +855,14 @@ def main():
             else:
                 log(f"Initial connect failed after 3 retries: {e}")
                 raise
-        except (TimeoutError, ConnectionError, OSError, socket.gaierror, URLError) as e:
+        except (TimeoutError, ConnectionError, OSError, socket.gaierror, URLError, Exception) as e:
             connect_retries += 1
             if connect_retries < 3:
                 log(f"Initial connect failed ({type(e).__name__}), retrying ({connect_retries}/3)...")
                 time.sleep(2)
             else:
-                raise
+                log(f"Initial connect failed after 3 retries: {type(e).__name__}: {e}")
+                time.sleep(5)  # Back off before exiting to avoid rapid restart loops
 
     log("Connected. Listening for DMs and @Kamil mentions.")
 
