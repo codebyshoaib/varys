@@ -913,6 +913,7 @@ def main():
                 web = WebClient(token=bot_token)
                 web_ref[0] = web
                 socket_client = SocketModeClient(app_token=app_token, web_client=web)
+                socket_client.socket_mode_request_listeners.clear()
                 socket_client.socket_mode_request_listeners.append(handler_with_heartbeat)
                 socket_client.connect()
                 last_event_time[0] = time.time()
