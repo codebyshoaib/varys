@@ -30,6 +30,7 @@ import subprocess
 import sys
 import time
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 from urllib.error import URLError
@@ -60,6 +61,9 @@ STATE_FILE   = Path("/tmp/kamil-listener-state.json")
 KAMAL_USER_ID   = "U0AV1DX3WSE"
 KAMIL_BOT_USER  = "U0B4L7RVA8L"  # Kamil's own bot user — skip in catchup
 DB_PAGE_HARNESS = "de10157da3e34ef58a74ea240f31fe98"
+
+# Limits concurrent Claude invocations from message handling to 2
+_MSG_EXECUTOR = ThreadPoolExecutor(max_workers=2)
 
 # Track last activity time for idle detection
 last_activity_time = time.time()
@@ -586,12 +590,11 @@ def dispatch(text: str, web: WebClient, channel: str, thread_ts: str, source: st
         ).start()
         return
 
-    threading.Thread(
-        target=handle_message,
-        args=(clean, thread_history, web, channel, thread_ts, source,
-              sender_id, sender_name, is_third_party, is_dm),
-        daemon=True,
-    ).start()
+    _MSG_EXECUTOR.submit(
+        handle_message,
+        clean, thread_history, web, channel, thread_ts, source,
+        sender_id, sender_name, is_third_party, is_dm,
+    )
 
 
 _content_ran_today = Path("/tmp/kamil-content-ran.txt")
