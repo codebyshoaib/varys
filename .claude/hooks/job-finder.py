@@ -18,6 +18,7 @@ import os
 import re
 import subprocess
 import sys
+import threading
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -45,6 +46,9 @@ MIN_SCORE_TO_DM = 55
 
 # Max jobs per DM to avoid noise
 MAX_JOBS_PER_DM = 3
+
+# Max 2 Claude subprocesses at a time — prevents OOM freeze on busy job runs
+_NOTION_SEMA = threading.Semaphore(2)
 
 # Scoring weights — Kamal does ANY digital work (laptop or mobile)
 # Higher score = better match. Baseline score = 50 for any remote digital job.
@@ -460,12 +464,17 @@ Reply only "ok"."""
     env = os.environ.copy()
     env["KAMIL_JOB_PROMPT"] = prompt
     nvm = 'export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"'
-    subprocess.Popen(
-        ["bash", "-c", f'{nvm} && claude --dangerously-skip-permissions --print -p "$KAMIL_JOB_PROMPT"'],
-        cwd=str(KAMIL_DIR), env=env,
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        start_new_session=True,
-    )
+
+    def _run():
+        with _NOTION_SEMA:
+            subprocess.Popen(
+                ["bash", "-c", f'{nvm} && claude --dangerously-skip-permissions --print -p "$KAMIL_JOB_PROMPT"'],
+                cwd=str(KAMIL_DIR), env=env,
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            ).wait()
+
+    threading.Thread(target=_run, daemon=True).start()
 
 
 # ── Why it matches builder ────────────────────────────────────────────────────
