@@ -270,7 +270,7 @@ def run_trend_scan(track: str):
 # ─── Topic pick ───────────────────────────────────────────────────────────────
 
 def pick_topic(track: str) -> tuple | None:
-    """Returns (page_id, topic, post_type, score, reason) or None."""
+    """Returns (page_id, topic, post_type, score, reason, existing_nb_id) or None."""
     pages = notion_query(NOTION_CONTENT_DB, {
         "filter": {"and": [
             {"property": "Status", "select": {"equals": "Pending"}},
@@ -281,14 +281,15 @@ def pick_topic(track: str) -> tuple | None:
     })
     if not pages:
         return None
-    page      = pages[0]
-    page_id   = page["id"]
-    topic     = prop_text(page, "Topic")
-    post_type = prop_text(page, "PostType") or "steps"
-    score     = int(prop_text(page, "EngagementScore") or "60")
-    reason    = prop_text(page, "EngagementReason") or "pre-planned queue topic"
+    page         = pages[0]
+    page_id      = page["id"]
+    topic        = prop_text(page, "Topic")
+    post_type    = prop_text(page, "PostType") or "steps"
+    score        = int(prop_text(page, "EngagementScore") or "60")
+    reason       = prop_text(page, "EngagementReason") or "pre-planned queue topic"
+    existing_nb  = prop_text(page, "NLMNotebookID")
     notion_update_page(page_id, {"Status": {"select": {"name": "In Progress"}}})
-    return page_id, topic, post_type, score, reason
+    return page_id, topic, post_type, score, reason, existing_nb
 
 # ─── NLM ─────────────────────────────────────────────────────────────────────
 
@@ -300,6 +301,42 @@ def run_nlm(args: list, timeout: int = 300) -> tuple[bool, str]:
         return False, "timeout"
     except Exception as e:
         return False, str(e)
+
+
+def nlm_find_existing_notebook(topic: str) -> tuple[str, int] | None:
+    """Search existing notebooks for a title match. Returns (nb_id, source_count) or None."""
+    import re as _re
+    ok, out = run_nlm(["list", "notebooks"], timeout=30)
+    if not ok:
+        return None
+    try:
+        notebooks = json.loads(out)
+    except Exception:
+        return None
+    topic_lower = topic.lower()
+    # exact or near-match on title
+    for nb in notebooks:
+        title = nb.get("title", "").lower()
+        if title and (title == topic_lower or topic_lower[:30] in title or title[:30] in topic_lower):
+            nb_id = nb["id"]
+            count = nb.get("source_count", 0)
+            print(f"[scheduler] NLM found existing notebook: '{nb['title']}' ({count} sources) → {nb_id[:8]}")
+            return nb_id, count
+    return None
+
+
+def nlm_get_source_count(nb_id: str) -> int:
+    """Return current source count for a notebook."""
+    ok, out = run_nlm(["list", "notebooks"], timeout=30)
+    if not ok:
+        return 0
+    try:
+        for nb in json.loads(out):
+            if nb["id"] == nb_id:
+                return nb.get("source_count", 0)
+    except Exception:
+        pass
+    return 0
 
 
 def nlm_create_notebook(topic: str) -> str | None:
@@ -316,8 +353,29 @@ def nlm_create_notebook(topic: str) -> str | None:
     return None
 
 
-def nlm_research(nb_id: str, topic: str):
-    """Research + auto-import sources. Correct syntax: nlm research start QUERY --notebook-id ID --mode deep --auto-import"""
+def nlm_get_or_create_notebook(topic: str) -> tuple[str, bool] | tuple[None, bool]:
+    """
+    Return (nb_id, had_sources). Reuses existing notebook if it has sources.
+    If existing has 0 sources, deletes it and creates fresh.
+    Returns (None, False) on failure.
+    """
+    existing = nlm_find_existing_notebook(topic)
+    if existing:
+        nb_id, count = existing
+        if count > 0:
+            print(f"[scheduler] Reusing existing notebook {nb_id[:8]} ({count} sources) — skipping research")
+            return nb_id, True
+        else:
+            # Empty notebook — delete and recreate
+            print(f"[scheduler] Existing notebook {nb_id[:8]} has 0 sources — deleting and recreating")
+            run_nlm(["delete", "notebook", nb_id, "--confirm"], timeout=30)
+
+    nb_id = nlm_create_notebook(topic)
+    return nb_id, False
+
+
+def nlm_research(nb_id: str, topic: str) -> bool:
+    """Research + auto-import sources. Returns True if sources were added."""
     ok, out = run_nlm([
         "research", "start", topic,
         "--notebook-id", nb_id,
@@ -325,6 +383,33 @@ def nlm_research(nb_id: str, topic: str):
         "--auto-import",
     ], timeout=420)
     print(f"[scheduler] NLM research: {'ok' if ok else 'failed'} — {out[:80]}")
+    if not ok:
+        return False
+    # Verify sources actually landed
+    count = nlm_get_source_count(nb_id)
+    print(f"[scheduler] NLM source count after research: {count}")
+    return count > 0
+
+
+def nlm_query_for_content(nb_id: str, topic: str) -> str:
+    """Query the notebook for key insights to use as caption basis."""
+    query = (
+        f"What are the 5 most surprising or actionable insights about '{topic}' "
+        f"that would stop someone scrolling on Instagram? "
+        f"Give concrete facts, numbers, or contrarian takes — not generic advice."
+    )
+    ok, out = run_nlm(["query", "notebook", nb_id, query], timeout=120)
+    if ok and out:
+        try:
+            answer = json.loads(out).get("value", {}).get("answer", "")
+            if len(answer) > 50:
+                print(f"[scheduler] NLM query: got {len(answer)} chars of insights")
+                return answer
+        except Exception:
+            if len(out) > 50:
+                return out
+    print(f"[scheduler] NLM query failed or empty")
+    return ""
 
 
 def nlm_trigger_visuals(nb_id: str, topic: str):
@@ -408,10 +493,16 @@ def generate_image(topic: str, track: str) -> str | None:
 
 # ─── Caption ─────────────────────────────────────────────────────────────────
 
-def generate_caption(topic: str, track: str, score: int, reason: str) -> str:
+def generate_caption(topic: str, track: str, score: int, reason: str,
+                      nlm_insights: str = "") -> str:
+    insights_block = (
+        f"\n\nKey insights from research (use these as the substance):\n{nlm_insights[:800]}"
+        if nlm_insights else ""
+    )
     prompt = (
         f"Write a social media caption for a {track} post about: {topic}\n"
-        f"Engagement score: {score}/100. Why trending: {reason}\n\n"
+        f"Engagement score: {score}/100. Why trending: {reason}"
+        f"{insights_block}\n\n"
         f"Rules:\n"
         f"- Under 150 words\n"
         f"- First line = scroll-stopping hook (no emoji at start)\n"
@@ -501,31 +592,49 @@ def run_fitness_or_tech(track: str, token: str):
             f"Add topics with Status=Pending, Track={track}\n🤖 Kamil")
         return
 
-    page_id, topic, post_type, score, reason = result
+    page_id, topic, post_type, score, reason, existing_nb_id = result
     print(f"[scheduler] Topic: {topic} ({score}/100)")
 
     slack_dm(token,
         f"🚀 *{track} pipeline started* — *{topic}*\n"
         f"Score: {score}/100 | {reason}\n"
-        f"Researching + generating visuals...\n🤖 Kamil")
+        f"Checking NLM notebooks + generating...\n🤖 Kamil")
 
-    # NLM pipeline
-    nb_id = nlm_create_notebook(topic)
+    # NLM pipeline — use Notion-stored notebook ID first, then search, then create
+    if existing_nb_id:
+        count = nlm_get_source_count(existing_nb_id)
+        print(f"[scheduler] Notion-stored NLM notebook {existing_nb_id[:8]} has {count} sources")
+        nb_id, had_sources = existing_nb_id, count > 0
+    else:
+        nb_id, had_sources = nlm_get_or_create_notebook(topic)
+    nlm_insights = ""
     if nb_id:
-        nlm_research(nb_id, topic)
-        nlm_trigger_visuals(nb_id, topic)
-        for artifact in ["slide_deck", "infographic", "mind_map"]:
-            threading.Thread(
-                target=nlm_poll_and_send,
-                args=(nb_id, artifact, topic, token),
-                daemon=True,
-            ).start()
+        if not had_sources:
+            had_sources = nlm_research(nb_id, topic)
+        if had_sources:
+            nlm_insights = nlm_query_for_content(nb_id, topic)
+            nlm_trigger_visuals(nb_id, topic)
+            for artifact in ["slide_deck", "infographic", "mind_map"]:
+                threading.Thread(
+                    target=nlm_poll_and_send,
+                    args=(nb_id, artifact, topic, token),
+                    daemon=True,
+                ).start()
+        else:
+            print(f"[scheduler] Skipping visuals — notebook has 0 sources after research")
+            slack_dm(token,
+                f"⚠️ *{track} — NLM research failed* for *{topic}*\n"
+                f"Google API quota likely hit. Continuing with image + caption only.\n🤖 Kamil")
+
+    # Store NLM notebook ID back on the Content Calendar page for future runs
+    if nb_id:
+        notion_update_page(page_id, {"NLMNotebookID": {"rich_text": [{"text": {"content": nb_id}}]}})
 
     # Branded image
     image_path = generate_image(topic, track)
 
-    # Caption
-    caption = generate_caption(topic, track, score, reason)
+    # Caption — uses NLM insights if available
+    caption = generate_caption(topic, track, score, reason, nlm_insights)
 
     # LinkedIn (tech only)
     li_result = ""
@@ -590,7 +699,7 @@ def run_vlog(token: str):
             "Add topics with Track=vlog, Status=Pending\n🤖 Kamil")
         return
 
-    page_id, topic, _, score, reason = result
+    page_id, topic, _, score, reason, _ = result
     script = generate_vlog_script(topic, score, reason)
 
     notion_update_page(page_id, {
