@@ -166,10 +166,11 @@ def notion_query(db_id: str, filter_body: dict) -> list[dict]:
         return []
 
 
-def notion_create_page(db_id: str, properties: dict):
+def notion_create_page(db_id: str, properties: dict) -> str:
+    """Create a Notion page and return its page ID."""
     token = _notion_token()
     if not token:
-        return
+        return ""
     body = json.dumps({"parent": {"database_id": db_id},
                        "properties": properties}).encode()
     req  = urllib.request.Request(
@@ -180,9 +181,35 @@ def notion_create_page(db_id: str, properties: dict):
     )
     try:
         with urllib.request.urlopen(req, timeout=10) as r:
-            r.read()
+            data = json.loads(r.read())
+            return data.get("id", "")
     except Exception as e:
         print(f"[scheduler] Notion create page error: {e}")
+        return ""
+
+
+def notion_write_page_body(page_id: str, content: str):
+    """Append text as paragraph blocks to a Notion page body."""
+    token = _notion_token()
+    if not token or not page_id or not content:
+        return
+    body = json.dumps({
+        "children": [{"object": "block", "type": "paragraph",
+                      "paragraph": {"rich_text": [{"type": "text",
+                                                   "text": {"content": content[:1800]}}]}}]
+    }).encode()
+    req = urllib.request.Request(
+        f"https://api.notion.com/v1/blocks/{page_id}/children",
+        data=body, method="PATCH",
+        headers={"Authorization": f"Bearer {token}",
+                 "Notion-Version": "2022-06-28",
+                 "Content-Type":   "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as r:
+            r.read()
+    except Exception as e:
+        print(f"[scheduler] Notion write body error: {e}")
 
 
 def notion_update_page(page_id: str, properties: dict):
@@ -207,26 +234,35 @@ def notion_update_page(page_id: str, properties: dict):
 def log_to_content_log(topic: str, track: str, score: int, reason: str,
                         caption: str, hashtags: str, nb_id: str,
                         li_post_id: str, vlog_angle: str,
-                        platforms: list[str], status: str = "Generated"):
-    """Write a row to the Notion Content Log DB after every run."""
+                        platforms: list[str], status: str = "Generated",
+                        nlm_insights: str = "", nlm_artifacts: dict = None,
+                        calendar_page_id: str = "") -> str:
+    """Write a row to the Notion Content Log DB. Returns the created page ID."""
     channel = TRACK_CHANNEL.get(track, "oykamal")
+    artifacts_json = json.dumps(nlm_artifacts) if nlm_artifacts else ""
     props = {
-        "Topic":           {"title":        [{"text": {"content": topic}}]},
-        "Channel":         {"select":       {"name": channel}},
-        "Track":           {"select":       {"name": track}},
-        "Status":          {"select":       {"name": status}},
-        "EngagementScore": {"number":       score},
-        "EngagementReason":{"rich_text":    [{"text": {"content": reason[:800]}}]},
-        "Caption":         {"rich_text":    [{"text": {"content": caption[:1800]}}]},
-        "Hashtags":        {"rich_text":    [{"text": {"content": hashtags[:400]}}]},
-        "NLMNotebookID":   {"rich_text":    [{"text": {"content": nb_id or ""}}]},
-        "LinkedInPostID":  {"rich_text":    [{"text": {"content": li_post_id or ""}}]},
-        "VlogAngle":       {"rich_text":    [{"text": {"content": vlog_angle or ""}}]},
-        "Platforms":       {"multi_select": [{"name": p} for p in platforms]},
-        "PostedDate":      {"date":         {"start": date.today().isoformat()}},
+        "Topic":                  {"title":     [{"text": {"content": topic}}]},
+        "Channel":                {"select":    {"name": channel}},
+        "Track":                  {"select":    {"name": track}},
+        "Status":                 {"select":    {"name": status}},
+        "EngagementScore":        {"number":    score},
+        "EngagementReason":       {"rich_text": [{"text": {"content": reason[:800]}}]},
+        "Caption":                {"rich_text": [{"text": {"content": caption[:1800]}}]},
+        "Hashtags":               {"rich_text": [{"text": {"content": hashtags[:400]}}]},
+        "NLMNotebookID":          {"rich_text": [{"text": {"content": nb_id or ""}}]},
+        "LinkedInPostID":         {"rich_text": [{"text": {"content": li_post_id or ""}}]},
+        "VlogAngle":              {"rich_text": [{"text": {"content": vlog_angle or ""}}]},
+        "NLMArtifacts":           {"rich_text": [{"text": {"content": artifacts_json}}]},
+        "NLMInsights":            {"rich_text": [{"text": {"content": nlm_insights[:1800]}}]},
+        "ContentCalendarPageID":  {"rich_text": [{"text": {"content": calendar_page_id or ""}}]},
+        "Platforms":              {"multi_select": [{"name": p} for p in platforms]},
+        "PostedDate":             {"date":      {"start": date.today().isoformat()}},
     }
-    notion_create_page(NOTION_CONTENT_LOG, props)
-    print(f"[scheduler] Logged to Content Log: {topic}")
+    log_page_id = notion_create_page(NOTION_CONTENT_LOG, props)
+    if log_page_id and nlm_insights:
+        notion_write_page_body(log_page_id, nlm_insights)
+    print(f"[scheduler] Logged to Content Log: {topic} (page={log_page_id[:8] if log_page_id else 'none'})")
+    return log_page_id
 
 
 def prop_text(page: dict, key: str) -> str:
@@ -423,10 +459,20 @@ def nlm_trigger_visuals(nb_id: str, topic: str):
     print(f"[scheduler] NLM visuals triggered (slides+infographic+mindmap)")
 
 
+def _update_nlm_artifact_status(log_page_id: str, artifacts_state: dict):
+    """Write the full NLMArtifacts JSON back to the Content Log entry."""
+    if not log_page_id:
+        return
+    notion_update_page(log_page_id, {
+        "NLMArtifacts": {"rich_text": [{"text": {"content": json.dumps(artifacts_state)}}]}
+    })
+
+
 def nlm_poll_and_send(nb_id: str, artifact_type: str, topic: str,
-                       token: str, max_wait: int = 900):
-    """Background thread: poll until artifact ready, download, upload to Slack as-is."""
-    # Download commands verified: nlm download slide-deck|infographic|mind-map NB_ID --output FILE
+                       token: str, log_page_id: str = "",
+                       artifacts_state: dict = None, max_wait: int = 900):
+    """Background thread: poll until artifact ready, download, upload to Slack.
+    Writes artifact outcome (completed/failed/timeout) back to Notion Content Log."""
     dl_cmd_map = {
         "slide_deck":  "slide-deck",
         "infographic": "infographic",
@@ -437,6 +483,7 @@ def nlm_poll_and_send(nb_id: str, artifact_type: str, topic: str,
     outfile = f"/tmp/nlm-{nb_id[:8]}-{artifact_type}{ext}"
     icons   = {"slide_deck": "📊", "infographic": "🖼️", "mind_map": "🗺️"}
     icon    = icons.get(artifact_type, "✅")
+    state   = artifacts_state or {}
     waited  = 0
 
     while waited < max_wait:
@@ -458,11 +505,16 @@ def nlm_poll_and_send(nb_id: str, artifact_type: str, topic: str,
                                     title=f"{topic} — {artifact_type.replace('_', ' ')}",
                                     comment=f"{icon} *{topic}* — {artifact_type.replace('_', ' ')}\n🤖 Kamil",
                                 )
+                                state[artifact_type] = "completed"
                             else:
                                 slack_dm(token, f"{icon} *{topic}* — {artifact_type} ready in NotebookLM (download failed)\n🤖 Kamil")
+                                state[artifact_type] = "download_failed"
+                            _update_nlm_artifact_status(log_page_id, state)
                             return
                         elif status == "failed":
                             print(f"[scheduler] NLM {artifact_type} failed")
+                            state[artifact_type] = "failed"
+                            _update_nlm_artifact_status(log_page_id, state)
                             return
             except Exception:
                 pass
@@ -470,6 +522,8 @@ def nlm_poll_and_send(nb_id: str, artifact_type: str, topic: str,
         waited += 20
 
     print(f"[scheduler] NLM {artifact_type} timed out after {max_wait}s")
+    state[artifact_type] = "timeout"
+    _update_nlm_artifact_status(log_page_id, state)
 
 # ─── Image generation ─────────────────────────────────────────────────────────
 
@@ -608,18 +662,15 @@ def run_fitness_or_tech(track: str, token: str):
     else:
         nb_id, had_sources = nlm_get_or_create_notebook(topic)
     nlm_insights = ""
+    artifacts_state = {}
     if nb_id:
         if not had_sources:
             had_sources = nlm_research(nb_id, topic)
         if had_sources:
             nlm_insights = nlm_query_for_content(nb_id, topic)
             nlm_trigger_visuals(nb_id, topic)
-            for artifact in ["slide_deck", "infographic", "mind_map"]:
-                threading.Thread(
-                    target=nlm_poll_and_send,
-                    args=(nb_id, artifact, topic, token),
-                    daemon=True,
-                ).start()
+            # Mark all 3 artifacts as triggered initially
+            artifacts_state = {"slide_deck": "triggered", "infographic": "triggered", "mind_map": "triggered"}
         else:
             print(f"[scheduler] Skipping visuals — notebook has 0 sources after research")
             slack_dm(token,
@@ -642,7 +693,7 @@ def run_fitness_or_tech(track: str, token: str):
         li_result = post_linkedin(caption, image_path)
         print(f"[scheduler] LinkedIn: {li_result}")
 
-    # Mark Done in Notion
+    # Mark Done in Notion Content Calendar
     notion_update_page(page_id, {
         "Status":         {"select":    {"name": "Done"}},
         "PostedDate":     {"date":      {"start": date.today().isoformat()}},
@@ -666,22 +717,39 @@ def run_fitness_or_tech(track: str, token: str):
 
     # Extract hashtags from caption for logging
     hashtag_line = " ".join(w for w in caption.split() if w.startswith("#"))
-
-    # Vlog cross-link angle for @oykamal
     vlog_angle = f"Behind the build: the moment that made '{topic}' worth posting — what was happening in Islamabad when this was created."
 
-    # Log everything to Notion Content Log
+    # Log everything to Notion Content Log — get back the log page ID
     platforms = ["TikTok", "Instagram", "YouTube Shorts", "Facebook"]
     if track == "tech" and li_result and "✅" in li_result:
         platforms.append("LinkedIn")
 
-    log_to_content_log(
+    log_page_id = log_to_content_log(
         topic=topic, track=track, score=score, reason=reason,
         caption=caption, hashtags=hashtag_line, nb_id=nb_id or "",
         li_post_id=li_result if li_result and "urn:" in li_result else "",
         vlog_angle=vlog_angle, platforms=platforms,
         status="Posted" if (image_path or li_result) else "Generated",
+        nlm_insights=nlm_insights,
+        nlm_artifacts=artifacts_state,
+        calendar_page_id=page_id,
     )
+
+    # Write backlink from Content Calendar → Content Log
+    if log_page_id:
+        notion_update_page(page_id, {
+            "ContentLogPageID": {"rich_text": [{"text": {"content": log_page_id}}]}
+        })
+
+    # Now launch background artifact pollers — they'll update NLMArtifacts as each completes
+    if nb_id and artifacts_state:
+        for artifact in ["slide_deck", "infographic", "mind_map"]:
+            threading.Thread(
+                target=nlm_poll_and_send,
+                args=(nb_id, artifact, topic, token),
+                kwargs={"log_page_id": log_page_id, "artifacts_state": artifacts_state},
+                daemon=True,
+            ).start()
 
     klog("content_posted", component="content-scheduler",
          topic=topic, track=track, score=score,
@@ -713,14 +781,21 @@ def run_vlog(token: str):
         f"{script}\n\n"
         f"📱 Film today → post to YouTube/TikTok/Reels/Shorts\n🤖 Kamil")
 
-    # Log vlog to Content Log
-    log_to_content_log(
+    # Log vlog to Content Log — get back page ID for backlink
+    log_page_id = log_to_content_log(
         topic=topic, track="vlog", score=score, reason=reason,
         caption=script[:1800], hashtags="", nb_id="",
         li_post_id="", vlog_angle=script[:400],
         platforms=["TikTok", "Instagram", "YouTube Shorts", "Facebook"],
         status="Generated",
+        calendar_page_id=page_id,
     )
+
+    # Write backlink from Content Calendar → Content Log
+    if log_page_id:
+        notion_update_page(page_id, {
+            "ContentLogPageID": {"rich_text": [{"text": {"content": log_page_id}}]}
+        })
 
     klog("vlog_script", component="content-scheduler", topic=topic, score=score)
 
