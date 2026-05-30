@@ -841,7 +841,7 @@ def main():
     klog_system_start("listener")
     log("Kamil listener starting (Socket Mode)...")
 
-    # Retry initial connect on network errors (IncompleteRead, timeout)
+    # Retry initial connect on network errors (IncompleteRead, timeout, DNS, etc)
     connect_retries = 0
     while connect_retries < 3:
         try:
@@ -855,7 +855,7 @@ def main():
             else:
                 log(f"Initial connect failed after 3 retries: {e}")
                 raise
-        except (TimeoutError, ConnectionError, OSError) as e:
+        except (TimeoutError, ConnectionError, OSError, socket.gaierror, URLError) as e:
             connect_retries += 1
             if connect_retries < 3:
                 log(f"Initial connect failed ({type(e).__name__}), retrying ({connect_retries}/3)...")
