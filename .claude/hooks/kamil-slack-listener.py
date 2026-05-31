@@ -737,7 +737,6 @@ def proactive_loop(web: WebClient, dm_channel: str):
     """Background thread: every 35min of idle, do something useful."""
     global last_activity_time, last_idle_work
     last_proactive_sent = ""
-    last_proactive_ts = 0
     while True:
         time.sleep(60)
         idle_min  = (time.time() - last_activity_time) / 60
@@ -759,10 +758,8 @@ Sign off: 🤖 Kamil""", timeout=180, event_context="proactive_idle")
 
             if answer and len(answer) > 20:
                 answer_normalized = answer.strip()
-                now = time.time()
-                if answer_normalized != last_proactive_sent and (now - last_proactive_ts) > 120:
+                if answer_normalized != last_proactive_sent:
                     last_proactive_sent = answer_normalized
-                    last_proactive_ts = now
                     try:
                         resp = web.chat_postMessage(channel=dm_channel, text=answer_normalized)
                         log(f"Proactive: {answer_normalized[:80]}")
