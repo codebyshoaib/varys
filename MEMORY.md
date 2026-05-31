@@ -23,6 +23,9 @@
 - [[vault/memory/portfolio_ownership]] — You maintain portfolio-website + portfolio-data repos; SSH push, amber design system
 - [[vault/memory/project_workspace]] — This workspace: morning standup OS, domain tracking, GitHub blueprint
 
+## Content Creation
+- [Emotional Content Playbook](vault/memory/content_emotional_playbook.md) — READ BEFORE ANY CONTENT: arousal>valence, 4-beat structure, hook rules, Kamal's 4 emotions (awe/longing/nostalgia/belonging), voice rules, warnings
+
 ## Integrations & Tools
 - [[vault/memory/jira_hook]] — auto-jira.py creates MC20 tickets via API; token at `~/.claude/hooks/.jira`
 - [[vault/memory/graphify_integration]] — Knowledge graph for context; npm run standup auto-indexes workspace relationships

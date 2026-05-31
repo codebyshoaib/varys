@@ -28,6 +28,24 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 from kamil_log import klog, klog_error
 
+# ─── Emotional Content Playbook ───────────────────────────────────────────────
+# Loaded once at startup — injected into every caption/script/NLM prompt
+_PLAYBOOK_PATH = Path(__file__).parent.parent.parent / "vault/memory/content_emotional_playbook.md"
+EMOTIONAL_PLAYBOOK = _PLAYBOOK_PATH.read_text() if _PLAYBOOK_PATH.exists() else ""
+_PLAYBOOK_SUMMARY = """
+CONTENT RULES (Emotional Content Playbook):
+- Pick ONE emotion per piece: awe, longing, nostalgia, or belonging. Never mix.
+- Arousal beats valence: push "beautiful/calm" up into AWE (chill-down-the-spine), not contentment.
+- Hook in first 3 seconds: most striking visual first, 4-7 word text overlay, pattern interrupt.
+- Use delayed-answer technique: "this place" not "Trail 5" — open the loop, close it at payoff.
+- Never end on sadness. Resolve upward into awe, hope, or warmth.
+- No anger, no anxiety, no rage-bait. Kamal's lane: awe + amusement only.
+- Specifics beat generalities: "naan so hot it burned my fingers" not "the food was amazing".
+- Write like you talk. Read it out loud. One idea per line.
+- Earn the emotion — don't announce it. Show the thing, don't say "this is emotional".
+- CTA: save/comment/share — never force, always soft.
+"""
+
 # ─── Config ───────────────────────────────────────────────────────────────────
 
 HOOKS_DIR         = Path(__file__).parent
@@ -430,9 +448,10 @@ def nlm_research(nb_id: str, topic: str) -> bool:
 def nlm_query_for_content(nb_id: str, topic: str) -> str:
     """Query the notebook for key insights to use as caption basis."""
     query = (
-        f"What are the 5 most surprising or actionable insights about '{topic}' "
-        f"that would stop someone scrolling on Instagram? "
-        f"Give concrete facts, numbers, or contrarian takes — not generic advice."
+        f"What are the 5 most surprising, specific, or contrarian insights about '{topic}' "
+        f"that would trigger AWE or LONGING in someone scrolling Instagram at 11pm? "
+        f"Focus on: concrete facts, unexpected angles, sensory details, or things that make someone say "
+        f"'I had no idea' or 'I want to experience this'. Not generic advice — specific, vivid, emotional."
     )
     ok, out = run_nlm(["query", "notebook", nb_id, query], timeout=120)
     if ok and out:
@@ -554,17 +573,19 @@ def generate_caption(topic: str, track: str, score: int, reason: str,
         if nlm_insights else ""
     )
     prompt = (
+        f"{_PLAYBOOK_SUMMARY}\n\n"
         f"Write a social media caption for a {track} post about: {topic}\n"
         f"Engagement score: {score}/100. Why trending: {reason}"
         f"{insights_block}\n\n"
         f"Rules:\n"
         f"- Under 150 words\n"
-        f"- First line = scroll-stopping hook (no emoji at start)\n"
-        f"- 3-4 bullet points — each is a visual cue or quick insight\n"
+        f"- First line = scroll-stopping hook using delayed-answer technique (no emoji at start)\n"
+        f"- Pick the ONE emotion this delivers (awe/longing/nostalgia/belonging) and write toward it\n"
+        f"- 3-4 bullet points — each is a specific visual cue or concrete insight (no generalities)\n"
         f"- Include 'Save this' or 'Swipe to see' CTA — audience are visual learners\n"
         f"- End with a question to drive comments\n"
         f"- 4 relevant trending hashtags for {track}\n"
-        f"- Sound like a practitioner, not a marketer\n"
+        f"- Sound like a practitioner talking to a friend, not a marketer\n"
         f"Return ONLY the caption text."
     )
     try:
@@ -585,6 +606,7 @@ def generate_caption(topic: str, track: str, score: int, reason: str,
 
 def generate_vlog_script(topic: str, score: int, reason: str) -> str:
     prompt = (
+        f"{_PLAYBOOK_SUMMARY}\n\n"
         f"Write a Casey Neistat-style vlog script for a daily Islamabad life video about: {topic}\n"
         f"Trending signal: {reason}\n\n"
         f"Use this exact format:\n"
