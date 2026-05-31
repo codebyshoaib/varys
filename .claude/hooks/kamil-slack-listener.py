@@ -741,7 +741,7 @@ def proactive_loop(web: WebClient, dm_channel: str):
         time.sleep(60)
         idle_min  = (time.time() - last_activity_time) / 60
         since_idle = (time.time() - last_idle_work) / 60
-        if idle_min >= 35 and since_idle >= 35:
+        if idle_min >= 35 and since_idle >= 60:  # Increased cooldown to 60min to prevent duplicates
             last_idle_work = time.time()
             log("Idle 35min — doing proactive work")
             answer = run_claude("""You are Kamil — Kamal's autonomous AI agent. You have idle time.
