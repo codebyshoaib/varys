@@ -67,7 +67,7 @@ _MSG_EXECUTOR = ThreadPoolExecutor(max_workers=2)
 
 # Track last activity time for idle detection
 last_activity_time = time.time()
-last_idle_work     = 0.0
+last_idle_work     = time.time()
 
 
 
