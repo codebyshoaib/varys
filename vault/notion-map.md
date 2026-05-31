@@ -809,4 +809,5 @@ Last full scan: 2026-05-28 12:21
 - 2026-05-31 12:00 — - 11:00 — **Self-Question #0 answered:** SessionStart hook does NOT create vault/logs/YYYY-MM-DD.md. File creation is Claude's job (via Write), not the hook's job. Result: if Claude never logs (no Wri
 - 2026-05-31 12:01 — - 11:00 — **Self-Question #0 answered:** SessionStart hook does NOT create vault/logs/YYYY-MM-DD.md. File creation is Claude's job (via Write), not the hook's job. Result: if Claude never logs (no Wri
 - 2026-05-31 12:01 — - 11:00 — **Self-Question #0 answered:** SessionStart hook does NOT create vault/logs/YYYY-MM-DD.md. File creation is Claude's job (via Write), not the hook's job. Result: if Claude never logs (no Wri
+- 2026-05-31 12:01 — - 11:00 — **Self-Question #0 answered:** SessionStart hook does NOT create vault/logs/YYYY-MM-DD.md. File creation is Claude's job (via Write), not the hook's job. Result: if Claude never logs (no Wri
 <!-- ACTIVITY_LOG_END -->
