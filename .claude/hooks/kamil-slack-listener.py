@@ -754,15 +754,18 @@ Pick ONE valuable action:
 
 Do the work, then reply in 2-3 lines for Slack:
 "📚 While you were away: [what I found/learned]. [action taken]"
-Sign off: 🤖 Kamil""", timeout=180)
+Sign off: 🤖 Kamil""", timeout=180, event_context="proactive_idle")
 
             if answer and len(answer) > 20 and answer != last_proactive_sent:
                 last_proactive_sent = answer
-                resp = web.chat_postMessage(channel=dm_channel, text=answer)
-                log(f"Proactive: {answer[:80]}")
-                # Eval: log proactive DM, watch for Kamal reaction
-                msg_ts = resp.get("ts", "") if isinstance(resp, dict) else ""
-                eval_proactive_dm(content=answer, channel=dm_channel, ts=msg_ts)
+                try:
+                    resp = web.chat_postMessage(channel=dm_channel, text=answer)
+                    log(f"Proactive: {answer[:80]}")
+                    # Eval: log proactive DM, watch for Kamal reaction
+                    msg_ts = resp.get("ts", "") if isinstance(resp, dict) else ""
+                    eval_proactive_dm(content=answer, channel=dm_channel, ts=msg_ts)
+                except Exception as e:
+                    klog_error(context="proactive_loop-send_message", exc=e)
 
 
 # ── Socket Mode event handler ─────────────────────────────────────────────────
