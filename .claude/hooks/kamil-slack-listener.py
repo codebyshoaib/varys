@@ -736,6 +736,7 @@ def _check_pending_reactions(channel: str, ts: str):
 def proactive_loop(web: WebClient, dm_channel: str):
     """Background thread: every 35min of idle, do something useful."""
     global last_activity_time, last_idle_work
+    last_proactive_sent = ""
     while True:
         time.sleep(60)
         idle_min  = (time.time() - last_activity_time) / 60
@@ -755,7 +756,8 @@ Do the work, then reply in 2-3 lines for Slack:
 "📚 While you were away: [what I found/learned]. [action taken]"
 Sign off: 🤖 Kamil""", timeout=180)
 
-            if answer and len(answer) > 20:
+            if answer and len(answer) > 20 and answer != last_proactive_sent:
+                last_proactive_sent = answer
                 resp = web.chat_postMessage(channel=dm_channel, text=answer)
                 log(f"Proactive: {answer[:80]}")
                 # Eval: log proactive DM, watch for Kamal reaction
