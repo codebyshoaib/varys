@@ -762,9 +762,19 @@ def run_fitness_or_tech(track: str, token: str):
                 print(f"[scheduler] NLM query returned no insights, skipping artifact generation")
                 nb_id = None
         elif nb_id:
-            # Notebook exists but has 0 sources — skip NLM entirely for this run
-            print(f"[scheduler] NLM notebook {nb_id[:8]} has 0 sources, skipping content queries")
-            nb_id = None
+            # Notebook exists but has 0 sources — verify source count before proceeding
+            final_count = nlm_get_source_count(nb_id)
+            if final_count == 0:
+                print(f"[scheduler] NLM notebook {nb_id[:8]} still has 0 sources after check, skipping content queries")
+                nb_id = None
+            else:
+                # Sources exist but had_sources was False — query and proceed
+                nlm_insights = nlm_query_for_content(nb_id, topic)
+                if nlm_insights:
+                    nlm_trigger_visuals(nb_id, topic)
+                    artifacts_state = {"slide_deck": "triggered", "infographic": "triggered", "mind_map": "triggered"}
+                else:
+                    nb_id = None
 
     # Store NLM notebook ID back on the Content Calendar page for future runs
     if nb_id:
