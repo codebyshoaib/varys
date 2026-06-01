@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 """PreToolUse/Write|Edit guard. Blocks CLAUDE.md >150 lines; warns on secret writes."""
 import json, os, sys
+sys.path.insert(0, "/home/oye/Documents/free_work/personal-agent-v2/.claude/hooks")
+try:
+    import kamil_log as _k
+except Exception:
+    _k = None
 
 def main():
     try:
@@ -31,6 +36,7 @@ def main():
             projected = content.count("\n") + 1
         if projected > 150:
             print(f"ERROR: CLAUDE.md would be ~{projected} lines (limit 150). Move detail to .claude/rules/ or vault/memory/.", file=sys.stderr)
+            if _k: _k.klog_policy_block("guard-file-writes", rule="claude_md_size", reason=f"~{projected} lines", path=path)
             sys.exit(2)
     sys.exit(0)
 

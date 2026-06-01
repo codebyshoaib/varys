@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 """PreToolUse/Bash guard. Blocks ONLY specific dangerous patterns. Silent on success."""
 import json, re, sys
+sys.path.insert(0, "/home/oye/Documents/free_work/personal-agent-v2/.claude/hooks")
+try:
+    import kamil_log as _k
+except Exception:
+    _k = None
 
 def main():
     try:
@@ -26,6 +31,7 @@ def main():
     for pattern, msg in blocks:
         if re.search(pattern, cmd):
             print(msg, file=sys.stderr)
+            if _k: _k.klog_policy_block("block-bad-commands", rule=pattern[:40], reason=msg, command=cmd)
             sys.exit(2)
     sys.exit(0)
 
