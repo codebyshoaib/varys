@@ -3,14 +3,15 @@
 openoutreach-monitor.py — Watches OpenOutreach SQLite DB for new events.
 
 Called by job-finder.py every 30 min. Detects:
-  - New accepted LinkedIn connections (CONNECTED state)
-  - New replies from leads (conversation activity)
-  - Campaign stats (sent, accepted rate)
+  - New accepted LinkedIn connections (Connected state in crm_deal)
+  - New inbound replies (chat_chatmessage where is_outgoing=False)
+  - Campaign stats (state counts)
 
 On new accepted connection → DM Kamal → save to Notion Job Tracker as LinkedIn lead.
 On new reply → DM Kamal → update Job Tracker entry.
 
 DB path: ~/.openoutreach/data/db.sqlite3
+Schema: crm_lead, crm_deal, chat_chatmessage (NOT crm_linkedinprofile — that table doesn't exist)
 """
 
 import json
@@ -104,6 +105,11 @@ def check_openoutreach() -> dict:
     """
     Query OpenOutreach DB for new activity.
     Returns dict with new_connections, new_replies, stats.
+
+    Schema note:
+      crm_deal  — state IN ('Connected','Qualified','Pending','Failed')
+      crm_lead  — linkedin_url, public_identifier
+      chat_chatmessage — is_outgoing=False means inbound reply
     """
     if not OPENOUTREACH_DB.exists():
         return {"running": False}
@@ -113,40 +119,34 @@ def check_openoutreach() -> dict:
         conn.row_factory = sqlite3.Row
         cur   = conn.cursor()
 
-        # Get table names to understand schema version
-        cur.execute("SELECT name FROM sqlite_master WHERE type='table'")
-        tables = [r[0] for r in cur.fetchall()]
+        result = {"running": True, "new_connections": [], "new_replies": [], "stats": {}}
 
-        result = {"running": True, "tables": tables,
-                  "new_connections": [], "new_replies": [], "stats": {}}
+        # Connected deals — joined with lead for profile URL
+        cur.execute("""
+            SELECT d.id, d.state, d.profile_summary, d.chat_summary, d.outcome,
+                   d.creation_date, d.update_date,
+                   l.linkedin_url, l.public_identifier
+            FROM crm_deal d
+            JOIN crm_lead l ON d.lead_id = l.id
+            WHERE d.state IN ('Connected', 'Qualified')
+            ORDER BY d.update_date DESC
+            LIMIT 50
+        """)
+        result["new_connections"] = [dict(r) for r in cur.fetchall()]
 
-        # Try to read LinkedIn profiles in CONNECTED state
-        if "crm_linkedinprofile" in tables:
-            cur.execute("""
-                SELECT id, first_name, last_name, headline, company, profile_url,
-                       state, created_at, updated_at
-                FROM crm_linkedinprofile
-                WHERE state IN ('CONNECTED', 'COMPLETED')
-                ORDER BY updated_at DESC
-                LIMIT 50
-            """)
-            result["new_connections"] = [dict(r) for r in cur.fetchall()]
-
-        # Try to read conversation/message activity
-        if "crm_message" in tables:
-            cur.execute("""
-                SELECT id, profile_id, content, direction, created_at
-                FROM crm_message
-                WHERE direction = 'INBOUND'
-                ORDER BY created_at DESC
-                LIMIT 20
-            """)
-            result["new_replies"] = [dict(r) for r in cur.fetchall()]
+        # Inbound chat messages
+        cur.execute("""
+            SELECT id, content, creation_date, linkedin_urn
+            FROM chat_chatmessage
+            WHERE is_outgoing = 0
+            ORDER BY creation_date DESC
+            LIMIT 20
+        """)
+        result["new_replies"] = [dict(r) for r in cur.fetchall()]
 
         # Campaign stats
-        if "crm_linkedinprofile" in tables:
-            cur.execute("SELECT state, COUNT(*) as cnt FROM crm_linkedinprofile GROUP BY state")
-            result["stats"] = {r["state"]: r["cnt"] for r in cur.fetchall()}
+        cur.execute("SELECT state, COUNT(*) as cnt FROM crm_deal GROUP BY state")
+        result["stats"] = {r["state"]: r["cnt"] for r in cur.fetchall()}
 
         conn.close()
         return result
@@ -189,24 +189,24 @@ def run(token: str) -> int:
     if new_connections:
         lines = ["🤝 *LinkedIn connections accepted on OpenOutreach:*\n"]
         for c in new_connections[:5]:
-            name    = f"{c.get('first_name','')} {c.get('last_name','')}".strip()
-            title   = c.get("headline", "")[:60]
-            company = c.get("company", "")
-            url     = c.get("profile_url", "")
-            lines.append(f"• *{name}* — {title}")
-            if company:
-                lines.append(f"  {company}")
+            identifier = c.get("public_identifier", "")
+            url        = c.get("linkedin_url", "")
+            summary    = (c.get("profile_summary") or "")[:80]
+            state_val  = c.get("state", "")
+            lines.append(f"• *{identifier}* ({state_val})")
+            if summary:
+                lines.append(f"  {summary}")
             if url:
                 lines.append(f"  {url}")
             lines.append("")
-            save_linkedin_lead_to_notion(name, title, company, url, "OpenOutreach connection")
+            save_linkedin_lead_to_notion(identifier, summary, "", url, "OpenOutreach connection")
             seen_connected.add(str(c["id"]))
             new_events += 1
 
         if len(new_connections) > 5:
             lines.append(f"_(+{len(new_connections)-5} more — check Notion Job Tracker)_")
 
-        lines.append("_Reply \"followup [name]\" and I'll write a message._\n🤖 Kamil")
+        lines.append("_Reply \"followup [name]\" and I'll write a value-first message._\n🤖 Kamil")
         slack_dm(token, "\n".join(lines))
 
     # New inbound replies
@@ -218,36 +218,28 @@ def run(token: str) -> int:
     if new_replies:
         lines = ["💬 *LinkedIn replies via OpenOutreach:*\n"]
         for r in new_replies[:3]:
-            content = r.get("content", "")[:120]
+            content = (r.get("content") or "")[:120]
+            urn     = r.get("linkedin_urn", "")
             lines.append(f"• \"{content}\"")
+            if urn:
+                lines.append(f"  URN: {urn}")
             seen_replies.add(str(r["id"]))
             new_events += 1
-        lines.append("\n_Check OpenOutreach admin to respond: http://localhost:8000/admin_")
+        lines.append("\n_Check OpenOutreach at http://localhost:6080 to respond_")
         lines.append("🤖 Kamil")
         slack_dm(token, "\n".join(lines))
 
-    # Log new connections and replies to Axiom
-    if new_connections:
-        for c in new_connections:
-            name = f"{c.get('first_name','')} {c.get('last_name','')}".strip()
-            klog("linkedin_connection_accepted", component="openoutreach-monitor",
-                 name=name, headline=c.get("headline","")[:80],
-                 company=c.get("company",""), state=c.get("state",""))
-    if new_replies:
-        for r in new_replies:
-            klog("linkedin_reply_received", component="openoutreach-monitor",
-                 content_preview=r.get("content","")[:100])
-
-    # Stats logging
+    # Stats
     stats = data.get("stats", {})
     if stats:
-        sent      = stats.get("PENDING", 0) + stats.get("CONNECTED", 0) + stats.get("COMPLETED", 0)
-        connected = stats.get("CONNECTED", 0) + stats.get("COMPLETED", 0)
-        rate      = round(connected / sent * 100) if sent > 0 else 0
-        print(f"[openoutreach-monitor] Stats: {sent} sent, {connected} connected ({rate}% acceptance)", flush=True)
+        connected = stats.get("Connected", 0) + stats.get("Qualified", 0)
+        total     = sum(stats.values())
+        rate      = round(connected / total * 100) if total > 0 else 0
+        print(f"[openoutreach-monitor] Stats: {total} total, {connected} connected ({rate}% acceptance)", flush=True)
         klog("openoutreach_stats", component="openoutreach-monitor",
-             sent=sent, connected=connected, acceptance_rate_pct=rate,
-             qualified=stats.get("QUALIFIED", 0), pending=stats.get("PENDING", 0))
+             total=total, connected=connected, acceptance_rate_pct=rate,
+             qualified=stats.get("Qualified", 0), pending=stats.get("Pending", 0),
+             failed=stats.get("Failed", 0))
 
     state["last_connected_ids"] = list(seen_connected)
     state["last_reply_ids"]     = list(seen_replies)
