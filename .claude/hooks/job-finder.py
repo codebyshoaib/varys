@@ -538,170 +538,175 @@ def main():
         for slot in slots_to_run:
             log(f"  └─ {slot['name']}")
 
-            # Route to correct scanner based on source
-            source = slot.get("source", "")
-            if source == "reddit" or source.startswith("reddit"):
-                sub   = slot.get("subreddit", "forhire")
-                hours = slot.get("hours", 48)
-                # Use generic reddit scan for this subreddit
-                from internet_scanner import http_get, has_paid_signal, has_stack_signal, extract_rate, is_recent
-                url  = f"https://www.reddit.com/r/{sub}/new.json?limit=25"
-                data = http_get(url)
-                if data:
-                    try:
-                        posts = json.loads(data)["data"]["children"]
-                        for p in posts:
-                            post  = p["data"]
-                            title = post.get("title", "")
-                            body  = post.get("selftext", "")
-                            ts    = post.get("created_utc", 0)
-                            full  = f"{title} {body}"
-                            url_p = f"https://reddit.com{post.get('permalink','')}"
-                            if not is_recent(ts, hours=hours):
-                                continue
-                            # Broad relevance — Kamal is open to any work
-                            slot_id = slot.get("id", "")
-                            full_lower = full.lower()
+            for slot_idx, slot in enumerate(slots_to_run):
+                slot_start = len(internet_jobs)
 
-                            # Startup/cofounder/EIC channels — look for opportunity signals
-                            STARTUP_SLOTS = {
-                                "reddit_cofounder", "reddit_cofounderhunt", "reddit_findacofounder",
-                                "reddit_startup_ideas", "reddit_entrepreneur_eic", "reddit_startupninjas",
-                                "reddit_microsaas", "reddit_nocode_devneeded", "reddit_alphaandbeta",
-                                "reddit_indiehackers", "reddit_indiehackers_collabs", "reddit_SaaS",
-                                "reddit_sideproject", "reddit_EntrepreneurRideAlong",
-                            }
-                            # Micro-task channels — anything with a price
-                            MICROTASK_SLOTS = {
-                                "reddit_slavelabour", "reddit_donedirtcheap", "reddit_hireforgigs",
-                                "reddit_hiringph", "reddit_jobs4bitcoin", "reddit_sidehustle",
-                            }
-                            # Broad tech channels — any technical work
-                            BROAD_TECH_SLOTS = {
-                                "reddit_webdeveloperjobs", "reddit_pythonjobs", "reddit_remotepython",
-                                "reddit_javascriptjobs", "reddit_mljobs", "reddit_bigdatajobs",
-                                "reddit_developerjobs", "reddit_devopsjobs", "reddit_requestabot",
-                                "reddit_claudeai_builders", "reddit_aitools_builders",
-                                "reddit_gamedevclassifieds", "reddit_designjobs",
-                                "reddit_ecommerce_devneeded", "reddit_passive_income_tech",
-                                "reddit_freelance_forhire", "reddit_forhirefreelance",
-                                "reddit_developers_hire", "reddit_freelanceprogramming",
-                                "reddit_remotearmy", "reddit_jobs4bitcoin",
-                            }
+                # Route to correct scanner based on source
+                source = slot.get("source", "")
+                if source == "reddit" or source.startswith("reddit"):
+                    sub   = slot.get("subreddit", "forhire")
+                    hours = slot.get("hours", 48)
+                    # Use generic reddit scan for this subreddit
+                    from internet_scanner import http_get, has_paid_signal, has_stack_signal, extract_rate, is_recent
+                    url  = f"https://www.reddit.com/r/{sub}/new.json?limit=25"
+                    data = http_get(url)
+                    if data:
+                        try:
+                            posts = json.loads(data)["data"]["children"]
+                            for p in posts:
+                                post  = p["data"]
+                                title = post.get("title", "")
+                                body  = post.get("selftext", "")
+                                ts    = post.get("created_utc", 0)
+                                full  = f"{title} {body}"
+                                url_p = f"https://reddit.com{post.get('permalink','')}"
+                                if not is_recent(ts, hours=hours):
+                                    continue
+                                # Broad relevance — Kamal is open to any work
+                                slot_id = slot.get("id", "")
+                                full_lower = full.lower()
 
-                            if slot_id in STARTUP_SLOTS:
-                                # For startup channels: look for founder/builder/technical signals
-                                is_relevant = any(w in full_lower for w in [
-                                    "technical", "developer", "engineer", "cto", "cofounder",
-                                    "co-founder", "build", "mvp", "equity", "looking for",
-                                    "need help", "startup", "saas", "app", "website", "paid",
-                                    "eic", "technical lead", "full stack", "backend", "python",
-                                ])
-                            elif slot_id in MICROTASK_SLOTS:
-                                # For micro-task channels: anything with a price is relevant
-                                is_relevant = has_paid_signal(full) or "$" in full or "pay" in full_lower
-                            elif slot_id in BROAD_TECH_SLOTS:
-                                # For tech boards: any hiring post
-                                is_relevant = (
-                                    has_paid_signal(full) or
-                                    "[hiring]" in title.lower() or
-                                    "looking for" in full_lower or
-                                    "need a" in full_lower or
-                                    "hiring" in full_lower or
-                                    "contract" in full_lower or
-                                    "freelance" in full_lower or
-                                    "remote" in full_lower
-                                )
-                            else:
-                                # Default: paid signal + any tech mention
-                                is_relevant = (
-                                    has_paid_signal(full) or
-                                    "[hiring]" in title.lower() or
-                                    "looking for" in title.lower() or
-                                    "need a dev" in title.lower() or
-                                    "need developer" in title.lower()
-                                )
+                                # Startup/cofounder/EIC channels — look for opportunity signals
+                                STARTUP_SLOTS = {
+                                    "reddit_cofounder", "reddit_cofounderhunt", "reddit_findacofounder",
+                                    "reddit_startup_ideas", "reddit_entrepreneur_eic", "reddit_startupninjas",
+                                    "reddit_microsaas", "reddit_nocode_devneeded", "reddit_alphaandbeta",
+                                    "reddit_indiehackers", "reddit_indiehackers_collabs", "reddit_SaaS",
+                                    "reddit_sideproject", "reddit_EntrepreneurRideAlong",
+                                }
+                                # Micro-task channels — anything with a price
+                                MICROTASK_SLOTS = {
+                                    "reddit_slavelabour", "reddit_donedirtcheap", "reddit_hireforgigs",
+                                    "reddit_hiringph", "reddit_jobs4bitcoin", "reddit_sidehustle",
+                                }
+                                # Broad tech channels — any technical work
+                                BROAD_TECH_SLOTS = {
+                                    "reddit_webdeveloperjobs", "reddit_pythonjobs", "reddit_remotepython",
+                                    "reddit_javascriptjobs", "reddit_mljobs", "reddit_bigdatajobs",
+                                    "reddit_developerjobs", "reddit_devopsjobs", "reddit_requestabot",
+                                    "reddit_claudeai_builders", "reddit_aitools_builders",
+                                    "reddit_gamedevclassifieds", "reddit_designjobs",
+                                    "reddit_ecommerce_devneeded", "reddit_passive_income_tech",
+                                    "reddit_freelance_forhire", "reddit_forhirefreelance",
+                                    "reddit_developers_hire", "reddit_freelanceprogramming",
+                                    "reddit_remotearmy", "reddit_jobs4bitcoin",
+                                }
 
-                            if not is_relevant:
-                                continue
+                                if slot_id in STARTUP_SLOTS:
+                                    # For startup channels: look for founder/builder/technical signals
+                                    is_relevant = any(w in full_lower for w in [
+                                        "technical", "developer", "engineer", "cto", "cofounder",
+                                        "co-founder", "build", "mvp", "equity", "looking for",
+                                        "need help", "startup", "saas", "app", "website", "paid",
+                                        "eic", "technical lead", "full stack", "backend", "python",
+                                    ])
+                                elif slot_id in MICROTASK_SLOTS:
+                                    # For micro-task channels: anything with a price is relevant
+                                    is_relevant = has_paid_signal(full) or "$" in full or "pay" in full_lower
+                                elif slot_id in BROAD_TECH_SLOTS:
+                                    # For tech boards: any hiring post
+                                    is_relevant = (
+                                        has_paid_signal(full) or
+                                        "[hiring]" in title.lower() or
+                                        "looking for" in full_lower or
+                                        "need a" in full_lower or
+                                        "hiring" in full_lower or
+                                        "contract" in full_lower or
+                                        "freelance" in full_lower or
+                                        "remote" in full_lower
+                                    )
+                                else:
+                                    # Default: paid signal + any tech mention
+                                    is_relevant = (
+                                        has_paid_signal(full) or
+                                        "[hiring]" in title.lower() or
+                                        "looking for" in title.lower() or
+                                        "need a dev" in title.lower() or
+                                        "need developer" in title.lower()
+                                    )
 
-                            # Stack signal check — relaxed for startup/microtask channels
-                            # No stack filter — Kamal does any digital/remote work
-                            internet_jobs.append({
-                                "title":       title[:120],
-                                "url":         url_p,
-                                "description": body[:400],
-                                "platform":    "other",
-                                "rate":        extract_rate(full),
-                                "company":     f"r/{sub}",
-                                "source":      f"reddit-{sub}",
-                            })
-                    except Exception as e:
-                        log(f"Reddit parse error: {e}")
+                                if not is_relevant:
+                                    continue
 
-            elif source == "hn_hiring":
-                internet_jobs.extend(scan_hn_hiring())
+                                # Stack signal check — relaxed for startup/microtask channels
+                                # No stack filter — Kamal does any digital/remote work
+                                internet_jobs.append({
+                                    "title":       title[:120],
+                                    "url":         url_p,
+                                    "description": body[:400],
+                                    "platform":    "other",
+                                    "rate":        extract_rate(full),
+                                    "company":     f"r/{sub}",
+                                    "source":      f"reddit-{sub}",
+                                })
+                        except Exception as e:
+                            log(f"Reddit parse error: {e}")
 
-            elif source == "github_bounty":
-                from internet_scanner import http_get
-                import urllib.parse as _up
-                q   = slot.get("query", "label:bounty+python+is:open+is:issue")
-                url = f"https://api.github.com/search/issues?q={_up.quote(q)}&sort=created&per_page=15"
-                data = http_get(url, headers={"Accept": "application/vnd.github+json"})
-                if data:
-                    try:
-                        items = json.loads(data).get("items", [])
-                        from internet_scanner import extract_rate, has_paid_signal
-                        for item in items:
-                            title = item.get("title", "")
-                            body  = (item.get("body") or "")[:300]
-                            full  = f"{title} {body}"
-                            rate  = extract_rate(full)
-                            if not has_paid_signal(full) and "$" not in full:
-                                continue
-                            internet_jobs.append({
-                                "title":       f"[Bounty] {title[:100]}",
-                                "url":         item.get("html_url", ""),
-                                "description": body,
-                                "platform":    "other",
-                                "rate":        rate or "bounty",
-                                "company":     item.get("repository_url","").split("/")[-1],
-                                "source":      "github-bounty",
-                            })
-                    except Exception as e:
-                        log(f"GitHub bounty parse error: {e}")
+                elif source == "hn_hiring":
+                    internet_jobs.extend(scan_hn_hiring())
 
-            elif source in ("remotive", "remotive_ai"):
-                internet_jobs.extend(scan_remotive())
+                elif source == "github_bounty":
+                    from internet_scanner import http_get
+                    import urllib.parse as _up
+                    q   = slot.get("query", "label:bounty+python+is:open+is:issue")
+                    url = f"https://api.github.com/search/issues?q={_up.quote(q)}&sort=created&per_page=15"
+                    data = http_get(url, headers={"Accept": "application/vnd.github+json"})
+                    if data:
+                        try:
+                            items = json.loads(data).get("items", [])
+                            from internet_scanner import extract_rate, has_paid_signal
+                            for item in items:
+                                title = item.get("title", "")
+                                body  = (item.get("body") or "")[:300]
+                                full  = f"{title} {body}"
+                                rate  = extract_rate(full)
+                                if not has_paid_signal(full) and "$" not in full:
+                                    continue
+                                internet_jobs.append({
+                                    "title":       f"[Bounty] {title[:100]}",
+                                    "url":         item.get("html_url", ""),
+                                    "description": body,
+                                    "platform":    "other",
+                                    "rate":        rate or "bounty",
+                                    "company":     item.get("repository_url","").split("/")[-1],
+                                    "source":      "github-bounty",
+                                })
+                        except Exception as e:
+                            log(f"GitHub bounty parse error: {e}")
 
-            elif source == "hn_ask":
-                # HN Ask threads needing help
-                data = http_get("https://hn.algolia.com/api/v1/search_by_date?query=django+python+help&tags=ask_hn&hitsPerPage=10")
-                if data:
-                    try:
-                        import re as _re
-                        hits = json.loads(data).get("hits", [])
-                        from internet_scanner import extract_rate
-                        for h in hits:
-                            text = h.get("title","") + " " + (h.get("story_text") or "")
-                            if not any(kw in text.lower() for kw in ["paid","will pay","hire","bounty","$"]):
-                                continue
-                            internet_jobs.append({
-                                "title":       h.get("title","")[:100],
-                                "url":         f"https://news.ycombinator.com/item?id={h.get('objectID','')}",
-                                "description": (h.get("story_text") or "")[:300],
-                                "platform":    "other",
-                                "rate":        extract_rate(text),
-                                "company":     "Hacker News",
-                                "source":      "hn-ask",
-                            })
-                    except Exception as e:
-                        log(f"HN ask parse error: {e}")
+                elif source in ("remotive", "remotive_ai"):
+                    internet_jobs.extend(scan_remotive())
 
-            log(f"Internet scan [{slot['name']}]: {len(internet_jobs)} found")
+                elif source == "hn_ask":
+                    # HN Ask threads needing help
+                    data = http_get("https://hn.algolia.com/api/v1/search_by_date?query=django+python+help&tags=ask_hn&hitsPerPage=10")
+                    if data:
+                        try:
+                            import re as _re
+                            hits = json.loads(data).get("hits", [])
+                            from internet_scanner import extract_rate
+                            for h in hits:
+                                text = h.get("title","") + " " + (h.get("story_text") or "")
+                                if not any(kw in text.lower() for kw in ["paid","will pay","hire","bounty","$"]):
+                                    continue
+                                internet_jobs.append({
+                                    "title":       h.get("title","")[:100],
+                                    "url":         f"https://news.ycombinator.com/item?id={h.get('objectID','')}",
+                                    "description": (h.get("story_text") or "")[:300],
+                                    "platform":    "other",
+                                    "rate":        extract_rate(text),
+                                    "company":     "Hacker News",
+                                    "source":      "hn-ask",
+                                })
+                        except Exception as e:
+                            log(f"HN ask parse error: {e}")
 
-            # Advance index for next run
-            queue["current_index"] = (idx + 1) % len(slots)
+                slot_found = len(internet_jobs) - slot_start
+                log(f"  ✓ {slot['name']}: {slot_found} found")
+
+        # Advance index for next run
+        if slots_to_run:
+            queue["current_index"] = (idx + len(slots_to_run)) % len(slots)
             queue_file.write_text(json.dumps(queue, indent=2))
 
     except Exception as e:
