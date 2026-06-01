@@ -713,20 +713,22 @@ def run_fitness_or_tech(track: str, token: str):
     artifacts_state = {}
     if nb_id:
         if not had_sources:
-            had_sources = nlm_research(nb_id, topic)
-        if had_sources:
+            research_ok = nlm_research(nb_id, topic)
+            if not research_ok:
+                print(f"[scheduler] NLM research failed (API quota/error), continuing without insights")
+                slack_dm(token,
+                    f"⚠️ *{track} — NLM research failed* for *{topic}*\n"
+                    f"Google API quota likely hit. Using image + caption only (no NLM visuals).\n🤖 Kamil")
+                nb_id = None  # Clear notebook ID to skip Notion save + artifact polling
+            else:
+                had_sources = True
+        if nb_id and had_sources:
             nlm_insights = nlm_query_for_content(nb_id, topic)
-            # Only trigger visuals if research succeeded
+            # Only trigger visuals if we have insights
             if nlm_insights:
                 nlm_trigger_visuals(nb_id, topic)
                 # Mark all 3 artifacts as triggered only if we have insights
                 artifacts_state = {"slide_deck": "triggered", "infographic": "triggered", "mind_map": "triggered"}
-        else:
-            print(f"[scheduler] Skipping NLM — notebook has 0 sources after research, continuing without insights")
-            slack_dm(token,
-                f"⚠️ *{track} — NLM research failed* for *{topic}*\n"
-                f"Google API quota likely hit. Using image + caption only (no NLM visuals).\n🤖 Kamil")
-            nb_id = None  # Clear notebook ID to skip Notion save + artifact polling
 
     # Store NLM notebook ID back on the Content Calendar page for future runs
     if nb_id:
