@@ -1,6 +1,20 @@
 {
   "model": "sonnet",
   "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          { "type": "command", "command": "python3 /home/oye/Documents/free_work/personal-agent-v2/.claude/hooks/block-bad-commands.py", "timeout": 5 }
+        ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          { "type": "command", "command": "python3 /home/oye/Documents/free_work/personal-agent-v2/.claude/hooks/guard-file-writes.py", "timeout": 5 }
+        ]
+      }
+    ],
     "SessionStart": [
       {
         "matcher": "",
