@@ -28,7 +28,9 @@ Score 0-100:
 
 import html
 import json
+import threading
 import time
+import urllib.error
 import urllib.request
 import urllib.parse
 import xml.etree.ElementTree as ET
