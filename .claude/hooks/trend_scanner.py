@@ -59,10 +59,30 @@ HOT_WORDS = [
 GUIDE_WORDS = ["guide", "tips", "how to", "how i", "tutorial", "beginner", "step by step", "routine"]
 
 
-def _fetch(url: str, timeout: int = 15) -> str:
-    req = urllib.request.Request(url, headers={"User-Agent": UA})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        return r.read().decode("utf-8", "replace")
+# Reddit 403s under rapid parallel hits. Serialize + throttle all Reddit fetches
+# across the 3 track threads, and back off on 403/429.
+_REDDIT_LOCK = threading.Lock()
+
+
+def _fetch(url: str, timeout: int = 15, retries: int = 3) -> str:
+    last = None
+    for attempt in range(retries):
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": UA})
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                return r.read().decode("utf-8", "replace")
+        except urllib.error.HTTPError as e:
+            last = e
+            if e.code in (403, 429, 500, 502, 503):
+                time.sleep(1.5 * (attempt + 1))  # 1.5s, 3s, 4.5s
+                continue
+            raise
+        except Exception as e:
+            last = e
+            time.sleep(1.0 * (attempt + 1))
+    if last:
+        raise last
+    return ""
 
 
 def _reddit_rss(sub: str, period: str, limit: int = 10) -> list[dict]:
