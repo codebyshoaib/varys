@@ -60,6 +60,13 @@ NOTION_CONTENT_LOG = "630d86afb17746f9ad6f9bc78afefa02"  # Content Log DB
 
 HANDLES = {"fitness": "@oykamal", "tech": "@oykamal", "vlog": "@oykamal"}
 
+# NLM artifact pollers run in non-daemon threads that outlive their track function.
+# They register here so run() can join() them before the process exits — otherwise
+# the process ends in ~20s and the pollers (which wait minutes for NLM to render)
+# are killed before slides/infographic/mindmap are downloaded + posted to Slack.
+ARTIFACT_POLLERS: list = []
+_POLLERS_LOCK = threading.Lock()
+
 TRACK_CHANNEL = {
     "fitness": "kamalkeexercies",
     "tech":    "kamalkecoding",
@@ -798,19 +805,29 @@ def run_fitness_or_tech(track: str, token: str):
             "ContentLogPageID": {"rich_text": [{"text": {"content": log_page_id}}]}
         })
 
-    # Now launch background artifact pollers — they'll update NLMArtifacts as each completes
+    # Now launch background artifact pollers — they'll update NLMArtifacts as each
+    # completes. NOT daemon threads: NLM render takes minutes, so the process must
+    # NOT exit before these finish downloading + uploading to Slack. We return them
+    # so run() can join() them before the process exits.
+    poller_threads = []
     if nb_id and artifacts_state:
         for artifact in ["slide_deck", "infographic", "mind_map"]:
-            threading.Thread(
+            th = threading.Thread(
                 target=nlm_poll_and_send,
                 args=(nb_id, artifact, topic, token),
                 kwargs={"log_page_id": log_page_id, "artifacts_state": copy.deepcopy(artifacts_state)},
-                daemon=True,
-            ).start()
+                daemon=False,
+            )
+            th.start()
+            poller_threads.append(th)
+        with _POLLERS_LOCK:
+            ARTIFACT_POLLERS.extend(poller_threads)
 
     klog("content_posted", component="content-scheduler",
          topic=topic, track=track, score=score,
          linkedin=bool(li_result), nlm=bool(nb_id))
+
+    return poller_threads
 
 
 def run_vlog(token: str):
@@ -874,6 +891,17 @@ def run():
     fitness_thread.join()
     tech_thread.join()
     vlog_thread.join()
+
+    # Wait for NLM artifact pollers (slides/infographic/mindmap) to finish
+    # downloading + posting to Slack. Without this the process would exit and
+    # kill them mid-render. Each poller self-bounds at max_wait (900s).
+    with _POLLERS_LOCK:
+        pollers = list(ARTIFACT_POLLERS)
+    if pollers:
+        print(f"[scheduler] Waiting on {len(pollers)} NLM artifact poller(s) to deliver to Slack...")
+        for th in pollers:
+            th.join()
+        print(f"[scheduler] All artifact pollers finished")
 
     print(f"[scheduler] Done {datetime.now().isoformat()}")
 
