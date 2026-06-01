@@ -775,8 +775,6 @@ Sign off: 🤖 Kamil""", timeout=180, event_context="proactive_idle")
 # ── Socket Mode event handler ─────────────────────────────────────────────────
 
 def make_handler(web: WebClient, dm_channel: str, bot_token: str):
-    processed = set()
-
     def handler(client: SocketModeClient, req: SocketModeRequest):
         client.send_socket_mode_response(SocketModeResponse(envelope_id=req.envelope_id))
 
@@ -789,12 +787,12 @@ def make_handler(web: WebClient, dm_channel: str, bot_token: str):
         bot_id     = event.get("bot_id", "")
         ts         = event.get("ts", "")
 
-        # Deduplicate
-        if ts in processed:
+        # Deduplicate using global set (persists across reconnects)
+        if ts in _processed_event_ts:
             return
-        processed.add(ts)
-        if len(processed) > 1000:
-            processed.clear()
+        _processed_event_ts.add(ts)
+        if len(_processed_event_ts) > 1000:
+            _processed_event_ts.clear()
 
         # Skip bot messages and edits/deletes
         if bot_id or subtype:
