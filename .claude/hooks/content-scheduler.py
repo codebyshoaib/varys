@@ -744,6 +744,10 @@ def run_fitness_or_tech(track: str, token: str):
             research_ok = nlm_research(nb_id, topic)
             if not research_ok:
                 print(f"[scheduler] NLM research failed (API quota/error), continuing without insights")
+                klog_error("nlm_research_failed",
+                          component="content-scheduler",
+                          topic=topic, track=track,
+                          severity="warning")
                 slack_dm(token,
                     f"⚠️ *{track} — NLM research failed* for *{topic}*\n"
                     f"Google API quota likely hit. Using image + caption only (no NLM visuals).\n🤖 Kamil")
