@@ -101,6 +101,26 @@ Reply only "ok"."""
     )
 
 
+def ensure_web_server_running():
+    """Start Django runserver inside container if not already running."""
+    try:
+        result = subprocess.run(
+            ["docker", "exec", "openoutreach", "sh", "-c",
+             "ls /proc/*/cmdline 2>/dev/null | xargs -I{} sh -c 'cat {} 2>/dev/null' | tr '\\0' ' ' | grep -q 'runserver'"],
+            capture_output=True, timeout=5
+        )
+        if result.returncode != 0:
+            # Not running — start it
+            subprocess.Popen(
+                ["docker", "exec", "-d", "openoutreach", "sh", "-c",
+                 "python manage.py runserver 0.0.0.0:8000 >> /tmp/django.log 2>&1"],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            )
+            print("[openoutreach-monitor] Started Django web server", flush=True)
+    except Exception as e:
+        print(f"[openoutreach-monitor] Could not ensure web server: {e}", flush=True)
+
+
 def check_openoutreach() -> dict:
     """
     Query OpenOutreach DB for new activity.
@@ -160,6 +180,7 @@ def run(token: str) -> int:
     if not OPENOUTREACH_DB.exists():
         return 0
 
+    ensure_web_server_running()
     state  = load_state()
     data   = check_openoutreach()
 
