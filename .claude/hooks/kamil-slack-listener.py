@@ -909,6 +909,7 @@ def main():
             reconnecting[0] = True
             log(f"Socket stale ({stale_minutes:.1f} min) — reconnecting")
             klog_socket("socket_stale", stale_minutes=round(stale_minutes, 1))
+            missed = 0
             try:
                 try:
                     socket_client.close()
