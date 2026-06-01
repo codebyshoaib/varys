@@ -4,9 +4,11 @@
 
   "campaign": {
     "name": "Freelance Client Outreach — Django/AI Senior Engineer",
-    "objective": "I am Muhammad Kamal, a Senior Backend Engineer with 4+ years experience. I am looking for freelance clients who need Python/Django backend development, AI agent development, or AWS infrastructure work. I want to connect with CTOs, Engineering Managers, Founders, or Product Leads at tech startups, SaaS companies, EdTech platforms, or any company building AI-powered products. Budget range: $35-60/hr or $800-5000 fixed projects.",
+    "objective": "Connect with CTOs, Engineering Managers, Founders, and Technical leads at tech startups (5-200 employees). I am Muhammad Kamal, a Senior Backend Engineer. My outreach approach is value-first: I reference something specific about their company, tie it to a real automation or engineering problem I can solve, and offer a concrete demo or proof-of-concept — no questions, no pitching on first contact. I never open with 'How do you handle X?' — instead I observe what they're doing and mention one specific thing I can automate or improve.",
 
     "target_market": "CTOs, VPs of Engineering, Engineering Managers, Founders, or Technical Co-founders at: (1) SaaS startups needing backend engineers, (2) EdTech companies building LMS or teacher tools, (3) Companies building AI agents or automation workflows, (4) Companies using Django/Python who need senior help, (5) Companies wanting to integrate Claude/LLMs into their products. Company size: 5-200 employees. Stage: Seed to Series B. Location: US, UK, Canada, Australia, or remote-first anywhere.",
+
+    "message_strategy": "3-message sequence only. Message 1: relevant observation + tiny value, no ask. Message 2 (only if they reply): deliver demo/example. Message 3: propose small paid commitment. Never ask 'how do you handle X' — that signals salesperson, not peer engineer.",
 
     "daily_limits": {
       "connection_requests": 20,
@@ -22,11 +24,11 @@
   "message_templates": {
     "connection_request": "Hi {{first_name}}, I'm a Senior Backend Engineer (Django/Python/AWS) who also builds AI agents. Saw your work at {{company}} — looked interesting. Happy to connect.",
 
-    "follow_up_1": "Thanks for connecting {{first_name}}! Quick question — is {{company}} ever looking for senior Django/Python help on a contract basis? I've been building production systems at 10K+ DAU scale and recently got deep into AI agent development. Happy to share more if there's a fit.",
+    "follow_up_1": "Hi {{first_name}} — saw you're running {{company}}. Teams at your stage usually lose hours to manual {{specific_task}} work. I build small AI agents that handle exactly that — happy to send a 60-sec demo of one I made if it's useful.",
 
-    "follow_up_2": "Hey {{first_name}}, following up in case my last message got buried. I specialise in Django backends, AWS infrastructure, and AI agent development (Claude API). If {{company}} ever has a backend challenge or an AI project that needs a senior engineer, I'd love to hear about it. No pressure either way.",
+    "follow_up_2": "Here's a quick demo of an agent I built that auto-qualifies inbound leads and drafts replies: https://oykamal.netlify.app/ — I could adapt something similar for {{company}}'s workflow. Want me to mock one up?",
 
-    "follow_up_3": "Hi {{first_name}}, last message from me — I promise! If the timing isn't right now, feel free to reach out when it is. I'm at oyekamalkhan@gmail.com. Wishing {{company}} well."
+    "follow_up_3": "Hi {{first_name}}, last message from me. I can build a quick proof-of-concept for {{company}}'s {{specific_task}} free of charge — if it works for you, we talk about a paid setup. 15 min to walk through it? Either way, feel free to reach out at oyekamalkhan@gmail.com."
   },
 
   "kamal_profile": {
