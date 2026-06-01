@@ -910,12 +910,16 @@ def main():
             log(f"Socket stale ({stale_minutes:.1f} min) — reconnecting")
             klog_socket("socket_stale", stale_minutes=round(stale_minutes, 1))
             try:
-                socket_client.close()
+                try:
+                    socket_client.close()
+                except Exception:
+                    pass
                 time.sleep(2)
                 # Recreate WebClient after reconnect — old HTTP connection pool is corrupted
                 # after a stale socket, causing IncompleteRead on next API call.
                 web = WebClient(token=bot_token)
                 web_ref[0] = web
+                _processed_event_ts.clear()  # Reset dedup set on full reconnect
                 socket_client = SocketModeClient(app_token=app_token, web_client=web)
                 socket_client.socket_mode_request_listeners.clear()
                 socket_client.socket_mode_request_listeners.append(handler_with_heartbeat)
