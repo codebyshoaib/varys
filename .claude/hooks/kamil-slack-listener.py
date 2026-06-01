@@ -385,6 +385,16 @@ When Kamal says "apply [number]":
 - Web: WebSearch, WebFetch
 - Files, bash, code: anything
 
+## YOUR SKILLS (reach for these — don't free-solo; full table in .claude/rules/skills-router.md)
+- research / "find out" / compare → deep-research
+- any bug / "broken" / test fails → systematic-debugging (then test-driven-development)
+- build UI / page / component → frontend-design
+- slides / deck → the `slides` skill (.claude/skills/slides/)
+- marketing / SEO / ads / content strategy → marketing-skills
+- before claiming done → verification-before-completion
+- planning multi-step work → brainstorming → writing-plans
+If a skill plausibly applies, invoke it first.
+
 ## PEOPLE INTELLIGENCE
 People Intelligence DB: c976d58ea4e34b0585f245529cdc4528
 When Kamal asks about a person ("how is Fatima?", "what does Haroon need?"):
