@@ -516,21 +516,27 @@ def main():
 
     seen = load_seen()
 
-    # ── Internet exploration (one slot per 30-min run) ────────────────────────
+    # ── Internet exploration (3-4 slots per 30-min run) ─────────────────────────
     internet_jobs = []
     try:
         from internet_scanner import scan_all as internet_scan_all
         from internet_scanner import scan_reddit_hiring, scan_remotive, scan_hn_hiring, scan_github_bounties, scan_reddit_problems
 
-        # Load exploration queue and pick current slot
+        # Load exploration queue and pick current slots (3-4 per run instead of 1)
         queue_file = Path(__file__).parent / "exploration-queue.json"
         if queue_file.exists():
             queue = json.loads(queue_file.read_text())
             slots = queue.get("slots", [])
             idx   = queue.get("current_index", 0) % len(slots)
-            slot  = slots[idx]
+            # Run 4 slots per pass for 5-6 hour full cycle
+            slots_to_run = [slots[(idx + i) % len(slots)] for i in range(4)]
 
-            log(f"Exploring slot {idx+1}/{len(slots)}: {slot['name']}")
+            log(f"Exploring {len(slots_to_run)} slots (indices {idx}-{(idx+3)%len(slots)})...")
+        else:
+            slots_to_run = []
+
+        for slot in slots_to_run:
+            log(f"  └─ {slot['name']}")
 
             # Route to correct scanner based on source
             source = slot.get("source", "")
