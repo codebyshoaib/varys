@@ -60,6 +60,19 @@ HOT_WORDS = [
 ]
 GUIDE_WORDS = ["guide", "tips", "how to", "how i", "tutorial", "beginner", "step by step", "routine"]
 
+# Titles that are not usable content topics — recurring megathreads, admin posts, etc.
+JUNK_MARKERS = [
+    "weekly thread", "daily thread", "daily discussion", "weekly discussion",
+    "monday daily", "weekly whiteboard", "megathread", "moronic monday",
+    "rules", "read before", "mod post", "monthly thread", "simple questions",
+    "no stupid questions", "what are you working on", "feedback thread",
+]
+
+
+def _is_junk(title: str) -> bool:
+    t = title.lower()
+    return any(m in t for m in JUNK_MARKERS)
+
 
 # Reddit 403s under rapid parallel hits. Serialize + throttle all Reddit fetches
 # across the 3 track threads, and back off on 403/429.
