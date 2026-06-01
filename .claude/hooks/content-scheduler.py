@@ -356,12 +356,20 @@ def pick_topic(track: str) -> tuple | None:
 
 # ─── NLM ─────────────────────────────────────────────────────────────────────
 
+# nlm subcommands that do NOT accept --profile. They rely on the global default
+# profile (set to "work" via `nlm login switch work`). Injecting --profile here
+# makes nlm error with "No such option '--profile'" → download/status failures.
+_NO_PROFILE_CMDS = {"download", "studio"}
+
+
 def _inject_profile(args: list) -> list:
     """Insert --profile <NLM_PROFILE> after the leading subcommand verbs, before any
     positional values (IDs, free-text questions). nlm verbs are the leading non-flag
     tokens; we stop at the first arg that looks like a value (UUID, URL, or contains a space)."""
     if "--profile" in args or "-p" in args:
         return args
+    if args and args[0] in _NO_PROFILE_CMDS:
+        return args                       # these commands reject --profile; use global default
     i = 0
     while i < len(args):
         tok = args[i]
