@@ -399,17 +399,23 @@ def nlm_find_existing_notebook(topic: str) -> tuple[str, int] | None:
     return None
 
 
-def nlm_get_source_count(nb_id: str) -> int:
-    """Return current source count for a notebook."""
-    ok, out = run_nlm(["list", "notebooks"], timeout=30)
-    if not ok:
-        return 0
-    try:
-        for nb in json.loads(out):
-            if nb["id"] == nb_id:
-                return nb.get("source_count", 0)
-    except Exception:
-        pass
+def nlm_get_source_count(nb_id: str, retries: int = 3) -> int:
+    """Return current source count for a notebook. Retry up to 3 times on failure."""
+    for attempt in range(retries):
+        ok, out = run_nlm(["list", "notebooks"], timeout=30)
+        if ok:
+            try:
+                for nb in json.loads(out):
+                    if nb["id"] == nb_id:
+                        count = nb.get("source_count", 0)
+                        if count > 0 or attempt == retries - 1:
+                            return count
+                        time.sleep(5)  # Wait before retry if no sources yet
+                        continue
+            except Exception:
+                pass
+        if attempt < retries - 1:
+            time.sleep(5)
     return 0
 
 
