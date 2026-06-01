@@ -206,6 +206,8 @@ def scan_trends(track: str) -> list[dict]:
     for period, recency in (("day", "today"), ("week", "this week")):
         for sub in TRACK_SUBREDDITS[track]:
             for item in _reddit_rss(sub, period):
+                if _is_junk(item["title"]):
+                    continue
                 s = _score(item, track, recency)
                 if s < 50:
                     continue
@@ -214,12 +216,13 @@ def scan_trends(track: str) -> list[dict]:
                     "score":  s,
                     "reason": f"Trending on {item['source']} ({recency}, score={s})",
                 })
-            time.sleep(0.4)  # be polite to reddit
 
     # 2. Hacker News — tech track only (thin signal for fitness/vlog)
     if track == "tech":
         for q in ["Claude AI", "Python", "Django", "AI agent coding", "developer tools"]:
             for item in _hn_search(q):
+                if _is_junk(item["title"]):
+                    continue
                 s = _score(item, track, "this week")
                 if s < 50:
                     continue
