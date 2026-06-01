@@ -67,7 +67,29 @@ def ensure_patched(force: bool = False) -> bool:
     return apply_patch()
 
 
+def ensure_web_server() -> bool:
+    """Start Django admin web server if not running. Uses --noreload so it survives file changes."""
+    try:
+        result = subprocess.run(
+            ["docker", "exec", CONTAINER, "sh", "-c",
+             "ls /proc/*/cmdline 2>/dev/null | xargs -I{} sh -c 'cat {} 2>/dev/null | tr \"\\0\" \" \"' 2>/dev/null | grep -q 'runserver'"],
+            capture_output=True, timeout=10
+        )
+        if result.returncode != 0:
+            subprocess.Popen(
+                ["docker", "exec", "-d", CONTAINER, "sh", "-c",
+                 "cd /app && python manage.py runserver 0.0.0.0:8000 --noreload >> /tmp/django.log 2>&1"],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            )
+            print("[restore-prompt] Started Django web server (admin at :8001).", flush=True)
+        return True
+    except Exception as e:
+        print(f"[restore-prompt] Could not ensure web server: {e}", flush=True)
+        return False
+
+
 if __name__ == "__main__":
     force = "--force" in sys.argv
-    success = ensure_patched(force=force)
-    sys.exit(0 if success else 1)
+    ensure_patched(force=force)
+    ensure_web_server()
+    sys.exit(0)
