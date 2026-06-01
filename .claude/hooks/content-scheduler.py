@@ -716,9 +716,11 @@ def run_fitness_or_tech(track: str, token: str):
             had_sources = nlm_research(nb_id, topic)
         if had_sources:
             nlm_insights = nlm_query_for_content(nb_id, topic)
-            nlm_trigger_visuals(nb_id, topic)
-            # Mark all 3 artifacts as triggered initially
-            artifacts_state = {"slide_deck": "triggered", "infographic": "triggered", "mind_map": "triggered"}
+            # Only trigger visuals if research succeeded
+            if nlm_insights:
+                nlm_trigger_visuals(nb_id, topic)
+                # Mark all 3 artifacts as triggered only if we have insights
+                artifacts_state = {"slide_deck": "triggered", "infographic": "triggered", "mind_map": "triggered"}
         else:
             print(f"[scheduler] Skipping NLM — notebook has 0 sources after research, continuing without insights")
             slack_dm(token,
