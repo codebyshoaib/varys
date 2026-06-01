@@ -724,7 +724,7 @@ def run_fitness_or_tech(track: str, token: str):
             slack_dm(token,
                 f"⚠️ *{track} — NLM research failed* for *{topic}*\n"
                 f"Google API quota likely hit. Using image + caption only (no NLM visuals).\n🤖 Kamil")
-            nb_id = None  # Clear notebook ID to skip artifact polling
+            nb_id = None  # Clear notebook ID to skip Notion save + artifact polling
 
     # Store NLM notebook ID back on the Content Calendar page for future runs
     if nb_id:
