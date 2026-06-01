@@ -144,7 +144,7 @@ def slack_upload(token: str, filepath: str, title: str, comment: str = ""):
         if not result.get("ok"):
             print(f"[scheduler] Upload complete failed: {result.get('error')}")
     except Exception as e:
-        print(f"[scheduler] File upload error {filepath}: {e}")
+        print(f"[scheduler] File upload error {filepath}: {e}")t(f"[scheduler] File upload error {filepath}: {e}")
 
 # ─── Notion ───────────────────────────────────────────────────────────────────
 
