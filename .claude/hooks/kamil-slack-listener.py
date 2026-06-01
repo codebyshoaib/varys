@@ -737,7 +737,7 @@ def _check_pending_reactions(channel: str, ts: str):
 def proactive_loop(web: WebClient, dm_channel: str):
     """Background thread: every 35min of idle, do something useful."""
     global last_activity_time, last_idle_work
-    last_proactive_sent = 0
+    last_proactive_ts = None
     while True:
         time.sleep(60)
         idle_min  = (time.time() - last_activity_time) / 60
@@ -759,17 +759,14 @@ Sign off: 🤖 Kamil""", timeout=180, event_context="proactive_idle")
 
             if answer and len(answer) > 20:
                 answer_normalized = " ".join(answer.strip().split())
-                answer_hash = hash(answer_normalized)
-                if answer_hash != last_proactive_sent:
-                    last_proactive_sent = answer_hash
-                    try:
-                        resp = web.chat_postMessage(channel=dm_channel, text=answer_normalized)
-                        log(f"Proactive: Critical findings:\n{answer_normalized}")
-                        # Eval: log proactive DM, watch for Kamal reaction
-                        msg_ts = resp.get("ts", "") if isinstance(resp, dict) else ""
-                        eval_proactive_dm(content=answer_normalized, channel=dm_channel, ts=msg_ts)
-                    except Exception as e:
-                        klog_error(context="proactive_loop-send_message", exc=e)
+                try:
+                    resp = web.chat_postMessage(channel=dm_channel, text=answer_normalized)
+                    last_proactive_ts = resp.get("ts", "") if isinstance(resp, dict) else None
+                    log(f"Proactive: {answer_normalized[:80]}")
+                    # Eval: log proactive DM, watch for Kamal reaction
+                    eval_proactive_dm(content=answer_normalized, channel=dm_channel, ts=last_proactive_ts or "")
+                except Exception as e:
+                    klog_error(context="proactive_loop-send_message", exc=e)
 
 
 # ── Socket Mode event handler ─────────────────────────────────────────────────
