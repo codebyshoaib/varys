@@ -91,7 +91,9 @@ def _reddit_rss(sub: str, period: str, limit: int = 10) -> list[dict]:
     """Fetch a subreddit's top Atom feed. Returns [{title,url,updated}]. [] on any failure."""
     url = f"https://www.reddit.com/r/{sub}/top.rss?t={period}&limit={limit}"
     try:
-        xml = _fetch(url)
+        with _REDDIT_LOCK:          # serialize across the 3 track threads
+            xml = _fetch(url)
+            time.sleep(0.6)          # throttle: one reddit hit max every ~0.6s globally
         root = ET.fromstring(xml)
     except Exception:
         return []
