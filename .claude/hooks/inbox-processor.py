@@ -21,6 +21,12 @@ import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
+import sys as _sys, time as _time
+_sys.path.insert(0, "/home/oye/Documents/free_work/personal-agent-v2/.claude/hooks")
+try:
+    import kamil_log as _k
+except Exception:
+    _k = None
 
 INBOX_DIR = Path.home() / "kamil-inbox"
 KAMIL_DIR = Path(__file__).parent.parent.parent  # personal-agent-v2/
@@ -196,4 +202,10 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    _t0 = _time.time()
+    try:
+        main()
+        if _k: _k.klog_cron("inbox-processor", status="ok", duration_ms=(_time.time()-_t0)*1000)
+    except Exception as _e:
+        if _k: _k.klog_error("inbox-processor-main", _e, component="inbox-processor", severity="ERROR")
+        raise

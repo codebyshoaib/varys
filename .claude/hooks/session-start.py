@@ -14,6 +14,12 @@ import json
 import sys
 from datetime import datetime
 from pathlib import Path
+import sys as _sys, time as _time
+_sys.path.insert(0, "/home/oye/Documents/free_work/personal-agent-v2/.claude/hooks")
+try:
+    import kamil_log as _k
+except Exception:
+    _k = None
 
 INBOX_FILE = Path("/tmp/kamil-slack-inbox.json")
 
@@ -90,4 +96,11 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    _t0 = _time.time()
+    try:
+        rc = main()
+        if _k: _k.klog_cron("session-start", status="ok", duration_ms=(_time.time()-_t0)*1000)
+        sys.exit(rc)
+    except Exception as _e:
+        if _k: _k.klog_error("session-start-main", _e, component="session-start", severity="ERROR")
+        raise

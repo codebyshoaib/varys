@@ -18,6 +18,12 @@ import urllib.request
 import urllib.error
 from datetime import datetime
 from pathlib import Path
+import sys as _sys, time as _time
+_sys.path.insert(0, "/home/oye/Documents/free_work/personal-agent-v2/.claude/hooks")
+try:
+    import kamil_log as _k
+except Exception:
+    _k = None
 
 NOTION_CONFIG   = Path.home() / ".claude" / "hooks" / ".notion"
 DB_PAGE_WORK_LOG = "0b71db855f914d18ac6d97c0f77fc21e"
@@ -158,4 +164,11 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    _t0 = _time.time()
+    try:
+        rc = main()
+        if _k: _k.klog_cron("stop-notion", status="ok", duration_ms=(_time.time()-_t0)*1000)
+        sys.exit(rc)
+    except Exception as _e:
+        if _k: _k.klog_error("stop-notion-main", _e, component="stop-notion", severity="ERROR")
+        raise

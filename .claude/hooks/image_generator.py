@@ -21,6 +21,12 @@ Usage:
 import argparse
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
+import sys as _sys, time as _time
+_sys.path.insert(0, "/home/oye/Documents/free_work/personal-agent-v2/.claude/hooks")
+try:
+    import kamil_log as _k
+except Exception:
+    _k = None
 
 # ─── Fonts ────────────────────────────────────────────────────────────────────
 
@@ -367,35 +373,41 @@ def generate(post_type: str, output: str, palette_name: str = "fitness",
 
 
 if __name__ == "__main__":
-    p = argparse.ArgumentParser()
-    p.add_argument("--type",     default="qa",
-                   choices=["qa","steps","info","tip"])
-    p.add_argument("--question", default="")
-    p.add_argument("--answer",   default="")
-    p.add_argument("--title",    default="")
-    p.add_argument("--subtitle", default="")
-    p.add_argument("--tip",      default="")
-    p.add_argument("--context",  default="")
-    p.add_argument("--steps",    default="")
-    p.add_argument("--points",   default="")
-    p.add_argument("--handle",   default="@oykamal")
-    p.add_argument("--palette",  default="fitness",
-                   choices=["fitness","tech","purple"])
-    p.add_argument("--output",   default="/tmp/social-post.png")
-    args = p.parse_args()
+    _t0 = _time.time()
+    try:
+        p = argparse.ArgumentParser()
+        p.add_argument("--type",     default="qa",
+                       choices=["qa","steps","info","tip"])
+        p.add_argument("--question", default="")
+        p.add_argument("--answer",   default="")
+        p.add_argument("--title",    default="")
+        p.add_argument("--subtitle", default="")
+        p.add_argument("--tip",      default="")
+        p.add_argument("--context",  default="")
+        p.add_argument("--steps",    default="")
+        p.add_argument("--points",   default="")
+        p.add_argument("--handle",   default="@oykamal")
+        p.add_argument("--palette",  default="fitness",
+                       choices=["fitness","tech","purple"])
+        p.add_argument("--output",   default="/tmp/social-post.png")
+        args = p.parse_args()
 
-    out = generate(
-        post_type    = args.type,
-        output       = args.output,
-        palette_name = args.palette,
-        handle       = args.handle,
-        question     = args.question,
-        answer       = args.answer,
-        title        = args.title,
-        subtitle     = args.subtitle,
-        tip          = args.tip,
-        context      = args.context,
-        steps        = [s.strip() for s in args.steps.split(",") if s.strip()],
-        points       = [s.strip() for s in args.points.split(",") if s.strip()],
-    )
-    print(f"Saved: {out}")
+        out = generate(
+            post_type    = args.type,
+            output       = args.output,
+            palette_name = args.palette,
+            handle       = args.handle,
+            question     = args.question,
+            answer       = args.answer,
+            title        = args.title,
+            subtitle     = args.subtitle,
+            tip          = args.tip,
+            context      = args.context,
+            steps        = [s.strip() for s in args.steps.split(",") if s.strip()],
+            points       = [s.strip() for s in args.points.split(",") if s.strip()],
+        )
+        print(f"Saved: {out}")
+        if _k: _k.klog_cron("image-generator", status="ok", duration_ms=(_time.time()-_t0)*1000)
+    except Exception as _e:
+        if _k: _k.klog_error("image-generator-main", _e, component="image-generator", severity="ERROR")
+        raise

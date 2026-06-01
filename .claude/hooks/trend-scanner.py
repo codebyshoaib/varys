@@ -23,6 +23,12 @@ import json
 import subprocess
 import sys
 from datetime import datetime
+import sys as _sys, time as _time
+_sys.path.insert(0, "/home/oye/Documents/free_work/personal-agent-v2/.claude/hooks")
+try:
+    import kamil_log as _k
+except Exception:
+    _k = None
 
 TRACK_NICHES = {
     "fitness": "calisthenics bodyweight fitness swimming hiking cycling workout",
@@ -140,9 +146,15 @@ def scan_trends(track: str) -> list[dict]:
 
 
 if __name__ == "__main__":
-    track = sys.argv[1] if len(sys.argv) > 1 else "fitness"
-    results = scan_trends(track)
-    print(f"\nTrending topics for '{track}':")
-    for r in results:
-        print(f"  [{r['score']:3d}] {r['topic']}")
-        print(f"         {r['reason']}")
+    _t0 = _time.time()
+    try:
+        track = sys.argv[1] if len(sys.argv) > 1 else "fitness"
+        results = scan_trends(track)
+        print(f"\nTrending topics for '{track}':")
+        for r in results:
+            print(f"  [{r['score']:3d}] {r['topic']}")
+            print(f"         {r['reason']}")
+        if _k: _k.klog_cron("trend-scanner", status="ok", duration_ms=(_time.time()-_t0)*1000)
+    except Exception as _e:
+        if _k: _k.klog_error("trend-scanner-main", _e, component="trend-scanner", severity="ERROR")
+        raise

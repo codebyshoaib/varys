@@ -11,6 +11,12 @@ import sys
 import urllib.request
 import urllib.parse
 from pathlib import Path
+import sys as _sys, time as _time
+_sys.path.insert(0, "/home/oye/Documents/free_work/personal-agent-v2/.claude/hooks")
+try:
+    import kamil_log as _k
+except Exception:
+    _k = None
 
 LINKEDIN_CFG = Path.home() / ".claude" / "hooks" / ".linkedin"
 API_BASE     = "https://api.linkedin.com/v2"
@@ -167,8 +173,14 @@ def post_to_linkedin(text: str, image_path: str = None) -> str:
 
 if __name__ == "__main__":
     import argparse
-    p = argparse.ArgumentParser()
-    p.add_argument("--text",  required=True)
-    p.add_argument("--image", default=None)
-    args = p.parse_args()
-    print(post_to_linkedin(args.text, args.image))
+    _t0 = _time.time()
+    try:
+        p = argparse.ArgumentParser()
+        p.add_argument("--text",  required=True)
+        p.add_argument("--image", default=None)
+        args = p.parse_args()
+        print(post_to_linkedin(args.text, args.image))
+        if _k: _k.klog_cron("linkedin-poster", status="ok", duration_ms=(_time.time()-_t0)*1000)
+    except Exception as _e:
+        if _k: _k.klog_error("linkedin-poster-main", _e, component="linkedin-poster", severity="ERROR")
+        raise

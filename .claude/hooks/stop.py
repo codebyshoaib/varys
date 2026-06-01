@@ -13,6 +13,12 @@ import sys
 import re
 from pathlib import Path
 from datetime import datetime
+import sys as _sys, time as _time
+_sys.path.insert(0, "/home/oye/Documents/free_work/personal-agent-v2/.claude/hooks")
+try:
+    import kamil_log as _k
+except Exception:
+    _k = None
 
 def run_cmd(cmd: list[str], cwd: str = None) -> tuple[bool, str]:
     """Execute shell command; return (success, output)."""
@@ -166,4 +172,11 @@ def main():
     return 0
 
 if __name__ == "__main__":
-    sys.exit(main())
+    _t0 = _time.time()
+    try:
+        rc = main()
+        if _k: _k.klog_cron("stop", status="ok", duration_ms=(_time.time()-_t0)*1000)
+        sys.exit(rc)
+    except Exception as _e:
+        if _k: _k.klog_error("stop-main", _e, component="stop", severity="ERROR")
+        raise
