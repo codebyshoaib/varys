@@ -1,148 +1,212 @@
 #!/usr/bin/env python3
 """
-trend-scanner.py — Scans web for trending topics for a given track.
+trend_scanner.py — Finds trending topics for a track from REAL internet sources.
+
+Cron-safe: uses public endpoints only (no API key, no nested Claude).
+  - Reddit RSS  (top.rss?t=day / t=week)  → primary, all tracks
+  - Hacker News Algolia search (JSON)     → bonus signal, tech track
+
+Reddit JSON is blocked (403) from datacenter IPs; Reddit RSS (.rss) is NOT — so
+we parse the Atom feed. Per-feed failures are swallowed so one dead subreddit
+never zeroes a whole run.
 
 Usage:
     from trend_scanner import scan_trends
     results = scan_trends("fitness")
-    # returns: [{"topic": str, "score": int, "reason": str}, ...]
+    # -> [{"topic": str, "score": int, "reason": str}, ...]  (score >= 50, sorted desc)
 
 Score 0-100:
-    +35  trending on Reddit/Twitter right now (recency=today)
-    +20  this week recency
-    +25  viral/trending/popular keywords in summary
-    +15  guide/tips/tutorial keywords
-    +20  niche word matches (4pts each, max 20)
-    +15  current month/year in summary
+    +30  recency = today  (from t=day feed)
+    +18  recency = this week
+    +25  engagement words in title (transformation, viral, insane, "I built", PR, first ...)
+    +15  guide/tips/how-to/tutorial words
+    +20  niche-word matches (4 pts each, max 20)
+    +10  current month or year in title
     +5   baseline
-    cap at 100
-Only returns score >= 50.
+    cap 100. Only score >= 50 returned.
 """
 
+import html
 import json
-import subprocess
-import sys
-from datetime import datetime
+import time
+import urllib.request
+import urllib.parse
+import xml.etree.ElementTree as ET
+from datetime import datetime, timezone
+
+UA = "Mozilla/5.0 (X11; Linux x86_64) kamil-trendscanner/1.0 (content-pipeline)"
+
+# Subreddits chosen for view/follower potential per channel (see @oykamal playbook).
+TRACK_SUBREDDITS = {
+    "fitness": ["bodyweightfitness", "calisthenics", "Fitness", "running", "swimming", "hiking"],
+    "tech":    ["Python", "django", "programming", "ClaudeAI", "ChatGPTCoding", "webdev"],
+    "vlog":    ["islamabad", "pakistan", "solotravel", "Pakistan", "streetphotography"],
+}
 
 TRACK_NICHES = {
-    "fitness": "calisthenics bodyweight fitness swimming hiking cycling workout",
-    "tech":    "Claude AI coding Python Django software engineering developer tools",
-    "vlog":    "Islamabad Pakistan daily life food travel vlog",
+    "fitness": "calisthenics bodyweight fitness swimming hiking cycling workout pull-up transformation routine running",
+    "tech":    "claude ai coding python django software developer tools agent llm prompt build",
+    "vlog":    "islamabad pakistan daily life food travel vlog hike trail margalla",
 }
 
-TRACK_SEARCH_QUERIES = {
-    "fitness": [
-        "calisthenics trending workout site:reddit.com",
-        "bodyweight fitness viral tips {month} {year}",
-        "swimming hiking cycling trending social media {year}",
-    ],
-    "tech": [
-        "Claude AI developer tips trending site:reddit.com",
-        "Python Django coding viral post {month} {year}",
-        "AI tools developer trending Twitter {month} {year}",
-    ],
-    "vlog": [
-        "Islamabad things to do {month} {year}",
-        "Pakistan travel vlog trending {year}",
-        "Islamabad food street events {month}",
-    ],
-}
+# Engagement-signal words — titles that historically drive views/saves/follows.
+HOT_WORDS = [
+    "transformation", "viral", "insane", "crazy", "shocking", "nobody",
+    "i built", "i made", "i tried", "secret", "underrated", "first time",
+    "before and after", "results", "mistake", "stop doing", "the truth",
+    "pr", "personal best", "finally", "after years", "changed my life",
+]
+GUIDE_WORDS = ["guide", "tips", "how to", "how i", "tutorial", "beginner", "step by step", "routine"]
 
 
-def _web_search(query: str) -> str:
-    prompt = (
-        f"Search the web for: {query}\n"
-        f"Return a JSON list of up to 5 results, each with: "
-        f'[{{"title": "...", "summary": "...", "url": "...", "recency": "today|this week|this month|older"}}]\n'
-        f"Return ONLY valid JSON array, no other text."
-    )
+def _fetch(url: str, timeout: int = 15) -> str:
+    req = urllib.request.Request(url, headers={"User-Agent": UA})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return r.read().decode("utf-8", "replace")
+
+
+def _reddit_rss(sub: str, period: str, limit: int = 10) -> list[dict]:
+    """Fetch a subreddit's top Atom feed. Returns [{title,url,updated}]. [] on any failure."""
+    url = f"https://www.reddit.com/r/{sub}/top.rss?t={period}&limit={limit}"
     try:
-        r = subprocess.run(
-            ["claude", "--dangerously-skip-permissions", "--print", "-p", prompt],
-            capture_output=True, text=True, timeout=60
-        )
-        return r.stdout.strip()
+        xml = _fetch(url)
+        root = ET.fromstring(xml)
     except Exception:
-        return "[]"
+        return []
+    ns = {"a": "http://www.w3.org/2005/Atom"}
+    out = []
+    for e in root.findall("a:entry", ns):
+        t = e.find("a:title", ns)
+        link = e.find("a:link", ns)
+        upd = e.find("a:updated", ns)
+        title = html.unescape(t.text) if (t is not None and t.text) else ""
+        if not title:
+            continue
+        out.append({
+            "title":   title,
+            "url":     link.get("href") if link is not None else "",
+            "updated": upd.text if (upd is not None and upd.text) else "",
+            "source":  f"r/{sub}",
+        })
+    return out
 
 
-def _score_result(result: dict, track: str) -> int:
+def _hn_search(query: str, since_days: int = 7) -> list[dict]:
+    """HN Algolia story search within since_days, sorted by points. [] on failure."""
+    since = int(time.time()) - since_days * 86400
+    q = urllib.parse.quote(query)
+    url = (f"https://hn.algolia.com/api/v1/search?query={q}"
+           f"&tags=story&numericFilters=created_at_i>{since}")
+    try:
+        d = json.loads(_fetch(url))
+    except Exception:
+        return []
+    out = []
+    for h in d.get("hits", []):
+        title = h.get("title") or ""
+        if not title:
+            continue
+        out.append({
+            "title":    title,
+            "url":      h.get("url") or f"https://news.ycombinator.com/item?id={h.get('objectID')}",
+            "points":   h.get("points", 0),
+            "comments": h.get("num_comments", 0),
+            "source":   "HackerNews",
+        })
+    # only meaningfully-upvoted stories
+    return [h for h in out if h.get("points", 0) >= 20]
+
+
+def _score(item: dict, track: str, recency: str) -> int:
     score = 5
-    summary = (result.get("summary", "") + result.get("title", "")).lower()
-    recency = result.get("recency", "older")
-    niche_words = TRACK_NICHES.get(track, "").lower().split()
+    title = item.get("title", "").lower()
+    niche = TRACK_NICHES.get(track, "").lower().split()
 
     if recency == "today":
-        score += 35
+        score += 30
     elif recency == "this week":
-        score += 20
-    elif recency == "this month":
+        score += 18
+    else:
+        score += 5
+
+    if any(w in title for w in HOT_WORDS):
+        score += 25
+    elif any(w in title for w in GUIDE_WORDS):
+        score += 15
+
+    score += min(sum(1 for w in niche if w in title) * 4, 20)
+
+    month = datetime.now(timezone.utc).strftime("%B").lower()
+    year = str(datetime.now(timezone.utc).year)
+    if month in title or year in title:
         score += 10
 
-    if any(w in summary for w in ["viral", "trending", "popular", "top", "best"]):
-        score += 25
-    elif any(w in summary for w in ["guide", "tips", "how to", "tutorial"]):
+    # HN points are a strong real signal — bump high-scoring stories
+    pts = item.get("points", 0)
+    if pts >= 200:
         score += 15
-
-    matches = sum(1 for w in niche_words if w in summary)
-    score += min(matches * 4, 20)
-
-    current_month = datetime.now().strftime("%B").lower()
-    current_year  = str(datetime.now().year)
-    if current_month in summary or current_year in summary:
-        score += 15
+    elif pts >= 80:
+        score += 8
 
     return min(score, 100)
 
 
-def _extract_topic(result: dict) -> str:
-    title = result.get("title", "")
-    for noise in ["- Reddit", "| Twitter", "- YouTube", " r/", " via "]:
-        title = title.split(noise)[0]
-    return title.strip()[:80]
+def _clean_topic(title: str) -> str:
+    t = title
+    for noise in [" - Reddit", " | Twitter", " - YouTube", " [OC]", " [Transformation]"]:
+        t = t.replace(noise, "")
+    return t.strip()[:80]
 
 
 def scan_trends(track: str) -> list[dict]:
-    if track not in TRACK_SEARCH_QUERIES:
+    """Return trending topics (score>=50, deduped, sorted desc) for a track."""
+    if track not in TRACK_SUBREDDITS:
         return []
 
-    month = datetime.now().strftime("%B")
-    year  = str(datetime.now().year)
     candidates: list[dict] = []
 
-    for query_tmpl in TRACK_SEARCH_QUERIES[track]:
-        query = query_tmpl.format(month=month, year=year)
-        raw   = _web_search(query)
-        try:
-            results = json.loads(raw)
-            if not isinstance(results, list):
-                continue
-        except Exception:
-            continue
+    # 1. Reddit RSS — today (high recency weight) then this-week
+    for period, recency in (("day", "today"), ("week", "this week")):
+        for sub in TRACK_SUBREDDITS[track]:
+            for item in _reddit_rss(sub, period):
+                s = _score(item, track, recency)
+                if s < 50:
+                    continue
+                candidates.append({
+                    "topic":  _clean_topic(item["title"]),
+                    "score":  s,
+                    "reason": f"Trending on {item['source']} ({recency}, score={s})",
+                })
+            time.sleep(0.4)  # be polite to reddit
 
-        for r in results:
-            score = _score_result(r, track)
-            if score < 50:
-                continue
-            topic  = _extract_topic(r)
-            reason = f"Found: '{r.get('title','')}' (recency={r.get('recency','?')}, score={score})"
-            candidates.append({"topic": topic, "score": score, "reason": reason})
+    # 2. Hacker News — tech track only (thin signal for fitness/vlog)
+    if track == "tech":
+        for q in ["Claude AI", "Python", "Django", "AI agent coding", "developer tools"]:
+            for item in _hn_search(q):
+                s = _score(item, track, "this week")
+                if s < 50:
+                    continue
+                candidates.append({
+                    "topic":  _clean_topic(item["title"]),
+                    "score":  s,
+                    "reason": (f"HN: {item['points']}pts/{item['comments']}c (score={s})"),
+                })
 
-    seen: set[str] = set()
-    unique = []
+    # dedupe by topic prefix, keep highest score
+    best: dict[str, dict] = {}
     for c in candidates:
         key = c["topic"].lower()[:40]
-        if key not in seen:
-            seen.add(key)
-            unique.append(c)
+        if key not in best or c["score"] > best[key]["score"]:
+            best[key] = c
 
-    return sorted(unique, key=lambda x: x["score"], reverse=True)
+    return sorted(best.values(), key=lambda x: x["score"], reverse=True)
 
 
 if __name__ == "__main__":
+    import sys
     track = sys.argv[1] if len(sys.argv) > 1 else "fitness"
     results = scan_trends(track)
-    print(f"\nTrending topics for '{track}':")
+    print(f"\nTrending topics for '{track}': {len(results)} found\n")
     for r in results:
         print(f"  [{r['score']:3d}] {r['topic']}")
         print(f"         {r['reason']}")
