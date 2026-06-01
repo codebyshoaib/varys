@@ -720,10 +720,11 @@ def run_fitness_or_tech(track: str, token: str):
             # Mark all 3 artifacts as triggered initially
             artifacts_state = {"slide_deck": "triggered", "infographic": "triggered", "mind_map": "triggered"}
         else:
-            print(f"[scheduler] Skipping visuals — notebook has 0 sources after research")
+            print(f"[scheduler] Skipping NLM — notebook has 0 sources after research, continuing without insights")
             slack_dm(token,
                 f"⚠️ *{track} — NLM research failed* for *{topic}*\n"
-                f"Google API quota likely hit. Continuing with image + caption only.\n🤖 Kamil")
+                f"Google API quota likely hit. Using image + caption only (no NLM visuals).\n🤖 Kamil")
+            nb_id = None  # Clear notebook ID to skip artifact polling
 
     # Store NLM notebook ID back on the Content Calendar page for future runs
     if nb_id:
