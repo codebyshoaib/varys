@@ -64,8 +64,14 @@ def upload_image(token: str, person_urn: str, image_path: str) -> str:
 
     with open(image_path, "rb") as f:
         img_data = f.read()
+    # LinkedIn's dms-uploads CDN requires an explicit image Content-Type on the PUT;
+    # without it the upload is rejected with a 400 HTML page (not JSON).
+    ext = Path(image_path).suffix.lower()
+    content_type = {".png": "image/png", ".jpg": "image/jpeg",
+                    ".jpeg": "image/jpeg", ".gif": "image/gif"}.get(ext, "image/png")
     ul_req = urllib.request.Request(upload_url, data=img_data,
-                                    headers={"Authorization": f"Bearer {token}"},
+                                    headers={"Authorization": f"Bearer {token}",
+                                             "Content-Type": content_type},
                                     method="PUT")
     with urllib.request.urlopen(ul_req, timeout=60):
         pass
