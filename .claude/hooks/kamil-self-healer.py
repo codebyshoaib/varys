@@ -38,6 +38,7 @@ HOOKS_DIR   = Path(__file__).parent
 SLACK_CFG   = Path.home() / ".claude" / "hooks" / ".slack"
 HEAL_LOG    = Path("/tmp/kamil-self-healer.log")
 HEAL_STATE  = Path("/tmp/kamil-healer-state.json")
+HANDLED_LEDGER = Path("/tmp/kamil-healer-handled.txt")  # dedup: errors already escalated
 KAMAL_DM    = "D0B415M06SK"
 
 SERVICES = [
@@ -192,8 +193,23 @@ def extract_errors(log_tail: str) -> list[str]:
 
 
 def is_process_running(name: str) -> bool:
-    result = subprocess.run(["pgrep", "-f", name], capture_output=True)
-    return result.returncode == 0
+    # pgrep -f matches against full cmdlines, which can include THIS checker's own
+    # process (and any cron-wrap/claude -p invocation that mentions the name) — a
+    # self-match that produced false "down" alerts. Exclude our own PID, the parent
+    # shell, and anything that is not a real python interpreter running the script.
+    import os
+    result = subprocess.run(["pgrep", "-af", name], capture_output=True, text=True)
+    if result.returncode != 0:
+        return False
+    self_pids = {str(os.getpid()), str(os.getppid())}
+    for line in result.stdout.splitlines():
+        pid = line.split(maxsplit=1)[0] if line.strip() else ""
+        if pid in self_pids:
+            continue
+        # require an actual interpreter running the script, not a shell/grep/wrapper
+        if "python" in line and name in line:
+            return True
+    return False
 
 
 def get_pid_from_file(pid_file: str) -> int | None:
@@ -300,13 +316,36 @@ def check_service(service: dict, token: str | None) -> bool:
     # 1. Check if process is running (for daemons only)
     if check_proc:
         running = is_process_running(check_proc)
+        # State-change-only alerting + cooldown: only restart/DM when the service
+        # TRANSITIONS up→down. Persisting "last_up" avoids flapping a "down→restarted"
+        # DM every single 10-min cycle (the prior false-positive spam).
+        pstate = {}
+        if HEAL_STATE.exists():
+            try: pstate = json.loads(HEAL_STATE.read_text())
+            except Exception: pstate = {}
+        svc_state = pstate.get(name, {})
+        last_restart_at = svc_state.get("last_restart_at")
         if not running:
-            log(f"⚠️  {name} is NOT running — restarting")
+            # cooldown: don't re-restart/re-DM within 30 min of a prior restart
+            recently_restarted = False
+            if last_restart_at:
+                try:
+                    age_m = (datetime.utcnow() - datetime.fromisoformat(last_restart_at)).total_seconds() / 60
+                    recently_restarted = age_m < 30
+                except Exception:
+                    recently_restarted = False
+            if recently_restarted:
+                log(f"{name} down but restarted <30m ago — cooldown, not re-alerting")
+                return False
+            log(f"⚠️  {name} is NOT running — restarting (first detection)")
             log_error(service=name, error=f"{name} process not found — was down", context="process check")
             if service.get("start_cmd"):
                 start_service(service["start_cmd"])
                 time.sleep(3)
                 if is_process_running(check_proc):
+                    svc_state["last_restart_at"] = datetime.utcnow().isoformat()
+                    pstate[name] = svc_state
+                    HEAL_STATE.write_text(json.dumps(pstate))
                     msg = f"🔧 *Kamil self-healed*: `{name}` was down → restarted successfully"
                     log(f"Restart OK for {name}")
                     log_healed(service=name, root_cause="process was not running", fix="restarted via start_cmd")
@@ -355,54 +394,38 @@ def check_service(service: dict, token: str | None) -> bool:
               error="\n".join(recent_errors[:2])[:500],
               context=f"Found {len(recent_errors)} error(s) in last 15 min")
 
-    # 3. Call Claude to diagnose and fix
-    claude_result = diagnose_and_fix(service, recent_errors)
+    # 3. ESCALATE-ONLY (no auto-edit/auto-commit/auto-restart on log errors).
+    # The self-healer previously shelled `claude -p` to diagnose+edit code and then
+    # killed/restarted the daemon every cycle. That re-acted on STALE errors (still in
+    # the window) and committed unverified edits → churn + contradictory DMs. Now it
+    # only escalates, deduped against a handled-ledger, with one DM per distinct error.
+    import hashlib
+    handled = set()
+    if HANDLED_LEDGER.exists():
+        try:
+            handled = {l.strip() for l in HANDLED_LEDGER.read_text().splitlines() if l.strip()}
+        except Exception:
+            handled = set()
+    sig = hashlib.sha1(("|".join(recent_errors[:2]))[:300].encode()).hexdigest()[:16]
+    ledger_key = f"{name}:{sig}"
+    if ledger_key in handled:
+        log(f"{name}: errors already escalated (ledger {ledger_key}) — not re-alerting")
+        return True
+    try:
+        with open(HANDLED_LEDGER, "a") as f:
+            f.write(ledger_key + "\n")
+    except Exception:
+        pass
 
-    # Parse Claude's response
-    root_cause = "unknown"
-    fix_desc   = "unknown"
-    status     = "unknown"
-
-    for line in claude_result.splitlines():
-        if line.startswith("ROOT_CAUSE:"):
-            root_cause = line.split(":", 1)[1].strip()
-        elif line.startswith("FIX:"):
-            fix_desc = line.split(":", 1)[1].strip()
-        elif line.startswith("STATUS:"):
-            status = line.split(":", 1)[1].strip()
-
-    if status == "fixed" and check_proc and service.get("start_cmd"):
-        # Restart service after fix
-        log(f"Fix applied — restarting {name}")
-        kill_process(check_proc)
-        time.sleep(2)
-        start_service(service["start_cmd"])
-        time.sleep(3)
-        restarted = is_process_running(check_proc)
-        restart_note = "restarted ✅" if restarted else "restart FAILED ⚠️"
-        log_healed(service=name, root_cause=root_cause, fix=fix_desc)
-        eval_self_heal(service=name, root_cause=root_cause, fix=fix_desc, applied=True)
-        # Record heal time so next run doesn't re-diagnose same errors
-        state[name] = {"last_healed_at": datetime.utcnow().isoformat()}
-        HEAL_STATE.write_text(json.dumps(state))
-
-        msg = (
-            f"🔧 *Kamil self-healed*: `{name}`\n"
-            f"• *Root cause:* {root_cause}\n"
-            f"• *Fix:* {fix_desc}\n"
-            f"• *Service:* {restart_note}"
-        )
-    else:
-        log_needs_manual(service=name, root_cause=root_cause, attempted=fix_desc)
-        eval_self_heal(service=name, root_cause=root_cause, fix=fix_desc, applied=False)
-        msg = (
-            f"⚠️ *Kamil found errors in `{name}` but could not auto-fix*\n"
-            f"• *Root cause:* {root_cause}\n"
-            f"• *Attempted fix:* {fix_desc}\n"
-            f"• *Status:* {status}\n"
-            f"• Check logs: `{log_path}`"
-        )
-
+    root_cause = "\n".join(recent_errors[:2])[:400]
+    log_needs_manual(service=name, root_cause=root_cause, attempted="escalate-only (no auto-fix)")
+    eval_self_heal(service=name, root_cause=root_cause, fix="escalated to Kamal", applied=False)
+    msg = (
+        f"⚠️ *Kamil flagged errors in `{name}` — needs your eyes*\n"
+        f"• *Recent error(s):* {root_cause[:300]}\n"
+        f"• *Action:* escalated (self-healer no longer edits code automatically)\n"
+        f"• Check logs: `{log_path}`"
+    )
     log(f"Slack DM: {msg[:120]}")
     if token:
         slack_dm(token, msg)

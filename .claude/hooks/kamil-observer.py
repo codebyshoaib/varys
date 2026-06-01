@@ -99,19 +99,48 @@ def auto_fix(anom, root_cause):
         escalate(anom, root_cause, "auto-fix raised; manual review")
         return False
 
+# Auto-fix is OFF by default after the 2026-06-01 churn incident (observer re-fixed an
+# already-fixed file 13× on stale errors + committed unverified edits). The observer now
+# ESCALATES by default. To re-enable auto-fix, create ~/.claude/hooks/.observer-autofix
+# AND ensure the diagnosis is verified-current. Escalate-only is the safe default.
+AUTOFIX_ENABLED = (Path.home()/".claude"/"hooks"/".observer-autofix").exists()
+HANDLED = ROOT/".beads"/"observer-handled.jsonl"
+
+def already_handled(anom) -> bool:
+    """Dedup against errors we've already escalated, so a lingering log entry in the
+    1h Axiom window is not re-acted every run."""
+    import hashlib
+    sig = hashlib.sha1(f"{anom.get('component')}|{anom.get('error_type')}|{anom.get('context')}".encode()).hexdigest()[:16]
+    try:
+        if HANDLED.exists():
+            for line in HANDLED.read_text().splitlines():
+                if line.strip() == sig:
+                    return True
+        with open(HANDLED, "a") as f:
+            f.write(sig + "\n")
+    except Exception:
+        pass
+    return False
+
 def main():
     k.start_trace()
     paused = PAUSED.exists()
     anomalies = query_anomalies()
-    k.klog("observer_run", component="observer", anomalies=len(anomalies), paused=paused)
+    k.klog("observer_run", component="observer", anomalies=len(anomalies),
+           paused=paused, autofix=AUTOFIX_ENABLED)
     for anom in anomalies:
+        if already_handled(anom):
+            continue  # stale/duplicate — already escalated, don't re-act
         ctx = f"{anom.get('component')} {anom.get('context')}"
         root_cause = f"{anom.get('error_type')} in {anom.get('component')} ({anom.get('context')})"
-        if paused or is_fenced(ctx):
-            escalate(anom, root_cause, "fenced or observer paused — manual fix required")
-        else:
+        # Escalate-only by default. Auto-fix only if explicitly enabled AND not fenced/paused.
+        if AUTOFIX_ENABLED and not paused and not is_fenced(ctx):
             if not auto_fix(anom, root_cause):
                 escalate(anom, root_cause, "auto-fix did not confirm FIXED")
+        else:
+            reason = ("auto-fix disabled (escalate-only default)" if not AUTOFIX_ENABLED
+                      else "fenced or paused")
+            escalate(anom, root_cause, reason)
 
 if __name__ == "__main__":
     try:
