@@ -747,6 +747,7 @@ def run_fitness_or_tech(track: str, token: str):
                 slack_dm(token,
                     f"⚠️ *{track} — NLM research failed* for *{topic}*\n"
                     f"Google API quota likely hit. Using image + caption only (no NLM visuals).\n🤖 Kamil")
+                run_nlm(["delete", "notebook", nb_id, "--confirm"], timeout=30)
                 nb_id = None  # Clear notebook ID to skip Notion save + artifact polling
             else:
                 had_sources = True
