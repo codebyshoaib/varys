@@ -69,7 +69,8 @@ _MSG_EXECUTOR = ThreadPoolExecutor(max_workers=2)
 last_activity_time = time.time()
 last_idle_work     = time.time()
 
-
+# Global deduplication set for event processing (persists across reconnects)
+_processed_event_ts = set()
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
