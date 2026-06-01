@@ -33,6 +33,13 @@ import os
 import traceback
 import urllib.request
 from pathlib import Path
+import socket
+import uuid
+
+_HOST = socket.gethostname()
+_PID = os.getpid()
+_SCHEMA_VERSION = "1.0"
+_TRACE_ID = None  # set per-operation via start_trace()
 
 _AXIOM_CONFIG   = Path.home() / ".claude" / "hooks" / ".axiom"
 _FALLBACK_LOG   = Path("/tmp/kamil-axiom-fallback.jsonl")
@@ -86,13 +93,28 @@ def _send(events: list):
         pass  # fallback file already has it
 
 
-def _base(component: str, event: str) -> dict:
-    """Base fields present on every event."""
+def _base(component: str, event: str, severity: str = "INFO") -> dict:
+    """Base fields present on every event (OTel-aligned envelope)."""
     return {
-        "component":  component,   # listener | poller | session-start | learn
-        "event":      event,
-        "session_id": _SESSION_ID,
+        "schema_version": _SCHEMA_VERSION,
+        "severity":       severity,
+        "component":      component,
+        "event":          event,
+        "session_id":     _SESSION_ID,
+        "trace_id":       _TRACE_ID or _SESSION_ID,
+        "host":           _HOST,
+        "pid":            _PID,
     }
+
+
+def start_trace(trace_id: str = None) -> str:
+    """Begin a correlated operation. Returns the trace_id."""
+    global _TRACE_ID
+    _TRACE_ID = trace_id or uuid.uuid4().hex[:16]
+    return _TRACE_ID
+
+def new_span() -> str:
+    return uuid.uuid4().hex[:8]
 
 
 # ── Typed log functions ───────────────────────────────────────────────────────
@@ -212,12 +234,15 @@ def klog_catchup(*, sender_id: str, text_preview: str, ts: str):
     _send([e])
 
 
-def klog_error(context: str, exc: Exception = None, component: str = "listener", **extra):
-    e = _base(component, "error")
+def klog_error(context: str, exc: Exception = None, component: str = "listener",
+               severity: str = "ERROR", **extra):
+    e = _base(component, "error", severity=severity)
     e.update({
-        "context":   context,
-        "error":     str(exc) if exc else "unknown",
-        "traceback": traceback.format_exc() if exc else "",
+        "context":    context,
+        "error_type": type(exc).__name__ if exc else "unknown",
+        "error_msg":  str(exc) if exc else "unknown",
+        "error":      str(exc) if exc else "unknown",  # backward compat
+        "traceback":  traceback.format_exc() if exc else "",
         **extra,
     })
     _send([e])
@@ -226,6 +251,48 @@ def klog_error(context: str, exc: Exception = None, component: str = "listener",
 def klog_system_start(component: str, version: str = "v2.2"):
     e = _base(component, "system_start")
     e.update({"version": version})
+    _send([e])
+
+
+def klog_cron(component: str, *, status: str, duration_ms: float,
+              items: int = 0, rc: int = 0, error: str = "", **extra):
+    """One row per cron run. status: ok|error|partial."""
+    sev = "INFO" if status == "ok" else ("ERROR" if status == "error" else "WARN")
+    e = _base(component, "cron_run", severity=sev)
+    e.update({"status": status, "duration_ms": duration_ms, "items": items,
+              "rc": rc, "error": error, **extra})
+    _send([e])
+
+def klog_external(component: str, *, target: str, status: str,
+                  latency_ms: float = 0, retry_count: int = 0, http_status: int = 0, **extra):
+    """External API call. target: slack|notion|github|kie|openoutreach|linkedin|nlm."""
+    sev = "INFO" if status == "ok" else "WARN"
+    e = _base(component, "external_call", severity=sev)
+    e.update({"target": target, "status": status, "latency_ms": latency_ms,
+              "retry_count": retry_count, "http_status": http_status, **extra})
+    _send([e])
+
+def klog_policy_block(component: str, *, rule: str, reason: str, command: str = "", path: str = ""):
+    """A PreToolUse hook blocked something."""
+    e = _base(component, "policy_block", severity="WARN")
+    e.update({"rule": rule, "reason": reason,
+              "command": command[:200], "path": path})
+    _send([e])
+
+def klog_bead(*, action: str, bead_id: str, title: str = "", status: str = ""):
+    """action: opened|closed."""
+    e = _base("beads", f"bead_{action}")
+    e.update({"bead_id": bead_id, "title": title, "status": status})
+    _send([e])
+
+def klog_eval(*, passed: int, failed: int, metrics: dict = None):
+    e = _base("evals", "eval_run", severity="INFO" if failed == 0 else "WARN")
+    e.update({"passed": passed, "failed": failed, **(metrics or {})})
+    _send([e])
+
+def klog_session_end(component: str, *, duration_s: float = 0, context_loaded: str = ""):
+    e = _base(component, "session_end")
+    e.update({"duration_s": duration_s, "context_loaded": context_loaded})
     _send([e])
 
 
