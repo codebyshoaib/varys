@@ -461,21 +461,28 @@ def nlm_get_or_create_notebook(topic: str) -> tuple[str, bool] | tuple[None, boo
     return nb_id, False
 
 
-def nlm_research(nb_id: str, topic: str) -> bool:
-    """Research + auto-import sources. Returns True if sources were added."""
-    ok, out = run_nlm([
-        "research", "start", topic,
-        "--notebook-id", nb_id,
-        "--mode", "deep",
-        "--auto-import",
-    ], timeout=420)
-    print(f"[scheduler] NLM research: {'ok' if ok else 'failed'} — {out[:80]}")
-    if not ok:
-        return False
-    # Verify sources actually landed
-    count = nlm_get_source_count(nb_id)
-    print(f"[scheduler] NLM source count after research: {count}")
-    return count > 0
+def nlm_research(nb_id: str, topic: str, retries: int = 2) -> bool:
+    """Research + auto-import sources. Returns True if sources were added. Retries on empty result."""
+    for attempt in range(retries):
+        ok, out = run_nlm([
+            "research", "start", topic,
+            "--notebook-id", nb_id,
+            "--mode", "deep",
+            "--auto-import",
+        ], timeout=420)
+        print(f"[scheduler] NLM research: {'ok' if ok else 'failed'} — {out[:80]} (attempt {attempt + 1}/{retries})")
+        if not ok:
+            if attempt < retries - 1:
+                time.sleep(10)
+            continue
+        # Verify sources actually landed
+        count = nlm_get_source_count(nb_id)
+        print(f"[scheduler] NLM source count after research: {count}")
+        if count > 0:
+            return True
+        if attempt < retries - 1:
+            time.sleep(10)
+    return False
 
 
 def nlm_query_for_content(nb_id: str, topic: str) -> str:
