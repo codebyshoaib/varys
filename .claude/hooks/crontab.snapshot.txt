@@ -1,0 +1,31 @@
+
+
+# Kamil — Slack poller every 30 min
+*/30 * * * * nice -n 15 /home/oye/Documents/free_work/personal-agent-v2/.claude/hooks/cron-wrap.sh poller python3 /home/oye/Documents/free_work/personal-agent-v2/.claude/hooks/slack-poller.py
+
+# Kamil — Daily learning loop at 8am
+0 8 * * * /home/oye/Documents/free_work/personal-agent-v2/.claude/hooks/cron-wrap.sh daily /home/oye/Documents/free_work/personal-agent-v2/kamil-daily.sh
+
+# Kamil — Weekly Slack report every Monday 9am
+0 9 * * 1 /home/oye/Documents/free_work/personal-agent-v2/.claude/hooks/cron-wrap.sh weekly /home/oye/Documents/free_work/personal-agent-v2/kamil-weekly-report.sh
+
+# Kamil — Slack listener (long-running daemon; keep raw log, not a discrete run)
+@reboot python3 /home/oye/Documents/free_work/personal-agent-v2/.claude/hooks/kamil-slack-listener.py >> /tmp/kamil-slack-listener.log 2>&1
+
+# Kamil — Learn loop 2am
+0 2 * * * /home/oye/Documents/free_work/personal-agent-v2/.claude/hooks/cron-wrap.sh learn /home/oye/Documents/free_work/personal-agent-v2/kamil-learn.sh
+
+# Kamil — Self-healer every 10 min
+*/10 * * * * nice -n 15 /home/oye/Documents/free_work/personal-agent-v2/.claude/hooks/cron-wrap.sh self-healer python3 /home/oye/Documents/free_work/personal-agent-v2/.claude/hooks/kamil-self-healer.py
+
+# Kamil — Job finder every 30 min
+5,35 * * * * nice -n 15 /home/oye/Documents/free_work/personal-agent-v2/.claude/hooks/cron-wrap.sh job-finder python3 /home/oye/Documents/free_work/personal-agent-v2/.claude/hooks/job-finder.py
+
+# Kamil — Content scheduler daily 11am PKT (6am UTC)
+0 6 * * * /home/oye/Documents/free_work/personal-agent-v2/.claude/hooks/cron-wrap.sh content python3 /home/oye/Documents/free_work/personal-agent-v2/.claude/hooks/content-scheduler.py
+
+# Kamil — Notion map daily scan at 2:30am
+30 2 * * * /home/oye/Documents/free_work/personal-agent-v2/.claude/hooks/cron-wrap.sh notion-map python3 /home/oye/Documents/free_work/personal-agent-v2/.claude/hooks/notion-map-updater.py --mode daily
+
+# Kamil — Self-healing observer, hourly at :15
+15 * * * * /home/oye/Documents/free_work/personal-agent-v2/.claude/hooks/cron-wrap.sh observer python3 /home/oye/Documents/free_work/personal-agent-v2/.claude/hooks/kamil-observer.py
