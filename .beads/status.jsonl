@@ -1,0 +1,2 @@
+{"schema": "v1", "fields": ["id","title","status","priority","created","updated","category","resolution","blocked_by","owner"]}
+{"id": "bd-001", "title": "Build Kamil super-agent harness", "status": "in_progress", "priority": "high", "created": "2026-06-01", "updated": "2026-06-01", "category": "infrastructure", "resolution": null, "blocked_by": null, "owner": "kamil"}
