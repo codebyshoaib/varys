@@ -403,10 +403,20 @@ def handle_new_connections(conn, token: str, seen_connected_ids: set) -> tuple[l
 # Main
 # ---------------------------------------------------------------------------
 
+def ensure_prompt_patched():
+    """Re-apply value-first template patch if container was restarted."""
+    restore = Path(__file__).parent / "openoutreach-restore-prompt.py"
+    if restore.exists():
+        subprocess.run([sys.executable, str(restore)], capture_output=True, timeout=20)
+
+
 def run(token: str) -> int:
     if not OPENOUTREACH_DB.exists():
         print(f"[openoutreach-monitor] DB not found at {OPENOUTREACH_DB}", flush=True)
         return 0
+
+    # Phase 2c — re-apply prompt patch if container was restarted
+    ensure_prompt_patched()
 
     state = load_state()
 
