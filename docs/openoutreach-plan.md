@@ -40,6 +40,26 @@ Setting a deal's `state` to `Completed` stops `handle_follow_up` from firing on 
 
 ---
 
+## Pre-build findings (verified 2026-06-01)
+
+### 1. DB path — confirmed correct, no discrepancy
+- Host path: `/home/oye/.openoutreach/data/db.sqlite3`
+- Container path: `/app/data/db.sqlite3`
+- These are the same file via Docker bind-mount: `/home/oye/.openoutreach/data → /app/data`
+- `Path.home() / ".openoutreach/data/db.sqlite3"` in the monitor resolves correctly.
+- `/root/.openoutreach` also exists but is a different file (permission denied from host). Monitor uses the right one.
+
+### 2. Send timing — randomized but daemon is currently stuck
+- Connect task intervals: 17s, 50s, 51s, 50s, 27s, 88s — properly randomized, not clean intervals. Good.
+- **Problem:** All tasks since June 2nd are `check_pending` with `status=pending`, `started_at=NULL`. The daemon queued ~25 tasks after restart but is not executing them. Monitor now detects this and alerts Kamal via Slack.
+
+### 3. Demo page — JS-only SPA, nothing shows before JS loads
+- `oykamal.netlify.app` is a Vite/React SPA with `<div id="root"></div>` as the only body content.
+- A buyer who clicks the link on mobile or slow connection sees a blank page.
+- **Fix needed (separate from Phase 3):** Create a direct Loom/video link showing one specific automation — e.g. the Kamil agent in action — and use that URL in follow-up messages instead of the portfolio. The portfolio URL stays for credibility but is not the demo link.
+
+---
+
 ## Build order
 
 ```
