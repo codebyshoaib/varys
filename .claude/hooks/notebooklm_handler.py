@@ -95,8 +95,28 @@ ARTIFACT_EXTS = {
 TEXT_ARTIFACTS = {"flashcards", "quiz", "report", "mind_map", "data_table"}
 
 
+NLM_PROFILE = os.environ.get("NLM_PROFILE", "work")  # work email m.kamal@taleemabad.com
+
+
+def _inject_profile(args: list[str]) -> list[str]:
+    """Insert --profile <NLM_PROFILE> after the leading subcommand verbs, before
+    positional values. Mirrors content-scheduler.py."""
+    if "--profile" in args or "-p" in args:
+        return args
+    i = 0
+    while i < len(args):
+        tok = args[i]
+        if tok.startswith("-"):
+            break
+        if i >= 1 and (" " in tok or "-" in tok or "/" in tok or "." in tok):
+            break
+        i += 1
+    return args[:i] + ["--profile", NLM_PROFILE] + args[i:]
+
+
 def run_nlm(args: list[str], timeout: int = 180) -> tuple[bool, str]:
     """Run nlm CLI command. Returns (success, output)."""
+    args = _inject_profile(args)
     try:
         result = subprocess.run(
             ["nlm"] + args,

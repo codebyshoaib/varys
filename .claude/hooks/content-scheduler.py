@@ -54,6 +54,7 @@ KAMIL_DIR         = HOOKS_DIR.parent.parent
 SLACK_CFG         = Path.home() / ".claude" / "hooks" / ".slack"
 KAMAL_DM          = "D0B415M06SK"
 NLM               = "/home/oye/.local/bin/nlm"
+NLM_PROFILE       = os.environ.get("NLM_PROFILE", "work")  # work email m.kamal@taleemabad.com
 NOTION_CONTENT_DB = "68792d2dfff84691a4f646f5a8126149"
 NOTION_CONTENT_LOG = "630d86afb17746f9ad6f9bc78afefa02"  # Content Log DB
 
@@ -348,7 +349,25 @@ def pick_topic(track: str) -> tuple | None:
 
 # ─── NLM ─────────────────────────────────────────────────────────────────────
 
+def _inject_profile(args: list) -> list:
+    """Insert --profile <NLM_PROFILE> after the leading subcommand verbs, before any
+    positional values (IDs, free-text questions). nlm verbs are the leading non-flag
+    tokens; we stop at the first arg that looks like a value (UUID, URL, or contains a space)."""
+    if "--profile" in args or "-p" in args:
+        return args
+    i = 0
+    while i < len(args):
+        tok = args[i]
+        if tok.startswith("-"):           # reached an option — insert before it
+            break
+        if i >= 1 and (" " in tok or "-" in tok or "/" in tok or "." in tok):
+            break                          # positional value (id/question/url) — insert before it
+        i += 1
+    return args[:i] + ["--profile", NLM_PROFILE] + args[i:]
+
+
 def run_nlm(args: list, timeout: int = 300) -> tuple[bool, str]:
+    args = _inject_profile(args)
     try:
         r = subprocess.run([NLM] + args, capture_output=True, text=True, timeout=timeout)
         return r.returncode == 0, r.stdout.strip() or r.stderr.strip()
