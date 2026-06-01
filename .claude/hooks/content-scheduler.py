@@ -761,12 +761,14 @@ def run_fitness_or_tech(track: str, token: str):
             else:
                 # Query returned empty — don't attempt artifact triggering
                 print(f"[scheduler] NLM query returned no insights, skipping artifact generation")
+                run_nlm(["delete", "notebook", nb_id, "--confirm"], timeout=30)
                 nb_id = None
         elif nb_id:
             # Notebook exists but has 0 sources — verify source count before proceeding
             final_count = nlm_get_source_count(nb_id)
             if final_count == 0:
-                print(f"[scheduler] NLM notebook {nb_id[:8]} still has 0 sources after check, skipping content queries")
+                print(f"[scheduler] NLM notebook {nb_id[:8]} still has 0 sources after check, deleting")
+                run_nlm(["delete", "notebook", nb_id, "--confirm"], timeout=30)
                 nb_id = None
             else:
                 # Sources exist but had_sources was False — query and proceed
@@ -775,6 +777,7 @@ def run_fitness_or_tech(track: str, token: str):
                     nlm_trigger_visuals(nb_id, topic)
                     artifacts_state = {"slide_deck": "triggered", "infographic": "triggered", "mind_map": "triggered"}
                 else:
+                    run_nlm(["delete", "notebook", nb_id, "--confirm"], timeout=30)
                     nb_id = None
 
     # Store NLM notebook ID back on the Content Calendar page for future runs
