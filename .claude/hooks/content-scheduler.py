@@ -15,6 +15,7 @@ Daily pipeline at 11am PKT (6am UTC via cron):
 Cron: 0 6 * * * python3 .claude/hooks/content-scheduler.py >> /tmp/kamil-content.log 2>&1
 """
 
+import copy
 import json
 import os
 import subprocess
@@ -769,7 +770,7 @@ def run_fitness_or_tech(track: str, token: str):
             threading.Thread(
                 target=nlm_poll_and_send,
                 args=(nb_id, artifact, topic, token),
-                kwargs={"log_page_id": log_page_id, "artifacts_state": artifacts_state},
+                kwargs={"log_page_id": log_page_id, "artifacts_state": copy.deepcopy(artifacts_state)},
                 daemon=True,
             ).start()
 
