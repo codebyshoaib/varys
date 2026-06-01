@@ -471,6 +471,12 @@ def nlm_research(nb_id: str, topic: str, retries: int = 2) -> bool:
             "--auto-import",
         ], timeout=420)
         print(f"[scheduler] NLM research: {'ok' if ok else 'failed'} — {out[:80]} (attempt {attempt + 1}/{retries})")
+
+        # Check for quota errors (code 8, 429, etc) — don't retry these
+        if not ok and ("error code 8" in out.lower() or "quota" in out.lower() or "429" in out):
+            print(f"[scheduler] NLM quota/API error detected — skipping retries")
+            return False
+
         if not ok:
             if attempt < retries - 1:
                 time.sleep(10)
