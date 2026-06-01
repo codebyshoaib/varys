@@ -765,7 +765,6 @@ def run_fitness_or_tech(track: str, token: str):
             else:
                 # Query returned empty — don't attempt artifact triggering
                 print(f"[scheduler] NLM query returned no insights, skipping artifact generation")
-                run_nlm(["delete", "notebook", nb_id, "--confirm"], timeout=30)
                 nb_id = None
         elif nb_id:
             # Notebook exists but has 0 sources — verify source count before proceeding
