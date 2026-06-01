@@ -845,7 +845,7 @@ def run_fitness_or_tech(track: str, token: str):
     # NOT exit before these finish downloading + uploading to Slack. We return them
     # so run() can join() them before the process exits.
     poller_threads = []
-    if nb_id and artifacts_state:
+    if nb_id and artifacts_state and any(v == "triggered" for v in artifacts_state.values()):
         for artifact in ["slide_deck", "infographic", "mind_map"]:
             th = threading.Thread(
                 target=nlm_poll_and_send,
