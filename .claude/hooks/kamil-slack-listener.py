@@ -927,7 +927,7 @@ def main():
                 last_reconnect_time[0] = now
                 missed = process_missed_messages(web, dm_channel, bot_token=bot_token)
                 klog_socket("socket_reconnect", missed_messages=missed)
-                log("Reconnected.")
+                log(f"Reconnected. ({missed} missed messages)")
             except Exception as e:
                 klog_error(context="socket_reconnect", exc=e)
                 log(f"Reconnect failed: {e}")
@@ -940,7 +940,7 @@ def main():
         if poll_minutes >= 2 and not reconnecting[0]:
             last_poll_time[0] = now
             missed = process_missed_messages(web_ref[0], dm_channel, bot_token=bot_token)
-            if missed:
+            if missed > 0:
                 log(f"[poll] Recovered {missed} missed message(s)")
 
 
