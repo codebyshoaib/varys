@@ -1,0 +1,10 @@
+id: eval-004
+description: "Implicit: a bug symptom should route to debugging skill"
+category: implicit
+input: "the job-finder isn't posting anything to Slack and I don't know why"
+expected:
+  route: ".claude/rules/skills-router.md"
+  must_load: ["skills-router.md"]
+  must_not_load: ["content.md"]
+  max_hops: 2
+quality_gate: CONCERNS

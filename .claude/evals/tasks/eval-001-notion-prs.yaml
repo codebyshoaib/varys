@@ -1,0 +1,10 @@
+id: eval-001
+description: "Find the Open PRs Notion DB ID"
+category: explicit
+input: "What's the Notion DB for open PRs?"
+expected:
+  route: ".claude/rules/notion.md"
+  must_load: ["notion.md"]
+  must_not_load: ["taleemabad.md", "content.md"]
+  max_hops: 2
+quality_gate: PASS

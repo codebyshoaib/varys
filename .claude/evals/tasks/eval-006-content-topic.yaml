@@ -1,0 +1,10 @@
+id: eval-006
+description: "Contextual: picking a content topic needs content rules + memory"
+category: contextual
+input: "draft today's LinkedIn post"
+expected:
+  route: ".claude/rules/content.md"
+  must_load: ["content.md"]
+  must_not_load: ["taleemabad.md"]
+  max_hops: 2
+quality_gate: CONCERNS

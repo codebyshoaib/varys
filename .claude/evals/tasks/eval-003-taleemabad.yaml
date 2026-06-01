@@ -1,0 +1,10 @@
+id: eval-003
+description: "Starting work on taleemabad-core"
+category: explicit
+input: "Kamil, work on taleemabad-core — fix the login bug"
+expected:
+  route: ".claude/rules/taleemabad.md"
+  must_load: ["taleemabad.md"]
+  must_not_load: ["content.md", "slack.md"]
+  max_hops: 2
+quality_gate: PASS

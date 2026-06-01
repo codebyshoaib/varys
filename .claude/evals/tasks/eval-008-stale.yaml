@@ -1,0 +1,10 @@
+id: eval-008
+description: "Negative: a simple question must not load the full personality/standards bundle"
+category: negative
+input: "what's the Harness DB ID?"
+expected:
+  route: ".claude/rules/notion.md"
+  must_load: ["notion.md"]
+  must_not_load: ["kamil_personality.md", "taleemabad.md", "content.md"]
+  max_hops: 2
+quality_gate: PASS

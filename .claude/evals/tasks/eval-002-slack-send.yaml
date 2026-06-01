@@ -1,0 +1,10 @@
+id: eval-002
+description: "How to send a Slack DM"
+category: explicit
+input: "How do I send Kamal a Slack DM?"
+expected:
+  route: ".claude/rules/slack.md"
+  must_load: ["slack.md"]
+  must_not_load: ["notion.md", "taleemabad.md"]
+  max_hops: 2
+quality_gate: PASS

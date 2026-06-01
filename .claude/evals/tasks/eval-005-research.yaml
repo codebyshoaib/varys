@@ -1,0 +1,10 @@
+id: eval-005
+description: "Implicit: a research request should route to deep-research"
+category: implicit
+input: "find out the best way to add rate limiting to a FastAPI app"
+expected:
+  route: ".claude/rules/skills-router.md"
+  must_load: ["skills-router.md"]
+  must_not_load: ["notion.md"]
+  max_hops: 2
+quality_gate: CONCERNS
