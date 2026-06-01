@@ -4,7 +4,7 @@
 import json, os, sys, urllib.request
 from pathlib import Path
 
-OBS_DB = os.environ.get("KAMIL_OBS_DB", "")  # filled from .claude/rules/notion.md id
+OBS_DB = os.environ.get("KAMIL_OBS_DB", "8b0f5754470540dfb832a61380a2a9b9")  # Kamil Observability DB
 TOKEN_FILE = Path.home() / ".claude" / "hooks" / ".notion"
 QUEUE = Path("/tmp/kamil-notion-queue.jsonl")
 

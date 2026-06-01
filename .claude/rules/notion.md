@@ -22,6 +22,7 @@ All Notion reads/writes use `mcp__claude_ai_Notion__*` tools (no API key file). 
 | Harness backlog | `de10157da3e34ef58a74ea240f31fe98` | Kamil's feature backlog + self-evolution |
 | People Intelligence | `c976d58ea4e34b0585f245529cdc4528` | Mood, needs, recurring topics, what works |
 | Job Tracker | `0d69c6ff-83d8-44c7-94c2-d341c4ded8d7` | Job finds + application status |
+| Observability | `8b0f5754470540dfb832a61380a2a9b9` | Errors, self-heal actions, daily digest — Status: 🔴 Needs Kamal / 🟡 Pending / 🟢 Solved / ⚪ Monitoring. Firehose in Axiom `kamil-logs`. |
 
 Other DBs referenced by name only: Projects, Kamal's Todo, Kamil's Learning Log.
 
