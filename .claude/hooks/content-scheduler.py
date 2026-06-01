@@ -729,6 +729,10 @@ def run_fitness_or_tech(track: str, token: str):
                 nlm_trigger_visuals(nb_id, topic)
                 # Mark all 3 artifacts as triggered only if we have insights
                 artifacts_state = {"slide_deck": "triggered", "infographic": "triggered", "mind_map": "triggered"}
+        elif nb_id:
+            # Notebook exists but has 0 sources — skip NLM entirely for this run
+            print(f"[scheduler] NLM notebook {nb_id[:8]} has 0 sources, skipping content queries")
+            nb_id = None
 
     # Store NLM notebook ID back on the Content Calendar page for future runs
     if nb_id:
