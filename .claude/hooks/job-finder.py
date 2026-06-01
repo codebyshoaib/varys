@@ -773,15 +773,16 @@ def main():
         except Exception as e:
             log(f"Auto-apply error: {e}")
 
-    # What internet slot was explored this run
-    slot_name = ""
+    # What internet slots were explored this run
+    slots_explored = ""
     try:
         queue_file = Path(__file__).parent / "exploration-queue.json"
         if queue_file.exists():
             q     = json.loads(queue_file.read_text())
             slots = q.get("slots", [])
-            prev_idx = (q.get("current_index", 1) - 1) % len(slots)
-            slot_name = slots[prev_idx]["name"]
+            start_idx = (q.get("current_index", 1) - 4) % len(slots)
+            explored = [slots[(start_idx + i) % len(slots)]["name"] for i in range(4)]
+            slots_explored = " + ".join(explored)
     except Exception:
         pass
 
@@ -791,7 +792,8 @@ def main():
          raw_fetched=len(raw_jobs),
          new_qualifying=len(new_jobs),
          internet_found=len(internet_jobs),
-         slot_explored=slot_name)
+         slots_explored_count=4,
+         slots_explored=slots_explored)
 
     # Only DM top N if there are new jobs
     dm_jobs = new_jobs[:MAX_JOBS_PER_DM]
