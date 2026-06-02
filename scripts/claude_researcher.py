@@ -84,8 +84,9 @@ def research(topic: str, track: str) -> ResearchResult:
     prompt = build_research_prompt(topic, track)
     try:
         result = subprocess.run(
-            ["claude", "--dangerously-skip-permissions", "--print", "-p", prompt],
-            capture_output=True, text=True, timeout=180,
+            ["claude", "--dangerously-skip-permissions", "--print", "-p", "-"],
+            input=prompt,
+            capture_output=True, text=True, timeout=120,
         )
         if result.returncode != 0 or not result.stdout.strip():
             return parse_research_output("")
