@@ -29,6 +29,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 from kamil_log import klog, klog_error
 
+# NLM fallback: Claude research + Canva carousel
+_SCRIPTS_DIR = Path(__file__).parent.parent / "scripts"
+if str(_SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS_DIR))
+from claude_researcher import research as claude_research, ResearchResult
+from canva_carousel import CarouselBrief, generate_carousel
+
 # ─── Emotional Content Playbook ───────────────────────────────────────────────
 # Loaded once at startup — injected into every caption/script/NLM prompt
 _PLAYBOOK_PATH = Path(__file__).parent.parent.parent / "vault/memory/content_emotional_playbook.md"
@@ -710,6 +717,43 @@ def post_linkedin(caption: str, image_path: str | None) -> str:
     except Exception as e:
         return f"❌ LinkedIn error: {e}"
 
+def run_nlm_fallback(token: str, topic: str, track: str) -> "ResearchResult | None":
+    """Claude research + Canva carousel when NLM quota is exhausted."""
+    print(f"[scheduler] NLM fallback: running Claude research for '{topic}'")
+    slack_dm(token,
+        f"🔄 *NLM quota hit — switching to Claude + Canva carousel for {track}*\n"
+        f"Researching: *{topic}*\n🤖 Kamil")
+
+    result = claude_research(topic, track)
+    print(f"[scheduler] Claude research done — hook: {result.hook[:60]}")
+
+    brief = CarouselBrief(
+        topic=topic,
+        track=track,
+        hook=result.hook,
+        insights=result.insights,
+    )
+    carousel = generate_carousel(brief)
+    slide_count = carousel["slide_count"]
+    edit_urls = [u for u in carousel["edit_urls"] if u]
+    errors = carousel["errors"]
+
+    if errors:
+        print(f"[scheduler] Carousel errors: {errors}")
+
+    insights_text = "\n".join(f"  {i+1}. {ins}" for i, ins in enumerate(result.insights))
+    urls_text = "\n".join(f"  Slide {i+1}: {u}" for i, u in enumerate(edit_urls))
+    slack_dm(token,
+        f"🎠 *Canva carousel ready — {topic}*\n\n"
+        f"*Hook:* {result.hook}\n\n"
+        f"*Key insights ({len(result.insights)}):*\n{insights_text}\n\n"
+        f"*Research summary:* {result.summary}\n\n"
+        f"*Edit slides in Canva ({slide_count} slides):*\n{urls_text}\n\n"
+        f"🤖 Kamil")
+
+    return result
+
+
 # ─── Canva ───────────────────────────────────────────────────────────────────
 
 def run_canva_designs(topic: str, copy: str, content_db_ref: str = "") -> dict:
@@ -771,16 +815,21 @@ def run_fitness_or_tech(track: str, token: str):
         if not had_sources:
             research_ok = nlm_research(nb_id, topic)
             if not research_ok:
-                print(f"[scheduler] NLM research failed (API quota/error), continuing without insights")
+                print(f"[scheduler] NLM research failed (API quota/error), running Claude+Canva fallback")
                 klog_error("nlm_research_failed",
                           component="content-scheduler",
                           topic=topic, track=track,
                           severity="warning")
-                slack_dm(token,
-                    f"⚠️ *{track} — NLM research failed* for *{topic}*\n"
-                    f"Google API quota likely hit. Using image + caption only (no NLM visuals).\n🤖 Kamil")
                 run_nlm(["delete", "notebook", nb_id, "--confirm"], timeout=30)
                 nb_id = None  # Clear notebook ID to skip Notion save + artifact polling
+                fallback_result = run_nlm_fallback(token, topic, track)
+                if fallback_result:
+                    nlm_insights = (
+                        f"Hook: {fallback_result.hook}\n\n"
+                        f"Insights:\n" +
+                        "\n".join(f"- {ins}" for ins in fallback_result.insights) +
+                        f"\n\nSummary: {fallback_result.summary}"
+                    )
             else:
                 had_sources = True
         if nb_id and had_sources:
