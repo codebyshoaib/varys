@@ -76,6 +76,11 @@
       "command": "mempalace",
       "args": ["serve", "--palace", "/home/oye/Documents/free_work/personal-agent-v2/mempalace"],
       "description": "Semantic memory — kept as fallback"
+    },
+    "canva": {
+      "type": "http",
+      "url": "https://mcp.canva.com/mcp",
+      "description": "Canva Pro design creation via OAuth — m.kamal@taleemabad.com"
     }
   }
 }
