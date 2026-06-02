@@ -35,18 +35,13 @@ class ResearchResult:
 
 def build_research_prompt(topic: str, track: str) -> str:
     return (
-        f"You are a social media researcher for a {track} content creator.\n"
-        f"Research this topic deeply: {topic}\n\n"
-        f"Produce a JSON object with these exact keys:\n"
-        f"- hook: one scroll-stopping opening line using delayed-answer technique (max 12 words, no emoji)\n"
-        f"- insights: list of exactly 5 specific, concrete facts or tips about the topic "
-        f"  (each max 15 words, specific enough to put on a slide)\n"
-        f"- caption_angle: one of [awe, longing, nostalgia, belonging] — the single emotion this content should evoke\n"
-        f"- summary: 2-sentence research summary to inform a social media caption\n\n"
-        f"Rules:\n"
-        f"- Every insight must be SPECIFIC — a number, a name, a concrete action, not a general principle\n"
-        f"- No fluff. No 'it depends'. No 'many people'. Write like a practitioner.\n"
-        f"- Return ONLY valid JSON. No markdown, no explanation, no code blocks.\n"
+        f"You are a social media researcher for {track}. Research this topic: {topic}. "
+        f"Return ONLY valid JSON (no explanation, no code blocks) with these keys: "
+        f"hook (one scroll-stopping line, max 12 words, no emoji, delayed-answer technique), "
+        f"insights (list of exactly 5 specific concrete facts or tips, each max 15 words, must include numbers/names/actions), "
+        f"caption_angle (one of: awe, longing, nostalgia, belonging), "
+        f"summary (2 sentences summarizing key research for a social media caption). "
+        f"Write like a practitioner — specific stats, named exercises, real numbers. No fluff."
     )
 
 
@@ -93,9 +88,9 @@ def research(topic: str, track: str) -> ResearchResult:
     prompt = build_research_prompt(topic, track)
     try:
         result = subprocess.run(
-            ["claude", "--dangerously-skip-permissions", "--print", "-p", "-"],
-            input=prompt,
+            ["claude", "--dangerously-skip-permissions", "--print", "-p", prompt],
             capture_output=True, text=True, timeout=120,
+            cwd="/tmp",
         )
         if result.returncode != 0 or not result.stdout.strip():
             return parse_research_output("")
