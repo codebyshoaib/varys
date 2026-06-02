@@ -31,7 +31,7 @@ description: Links to related projects and shared systems
 
 ### Celery Task Queue
 - Core: Background jobs (feedback, NIETE sync)
-- Queue: Redis broker shared
+- Broker: RabbitMQ (Redis used for result backend/cache)
 - Monitoring: Can view job status via Flower dashboard
 
 ### NIETE Integration

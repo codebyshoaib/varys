@@ -27,7 +27,9 @@ Log every non-trivial bug here after resolution. Link to the feature folder for 
 
 <!-- Add entries below in reverse-chronological order (newest first) -->
 
-### 2026-06-02 — (example) Dexie race condition on multi-profile sync
+## Example Entry (template only)
+
+### YYYY-MM-DD — (example) Dexie race condition on multi-profile sync
 - **Severity**: P1
 - **App**: coaching / frontend sync layer
 - **Symptom**: Coaching observations duplicated after teacher synced on two devices
