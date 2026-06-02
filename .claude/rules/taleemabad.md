@@ -31,3 +31,56 @@ Coverage ≥85% · Confidence ≥86% · Linter ≥95% · every model/endpoint te
 `/feature` (research+plan) · `/develop` (implement) · `/test` (validate+score) · `/fix` (loop to ≥86%) · `/bdd-writer` (Gherkin after done). Feature folder: research.md, plan.md, develop.md, bugs.md, test-results.md, confidence.md, status.md.
 
 ## Rule: NOTHING is done without a Harness entry.
+
+---
+
+## Model Selection
+
+Always use **claude-sonnet-4-6[1m]** (Sonnet 4.6 1M context). Never Haiku — the codebase is too large and context windows matter for understanding tenant-scoped architecture across dozens of files.
+
+---
+
+## Existing Branch — Conflict Resolution Flow
+
+When Kamal gives an existing branch (already has conflicts):
+
+1. `git checkout <branch> && git fetch origin && git status`
+2. Identify conflicting files: `git diff --name-only --diff-filter=U`
+3. For each conflicting file: read BOTH sides of the conflict, understand the intent of each change, then resolve by integrating both — **never delete working code to resolve a conflict**.
+4. After resolving all conflicts: run the test suite to confirm nothing broke.
+5. `git add <resolved-files> && git commit -m "fix: resolve merge conflicts on <branch>"`
+6. Update PR description to note conflicts resolved + push.
+7. DM Kamal on Slack: "Conflicts resolved on `<branch>`. PR updated."
+
+---
+
+## Monitoring the Harness
+
+After `/develop` runs, evaluate output quality before moving on:
+
+- Did `research.md` capture the real root cause (not just a surface symptom)?
+- Does `plan.md` solve the right problem, not just a related one?
+- Did `/develop` touch the right files — not too many (scope creep), not too few (incomplete fix)?
+- Are test assertions meaningful — do they catch regressions, or just pass trivially?
+
+If output is weak on any dimension: fix the corresponding command file in `.claude/commands/` before the next run so the harness improves.
+
+---
+
+## Harness Failure → Fix the Command
+
+If a command produces weak output **two sessions in a row**:
+
+1. Read the command file in `.claude/commands/`
+2. Identify what guidance is missing or underspecified
+3. Update the command file with the lesson learned
+4. Log the gap in `.beads/failures.jsonl`
+5. Update `vault/projects/taleemabad-core/patterns.md` with the pattern
+
+---
+
+## After Every Task
+
+- Update `vault/projects/taleemabad-core/issues-log.md` with what was done and any gotchas.
+- If a new code pattern emerged (good or bad): add it to `vault/projects/taleemabad-core/patterns.md`.
+- Update the Notion Harness entry to **Done** (or Blocked with reason).
