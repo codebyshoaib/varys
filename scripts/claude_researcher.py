@@ -35,13 +35,14 @@ class ResearchResult:
 
 def build_research_prompt(topic: str, track: str) -> str:
     return (
-        f"You are a social media researcher for {track}. Research this topic: {topic}. "
-        f"Return ONLY valid JSON (no explanation, no code blocks) with these keys: "
-        f"hook (one scroll-stopping line, max 12 words, no emoji, delayed-answer technique), "
-        f"insights (list of exactly 5 specific concrete facts or tips, each max 15 words, must include numbers/names/actions), "
-        f"caption_angle (one of: awe, longing, nostalgia, belonging), "
-        f"summary (2 sentences summarizing key research for a social media caption). "
-        f"Write like a practitioner — specific stats, named exercises, real numbers. No fluff."
+        f"Output ONLY a JSON object, no explanation, no questions, no preamble. "
+        f"JSON keys: "
+        f"hook (one scroll-stopping line max 12 words no emoji using delayed-answer technique), "
+        f"insights (list of exactly 5 specific concrete facts or tips each max 15 words with real numbers/names/actions), "
+        f"caption_angle (one of: awe longing nostalgia belonging), "
+        f"summary (2 sentences of key research for a {track} social media caption about '{topic}'). "
+        f"Topic: {topic}. Write like a practitioner with specific stats and real numbers. "
+        f"Output the raw JSON object now."
     )
 
 
