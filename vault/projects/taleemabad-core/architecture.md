@@ -1,120 +1,104 @@
 ---
 name: taleemabad-core Architecture
-description: Technical architecture, patterns, design decisions
+description: App structure, key models, sync patterns, file paths
+updated: 2026-06-02
 ---
 
 # Architecture — taleemabad-core
 
-## Tech Stack
-- **Framework**: Django REST Framework (DRF)
-- **Language**: Python 3.x
-- **Database**: PostgreSQL
-- **Queue**: Celery with Redis
-- **Testing**: pytest + Django test client
-- **Deployment**: Docker + GitHub Actions
+## Directory Structure
 
-## Core Modules
+```
+taleemabad_core/
+├── apps/
+│   ├── analytics/
+│   ├── asset_manager/
+│   ├── book_library/          # BookChapter
+│   ├── coaching/              # Core domain — observations, visits
+│   │   ├── models.py          # CoachingObservation*, SchoolVisit*, Answer*
+│   │   ├── serializers.py     # BasePushSyncSerializer subclasses
+│   │   ├── push_sync_helpers.py
+│   │   ├── views.py
+│   │   ├── api/
+│   │   ├── migrations/
+│   │   └── tests/
+│   ├── community/
+│   ├── core/                  # Shared mixins
+│   │   └── models.py          # SoftDeleteMixin, SoftDeleteAuditableMixin, TimeStampedModel
+│   ├── exam_generator/
+│   ├── fln_assessment/
+│   ├── internal_apps/         # Retool integrations
+│   ├── lesson_plan/           # CoreLessonPlan
+│   ├── question_bank/
+│   ├── schools/               # School, SchoolClassSubject, Announcement
+│   ├── slo/                   # GradeSubject, LessonPlan, Subject
+│   ├── student_learning/
+│   ├── teacher_training/      # Assessment, Submission, TeacherTrainingStatus
+│   ├── tenants/
+│   └── users/                 # User, CoachProfile, TeacherProfile, PrincipalProfile, RegionalManagerProfile
+├── settings/
+├── urls.py
+└── wsgi.py
+```
 
-### `apps/training/`
-- **Models**: Training, Level, TrainingMedia
-- **Serializers**: TrainingSerializer, LevelSerializer
-- **Views**: TrainingViewSet, LevelViewSet
-- **Endpoints**: `/api/v1/trainings/`, `/api/v1/levels/`
-- **Purpose**: Training CRUD, level hierarchy, asset relationships
+## Key Models
 
-### `apps/quiz/`
-- **Models**: Quiz, QuizQuestion, QuizAnswer, QuizResult
-- **Serializers**: QuizSerializer, QuizResultSerializer
-- **Views**: QuizViewSet, QuizResultViewSet
-- **Endpoints**: `/api/v1/quizzes/`, `/api/v1/quiz_results/`
-- **Features**: Score calculation, answer validation, result storage
+### core (shared mixins)
+- `SoftDeleteMixin` — adds `is_active` (BooleanField, default=True), `deleted_at`; overrides `save()` to set `deleted_at` on deactivation
+- `SoftDeleteAuditableMixin(SoftDeleteMixin)` — adds audit fields
+- `SoftDeleteAuditableMpttMixin(SoftDeleteMixin)` — MPTT tree + soft delete
 
-### `apps/media_assets/`
-- **Models**: MediaAsset
-- **Views**: PresignedURLView
-- **Endpoint**: `POST /api/v1/internal/media_assets/presigned_upload_url/`
-- **Purpose**: Generate S3 presigned URLs for browser uploads
-- **Integration**: Boto3 for AWS SDK
+### users
+- `User` — base auth user
+- `CoachProfile`, `TeacherProfile`, `PrincipalProfile`, `RegionalManagerProfile` — role profiles linked to User
 
-### `apps/user_progress/`
-- **Models**: UserProgress
-- **Purpose**: Track training completion, quiz scores, learning paths
-- **Endpoints**: `/api/v1/user_progress/`
+### schools
+- `School` — tenant root entity
+- `SchoolClassSubject` — school × class × subject junction
+- `Announcement`, `UserAnnouncement` — notification system
 
-### `apps/niete_sync/`
-- **Celery Task**: `sync_niete_learners()`
-- **Purpose**: Pull user list from NIETE API, sync completion status
-- **Schedule**: Daily at 9 AM
-- **Retry**: 3 times with exponential backoff
+### coaching
+- `CoachingObservation*` — observation forms for coaches visiting schools
+- `SchoolVisit*` — school visit records
+- Uses `GenericForeignKey` (GFK) for polymorphic user profile attachment (`gfk_helpers.py`)
+- Uses `db_validators.py` for cross-table consistency checks
 
-### `apps/feedback/`
-- **Celery Task**: `generate_quiz_feedback(quiz_result_id)`
-- **Purpose**: Call Claude API to generate personalized feedback
-- **Async**: Decoupled from request/response cycle
-- **Integration**: LLM API for feedback generation
+### teacher_training
+- `Assessment`, `Submission`, `TeacherTrainingStatus`
 
-## Design Patterns
+### slo
+- `GradeSubject`, `Subject`, `LessonPlan`
 
-### ViewSet Pattern (DRF)
-- Combines list, retrieve, create, update, delete into single class
-- Automatic routing via SimpleRouter
-- Example: TrainingViewSet handles all `/api/v1/trainings/*` endpoints
+## Offline-First Sync Pattern (Push Sync)
 
-### Serializer-Model Pairs
-- Model: Database representation
-- Serializer: Request/response validation and transformation
-- Example: Training model + TrainingSerializer for API contract
+The frontend (React + Dexie.js on IndexedDB) is offline-first. Sync uses a push model:
 
-### Celery Async Tasks
-- Long-running operations (feedback, NIETE sync) as background tasks
-- Redis broker for task queue
-- Retry policy for failed tasks
-- No blocking of request/response
+1. **Frontend writes** to Dexie locally, queues records with `updated_at` timestamps
+2. **Sync push** calls DRF endpoints with `BasePushSyncSerializer`
+3. **Backend merges** — timestamp-wins conflict resolution
+4. **Dexie schema versioning** — `db.version(N).stores(...)` must be incremented on any schema change; use `db.transaction()` for multi-table writes to avoid partial state
 
-### JWT Authentication
-- Token issued by [[taleemabad-auth]]
-- Middleware validates tokens on protected endpoints
-- Permission classes: IsAuthenticated, IsAdminUser, custom
+Key files:
+- `taleemabad_core/apps/coaching/push_sync_helpers.py` — server-side sync helpers
+- `taleemabad_core/apps/coaching/serializers.py` — `BasePushSyncSerializer` subclasses
+- Frontend: `api/teachertraining.ts` — every write must include `profileId` in key AND filter
 
-## Testing Strategy
+## Harness Feature Folder
 
-### Unit Tests
-- Test model methods (calculations, validations)
-- Test serializer field validation
-- Test API responses with mocked dependencies
-- File: `apps/*/tests.py`
+Every feature produces artifacts at:
+```
+.claude/features/YYYY-MM-DD-<feature>/
+├── research.md
+├── plan.md
+├── develop.md
+├── bugs.md
+├── test-findings.md
+├── confidence.md
+└── status.md
+```
 
-### Integration Tests
-- Test full request/response cycle
-- Hit real database (test DB)
-- Celery task execution with test broker
-- Example: Quiz submission → score calculation → feedback task queued
-
-### Database Tests
-- Migrations tested (schema changes are reversible)
-- Concurrent write scenarios
-- Foreign key constraints verified
-
-### No Mocking Rule
-- Database: Use test DB, not mocks
-- Celery: Use test broker, not mocks
-- External APIs: Use staging endpoints or fixtures, not mocks
-
-## Deployment Architecture
-
-### CI/CD Pipeline
-- GitHub Actions on push/PR
-- Run tests → type-check → build Docker image
-- Push to staging on merge to main
-- Manual trigger for production
-
-### Database Migrations
-- Use Django migrations for all schema changes
-- Migrations are reversible (avoid data loss operations)
-- Test migrations before deploying to staging
-- Coordinate with team before production deployment
-
-### Environment Variables
-- `.env.local` for development
-- `.env.staging`, `.env.production` for deployed environments
-- Secrets (DB password, AWS keys, API tokens) stored in GitHub Secrets
+## CI/CD
+- GitHub Actions on PR → tests → linter → type-check
+- Migrations tested for reversibility before merge
+- Docker image built on merge to main
+- Staging deploy automatic; production manual
