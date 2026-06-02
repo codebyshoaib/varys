@@ -28,17 +28,14 @@ class DesignPhilosophy:
 
 def build_philosophy_prompt(topic: str, track: str, design_type: str) -> str:
     return (
-        f"You are a world-class art director creating a design philosophy for a {design_type} social post about '{topic}' for a {track} content creator. "
-        f"Create an original aesthetic movement — not a template, not a style guide — a genuine philosophical stance. "
-        f"Name the movement (1-2 evocative words). Write a 4-paragraph manifesto covering: "
-        f"(1) the core visual philosophy and what it rejects, "
-        f"(2) how space form and color operate in this movement, "
-        f"(3) the emotional register and cultural references it draws from, "
-        f"(4) what expert craftsmanship looks like here — meticulously labored painstaking master-level. "
-        f"Then write a canvas_directive: 3-4 sentences of precise visual instruction for expressing this philosophy in a single {design_type} image — what visual elements dominate what is absent how text behaves as a visual element. "
-        f"The philosophy must emphasize: 90 percent visual 10 percent text. No generic AI aesthetics. "
-        f"Return ONLY valid JSON with keys: movement_name (string), manifesto (string), canvas_directive (string). "
-        f"The topic '{topic}' is the soul embedded invisibly in the work — not announced just felt."
+        f"Output ONLY a JSON object, no explanation, no questions, no preamble. "
+        f"JSON keys: movement_name (1-2 evocative words for an original aesthetic movement), "
+        f"manifesto (4 sentences: what the movement rejects; how space/form/color operate; emotional register and cultural references; what master-level craftsmanship looks like), "
+        f"canvas_directive (3 sentences: what visual element dominates the {design_type} canvas; what is absent; how the text '{topic}' behaves as sculpture not caption). "
+        f"Context: this is for a {track} social post about '{topic}'. "
+        f"The philosophy must be: 90 percent visual 10 percent text, museum-quality, reject generic AI aesthetics. "
+        f"Topic soul is embedded invisibly — felt not announced. "
+        f"Output the raw JSON object now."
     )
 
 
