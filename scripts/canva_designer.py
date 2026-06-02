@@ -18,6 +18,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+import sys as _sys_dp
+_DP_DIR = str(Path(__file__).parent)
+if _DP_DIR not in _sys_dp.path:
+    _sys_dp.path.insert(0, _DP_DIR)
+from design_philosopher import create_philosophy
+
 # Template registry — one entry per channel+format combo
 TEMPLATE_MAP = {
     ("linkedin", "card"):      {"template_name": "kamil-linkedin-card",  "width": 1200, "height": 627},
@@ -36,17 +42,33 @@ ALL_FORMATS = [
 
 
 def build_design_prompt(topic: str, copy: str, channel: str, fmt: str) -> str:
+    """
+    Two-step Anthropic canvas-design approach:
+    1. Generate a named aesthetic movement + manifesto (design_philosopher)
+    2. Express that philosophy visually on the canvas
+    """
     tmpl = TEMPLATE_MAP.get((channel, fmt), {})
     w = tmpl.get("width", 1080)
     h = tmpl.get("height", 1080)
-    template_name = tmpl.get("template_name", "brand-kit-default")
+
+    # Step 1: Generate design philosophy
+    philosophy = create_philosophy(topic, channel, fmt)
+
+    # Step 2: Build canvas expression prompt from philosophy
     return (
-        f"Create a {channel} {fmt} design ({w}x{h}px) using the template '{template_name}'. "
-        f"Topic: {topic}. "
-        f"Headline copy: {copy}. "
-        f"Apply brand kit colors and fonts. "
-        f"Ensure text is legible at thumbnail size. "
-        f"Clear visual hierarchy with one focal point."
+        f"You are expressing the aesthetic movement '{philosophy.movement_name}' as a single {channel} {fmt} "
+        f"design ({w}x{h}px). "
+        f"PHILOSOPHY: {philosophy.manifesto} "
+        f"CANVAS DIRECTIVE: {philosophy.canvas_directive} "
+        f"CONTENT SOUL (embedded invisibly, not announced): The topic '{topic}' lives in the visual DNA — "
+        f"felt by those who know it, invisible to those who don't. "
+        f"The only text permitted: '{copy}' — treated as a sculptural typographic element, "
+        f"not a caption. It is part of the composition, not placed on top of it. "
+        f"CRITICAL QUALITY STANDARD: This must look like it took countless hours of expert craftsmanship. "
+        f"Museum-quality. Painstaking attention. The work of someone at the absolute top of their field. "
+        f"90% visual composition, 10% essential text. Full bleed, no border, no frame. "
+        f"DO NOT produce generic AI aesthetics. DO NOT produce clip-art or illustration templates. "
+        f"DO NOT include layout labels or meta-instructions in the image."
     )
 
 
