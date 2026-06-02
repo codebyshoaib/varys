@@ -715,7 +715,7 @@ def post_linkedin(caption: str, image_path: str | None) -> str:
 def run_canva_designs(topic: str, copy: str, content_db_ref: str = "") -> dict:
     """Run kamil-canva-agent for all formats. Returns results dict."""
     if not CANVA_BRAND_KIT_ID:
-        klog("canva", "CANVA_BRAND_KIT_ID not set — skipping Canva designs")
+        klog("canva_skip", msg="CANVA_BRAND_KIT_ID not set — skipping Canva designs")
         return {}
     try:
         result = subprocess.run(
@@ -729,11 +729,11 @@ def run_canva_designs(topic: str, copy: str, content_db_ref: str = "") -> dict:
             capture_output=True, text=True, timeout=300,
         )
         if result.returncode != 0:
-            klog("canva", f"canva-agent failed: {result.stderr[:200]}")
+            klog("canva_error", msg=result.stderr[:200])
             return {}
         return json.loads(result.stdout)
     except Exception as e:
-        klog("canva", f"run_canva_designs error: {e}")
+        klog("canva_error", msg=str(e))
         return {}
 
 # ─── Track runners ────────────────────────────────────────────────────────────
@@ -826,7 +826,7 @@ def run_fitness_or_tech(track: str, token: str):
     if canva_results:
         passed = [k for k, v in canva_results.items() if v.get("status") == "draft"]
         needs_review = [k for k, v in canva_results.items() if v.get("status") == "Needs-Kamal"]
-        klog("canva", f"designs: {len(passed)} passed, {len(needs_review)} need review")
+        klog("canva_designs", passed=len(passed), needs_review=len(needs_review))
 
     # LinkedIn (tech only)
     li_result = ""
