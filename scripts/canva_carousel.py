@@ -96,7 +96,7 @@ def _call_canva_mcp(prompt: str, brand_kit_id: str) -> dict:
         f'{{\"design_id\": \"DABxxxxxx\", \"edit_url\": \"https://www.canva.com/d/...\"}}'
     )
     result = subprocess.run(
-        ["claude", "--dangerously-skip-permissions", "--print", "-p", instruction],
+        ["claude", "--dangerously-skip-permissions", "-p", instruction],
         capture_output=True, text=True, timeout=180,
     )
     if result.returncode != 0:
@@ -117,7 +117,7 @@ def _export_design_pdf(design_id: str) -> str:
         f"Return ONLY the download URL as plain text."
     )
     result = subprocess.run(
-        ["claude", "--dangerously-skip-permissions", "--print", "-p", instruction],
+        ["claude", "--dangerously-skip-permissions", "-p", instruction],
         capture_output=True, text=True, timeout=120,
     )
     if result.returncode != 0:
