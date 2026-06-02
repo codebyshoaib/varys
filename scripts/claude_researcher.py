@@ -54,9 +54,18 @@ def parse_research_output(raw: str) -> ResearchResult:
     """Parse claude -p output into ResearchResult. Returns fallback on any error."""
     try:
         cleaned = raw.strip()
-        if cleaned.startswith("```"):
-            lines = cleaned.split("\n")
-            cleaned = "\n".join(lines[1:-1] if lines[-1] == "```" else lines[1:])
+        # Extract JSON from code fences anywhere in the output
+        if "```" in cleaned:
+            import re
+            match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", cleaned, re.DOTALL)
+            if match:
+                cleaned = match.group(1)
+        # If still not pure JSON, find the first { ... } block
+        if not cleaned.startswith("{"):
+            import re
+            match = re.search(r"\{.*\}", cleaned, re.DOTALL)
+            if match:
+                cleaned = match.group(0)
         data = json.loads(cleaned)
         return ResearchResult(
             hook=str(data.get("hook", "Here is what the research says")),
