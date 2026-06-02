@@ -57,6 +57,8 @@ NLM               = "/home/oye/.local/bin/nlm"
 NLM_PROFILE       = os.environ.get("NLM_PROFILE", "work")  # work email m.kamal@taleemabad.com
 NOTION_CONTENT_DB = "68792d2dfff84691a4f646f5a8126149"
 NOTION_CONTENT_LOG = "630d86afb17746f9ad6f9bc78afefa02"  # Content Log DB
+CANVA_BRAND_KIT_ID = os.environ.get("CANVA_BRAND_KIT_ID", "")
+CANVA_AGENT        = KAMIL_DIR / "agents" / "kamil_canva_agent.py"
 
 HANDLES = {"fitness": "@oykamal", "tech": "@oykamal", "vlog": "@oykamal"}
 
@@ -708,6 +710,32 @@ def post_linkedin(caption: str, image_path: str | None) -> str:
     except Exception as e:
         return f"❌ LinkedIn error: {e}"
 
+# ─── Canva ───────────────────────────────────────────────────────────────────
+
+def run_canva_designs(topic: str, copy: str, content_db_ref: str = "") -> dict:
+    """Run kamil-canva-agent for all formats. Returns results dict."""
+    if not CANVA_BRAND_KIT_ID:
+        klog("canva", "CANVA_BRAND_KIT_ID not set — skipping Canva designs")
+        return {}
+    try:
+        result = subprocess.run(
+            [
+                sys.executable, str(CANVA_AGENT),
+                "--topic", topic,
+                "--copy", copy,
+                "--brand-kit-id", CANVA_BRAND_KIT_ID,
+                "--content-db-ref", content_db_ref,
+            ],
+            capture_output=True, text=True, timeout=300,
+        )
+        if result.returncode != 0:
+            klog("canva", f"canva-agent failed: {result.stderr[:200]}")
+            return {}
+        return json.loads(result.stdout)
+    except Exception as e:
+        klog("canva", f"run_canva_designs error: {e}")
+        return {}
+
 # ─── Track runners ────────────────────────────────────────────────────────────
 
 def run_fitness_or_tech(track: str, token: str):
@@ -792,6 +820,13 @@ def run_fitness_or_tech(track: str, token: str):
 
     # Caption — uses NLM insights if available
     caption = generate_caption(topic, track, score, reason, nlm_insights)
+
+    # ── Canva designs ────────────────────────────────────────────────────
+    canva_results = run_canva_designs(topic=topic, copy=caption[:120])
+    if canva_results:
+        passed = [k for k, v in canva_results.items() if v.get("status") == "draft"]
+        needs_review = [k for k, v in canva_results.items() if v.get("status") == "Needs-Kamal"]
+        klog("canva", f"designs: {len(passed)} passed, {len(needs_review)} need review")
 
     # LinkedIn (tech only)
     li_result = ""
