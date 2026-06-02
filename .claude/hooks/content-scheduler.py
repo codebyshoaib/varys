@@ -30,7 +30,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from kamil_log import klog, klog_error
 
 # NLM fallback: Claude research + Canva carousel
-_SCRIPTS_DIR = Path(__file__).parent.parent / "scripts"
+_SCRIPTS_DIR = Path(__file__).parent.parent.parent / "scripts"
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 from claude_researcher import research as claude_research, ResearchResult
