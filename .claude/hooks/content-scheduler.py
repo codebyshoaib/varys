@@ -631,6 +631,7 @@ def generate_image(topic: str, track: str) -> str | None:
 
 def generate_caption(topic: str, track: str, score: int, reason: str,
                       nlm_insights: str = "") -> str:
+    """Instagram/TikTok/Reels caption — conversational, visual-first."""
     insights_block = (
         f"\n\nKey insights from research (use these as the substance):\n{nlm_insights[:800]}"
         if nlm_insights else ""
@@ -664,6 +665,70 @@ def generate_caption(topic: str, track: str, score: int, reason: str,
 
     tags = "#calisthenics #fitness #workout #health" if track == "fitness" else "#coding #AI #developer #tech"
     return f"{topic}\n\nSave this for later.\n\n{tags}"
+
+
+def generate_linkedin_caption(topic: str, score: int, reason: str,
+                               nlm_insights: str = "") -> str:
+    """LinkedIn-specific post — professional, first-person, no Instagram tropes."""
+    insights_block = (
+        f"\n\nResearch insights to draw from (pick the 2-3 most surprising):\n{nlm_insights[:800]}"
+        if nlm_insights else ""
+    )
+    prompt = (
+        f"Write a LinkedIn post for a software engineer / tech professional audience about: {topic}\n"
+        f"Why this is relevant right now: {reason}"
+        f"{insights_block}\n\n"
+        f"Hard rules — any violation means the post fails:\n"
+        f"- Write in first person, as if you just experienced or learned this\n"
+        f"- NO: 'In today's fast-paced world', 'Game changer', 'Excited to share', 'Delighted', 'Thrilled'\n"
+        f"- NO: 'Swipe to see', 'Save this', 'Drop a like' — this is not Instagram\n"
+        f"- NO bullet point lists — write in short paragraphs or punchy single-line breaks\n"
+        f"- NO emojis as decoration — one at most if it genuinely adds meaning\n"
+        f"- Opening line: a specific observation or fact, NOT a question\n"
+        f"- Under 200 words\n"
+        f"- End with a genuine question that invites professional discussion\n"
+        f"- 3-4 relevant hashtags at the very end, on their own line\n"
+        f"- Sound like a senior engineer writing a note to a colleague, not a content creator\n"
+        f"Return ONLY the post text."
+    )
+    try:
+        r = subprocess.run(
+            ["claude", "--dangerously-skip-permissions", "--model", "claude-sonnet-4-6",
+             "--print", "-p", prompt],
+            capture_output=True, text=True, timeout=90,
+        )
+        post = r.stdout.strip()
+        if len(post) > 30:
+            return post
+    except Exception as e:
+        print(f"[scheduler] LinkedIn caption error: {e}")
+
+    return f"{topic}\n\nThoughts on this? Would love to hear from others working in this space.\n\n#tech #software #engineering #AI"
+
+
+def wait_for_nlm_infographic(nb_id: str, max_wait: int = 300) -> str | None:
+    """Poll NLM studio until infographic is ready. Download and return local path, or None on timeout."""
+    outfile = f"/tmp/nlm-{nb_id[:8]}-infographic-li.png"
+    waited = 0
+    while waited < max_wait:
+        ok, out = run_nlm(["studio", "status", nb_id], timeout=30)
+        if ok:
+            try:
+                for a in json.loads(out):
+                    if a.get("type") == "infographic" and a.get("status") == "completed":
+                        dl_ok, _ = run_nlm(
+                            ["download", "infographic", nb_id, "--output", outfile],
+                            timeout=120,
+                        )
+                        if dl_ok and Path(outfile).exists():
+                            print(f"[scheduler] NLM infographic ready for LinkedIn: {outfile}")
+                            return outfile
+            except Exception:
+                pass
+        time.sleep(20)
+        waited += 20
+    print(f"[scheduler] NLM infographic timed out after {max_wait}s — posting LinkedIn text-only")
+    return None
 
 # ─── Vlog script ──────────────────────────────────────────────────────────────
 
@@ -864,11 +929,14 @@ def run_fitness_or_tech(track: str, token: str):
     if nb_id:
         notion_update_page(page_id, {"NLMNotebookID": {"rich_text": [{"text": {"content": nb_id}}]}})
 
-    # Branded image
+    # Branded image (for Instagram/TikTok/Slack preview — NOT LinkedIn)
     image_path = generate_image(topic, track)
 
-    # Caption — uses NLM insights if available
+    # Caption for Instagram/TikTok/Reels
     caption = generate_caption(topic, track, score, reason, nlm_insights)
+
+    # LinkedIn caption — professional, separate from social caption
+    linkedin_caption = generate_linkedin_caption(topic, score, reason, nlm_insights) if track == "tech" else ""
 
     # ── Canva designs ────────────────────────────────────────────────────
     canva_results = run_canva_designs(topic=topic, copy=caption[:120])
@@ -877,10 +945,13 @@ def run_fitness_or_tech(track: str, token: str):
         needs_review = [k for k, v in canva_results.items() if v.get("status") == "Needs-Kamal"]
         klog("canva_designs", passed=len(passed), needs_review=len(needs_review))
 
-    # LinkedIn (tech only)
+    # LinkedIn (tech only) — wait for NLM infographic, fall back to text-only
     li_result = ""
     if track == "tech":
-        li_result = post_linkedin(caption, image_path)
+        li_image = None
+        if nb_id and artifacts_state.get("infographic") == "triggered":
+            li_image = wait_for_nlm_infographic(nb_id, max_wait=300)
+        li_result = post_linkedin(linkedin_caption, li_image)
         print(f"[scheduler] LinkedIn: {li_result}")
 
     # Mark Done in Notion Content Calendar
@@ -891,14 +962,20 @@ def run_fitness_or_tech(track: str, token: str):
     })
 
     li_line  = f"\n✅ Auto-posted to LinkedIn: {li_result}" if track == "tech" else ""
-    nb_line  = f"\n📓 NLM `{nb_id[:8]}...` — slides + infographic + mindmap delivering shortly" if nb_id else ""
+    nb_line  = f"\n📓 NLM `{nb_id[:8]}...` — slides + mindmap still rendering" if nb_id else ""
+
+    li_section = (
+        f"\n\n*LinkedIn post (already live):*\n{linkedin_caption}"
+        if linkedin_caption else ""
+    )
 
     slack_dm(token,
         f"📊 *{track.upper()} content ready — {topic}*\n"
         f"Score: {score}/100 — {reason}"
-        f"{li_line}{nb_line}\n\n"
-        f"*Caption (paste this):*\n{caption}\n\n"
-        f"📱 Post to Instagram + TikTok (images coming)\n🤖 Kamil")
+        f"{li_line}{nb_line}"
+        f"{li_section}\n\n"
+        f"*Instagram/TikTok caption (paste this):*\n{caption}\n\n"
+        f"📱 Post to Instagram + TikTok (branded image coming)\n🤖 Kamil")
 
     if image_path:
         slack_upload(token, image_path,
@@ -918,7 +995,7 @@ def run_fitness_or_tech(track: str, token: str):
         topic=topic, track=track, score=score, reason=reason,
         caption=caption, hashtags=hashtag_line, nb_id=nb_id or "",
         li_post_id=li_result if li_result and "urn:" in li_result else "",
-        vlog_angle=vlog_angle, platforms=platforms,
+        vlog_angle=linkedin_caption or vlog_angle, platforms=platforms,
         status="Posted" if (image_path or li_result) else "Generated",
         nlm_insights=nlm_insights,
         nlm_artifacts=artifacts_state,
