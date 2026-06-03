@@ -77,19 +77,13 @@ def poll_tickets(api_key: str, db_id: str, agent_user_id: str,
                     "last_edited_time": {"after": last_sync_at},
                 },
                 {
-                    "or": [
-                        {"property": "Status", "status": {"is_not_empty": True}},
-                    ]
+                    "property": "Phase",
+                    "select": {"is_not_empty": True},
                 },
             ]
         },
         "page_size": 50,
     }
-    # Add assignee filter only if we have agent_user_id
-    if agent_user_id:
-        body["filter"]["and"][1]["or"].append(
-            {"property": "Assignee", "people": {"contains": agent_user_id}}
-        )
 
     data = json.dumps(body).encode()
     req = urllib.request.Request(
@@ -129,7 +123,8 @@ def poll_comments(api_key: str, page_id: str, last_sync_at: str) -> list[dict]:
 
 def _page_title(page: dict) -> str:
     props = page.get("properties", {})
-    for prop in props.values():
+    # Harness DB uses "Feature" as title property
+    for name, prop in props.items():
         if prop.get("type") == "title":
             parts = prop.get("title", [])
             return "".join(p.get("plain_text", "") for p in parts)
@@ -150,6 +145,12 @@ def main() -> int:
     last_sync_at = db.execute(
         "SELECT last_sync_at FROM sync_state WHERE id='global'"
     ).fetchone()[0]
+
+    # Notion API rejects epoch (1970) — use 7 days ago as minimum
+    from datetime import timezone, timedelta
+    epoch = "1970-01-01T00:00:00Z"
+    if last_sync_at == epoch:
+        last_sync_at = (datetime.now(timezone.utc) - timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     print(f"[poll-notion] Polling since {last_sync_at}")
 

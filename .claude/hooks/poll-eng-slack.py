@@ -71,7 +71,7 @@ def _load_config() -> dict:
 def _slack_search(user_token: str, oldest_ts: str) -> list[dict]:
     """Search all engineering channels for @Kamil mentions since oldest_ts."""
     params = urllib.parse.urlencode({
-        "query": "<@U0B4L7RVA8L> OR @Kamil",
+        "query": f"<@U0B4L7RVA8L> OR @Kamil OR Kamil in:#engineering-learning",
         "sort": "timestamp",
         "sort_dir": "asc",
         "count": 20,
