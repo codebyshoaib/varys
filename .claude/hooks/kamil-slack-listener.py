@@ -51,6 +51,11 @@ from kamil_eval_tracker import (eval_conversation, eval_proactive_dm,
                                  record_reaction, expire_pending)
 from notebooklm_handler import handle as nlm_handle, is_notebooklm_command
 from linkedin_poster import post_to_linkedin
+try:
+    from kamil_harness_db import get_db as _get_harness_db
+    _harness_db_available = True
+except Exception:
+    _harness_db_available = False
 
 # ── Config ────────────────────────────────────────────────────────────────────
 SLACK_CONFIG = Path.home() / ".claude" / "hooks" / ".slack"
@@ -188,8 +193,56 @@ _MSG_EXECUTOR = ThreadPoolExecutor(max_workers=2)
 last_activity_time = time.time()
 last_idle_work     = time.time()
 
-# Global deduplication set for event processing (persists across reconnects)
-_processed_event_ts = set()
+# Event dedup — SQLite-backed via harness.db (survives restarts + reconnects).
+# Deterministic key: "slack-{channel}-{ts}" — same format as orchestration-harness-v2.
+# Falls back to in-memory set if harness DB is unavailable.
+_processed_event_ts: set = set()   # in-memory fallback only
+_listener_db = None
+_listener_db_lock = threading.Lock()
+
+
+def _init_event_dedup():
+    """Connect to harness.db for persistent event dedup. Called once from main()."""
+    global _listener_db
+    if not _harness_db_available:
+        return
+    try:
+        _listener_db = _get_harness_db()
+    except Exception as e:
+        log(f"WARNING: harness DB unavailable for dedup ({e}) — using in-memory fallback")
+
+
+def _is_already_processed(channel: str, ts: str) -> bool:
+    """
+    Return True if this Slack event was already handled.
+    Inserts the event key if new. Thread-safe.
+    Uses harness.db events table (INSERT OR IGNORE on deterministic PK).
+    Falls back to in-memory set if DB unavailable.
+    """
+    event_key = f"slack-{channel}-{ts}"
+
+    if _listener_db is not None:
+        with _listener_db_lock:
+            try:
+                _listener_db.execute(
+                    "INSERT OR IGNORE INTO events "
+                    "(id, source, type, context_key, payload, status, received_at) "
+                    "VALUES (?, 'slack', 'dedup_sentinel', 'pending', '{}', 'done', datetime('now'))",
+                    (event_key,),
+                )
+                _listener_db.commit()
+                already = _listener_db.execute("SELECT changes()").fetchone()[0] == 0
+                return already
+            except Exception:
+                pass  # fall through to in-memory
+
+    # In-memory fallback
+    if event_key in _processed_event_ts:
+        return True
+    _processed_event_ts.add(event_key)
+    if len(_processed_event_ts) > 2000:
+        _processed_event_ts.clear()
+    return False
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -912,13 +965,11 @@ def make_handler(web: WebClient, dm_channel: str, bot_token: str):
         subtype    = event.get("subtype", "")
         bot_id     = event.get("bot_id", "")
         ts         = event.get("ts", "")
+        channel    = event.get("channel", "")
 
-        # Deduplicate using global set (persists across reconnects)
-        if ts in _processed_event_ts:
+        # Persistent dedup — survives restarts via harness.db (fallback: in-memory set)
+        if _is_already_processed(channel, ts):
             return
-        _processed_event_ts.add(ts)
-        if len(_processed_event_ts) > 1000:
-            _processed_event_ts.clear()
 
         # Skip bot messages and edits/deletes
         if bot_id or subtype:
@@ -975,6 +1026,9 @@ def main():
         sys.exit(1)
 
     Path("/tmp/kamil-slack-listener.pid").write_text(str(os.getpid()))
+
+    # Init persistent event dedup (harness.db) — must happen before SocketModeClient
+    _init_event_dedup()
 
     web = WebClient(token=bot_token)
 
@@ -1071,7 +1125,7 @@ def main():
                 # after a stale socket, causing IncompleteRead on next API call.
                 web = WebClient(token=bot_token)
                 web_ref[0] = web
-                _processed_event_ts.clear()  # Reset dedup set on full reconnect
+                # Dedup is now persistent in harness.db — no clear needed on reconnect
                 socket_client = SocketModeClient(app_token=app_token, web_client=web)
                 socket_client.socket_mode_request_listeners.clear()
                 socket_client.socket_mode_request_listeners.append(handler_with_heartbeat)
