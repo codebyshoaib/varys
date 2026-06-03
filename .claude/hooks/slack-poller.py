@@ -28,6 +28,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 from kamil_log import klog, klog_error, klog_poller
 from kamil_eval_tracker import eval_poller_summary, eval_self_question
+try:
+    from kamil_harness_db import get_db, acquire_tick_lock, release_tick_lock
+    _harness_db_available = True
+except Exception:
+    _harness_db_available = False
 
 # ── Config ────────────────────────────────────────────────────────────────────
 SLACK_CONFIG    = Path.home() / ".claude" / "hooks" / ".slack"
@@ -475,6 +480,30 @@ def build_summary_dm(new_items: list, total_inbox: int, run_ts: str) -> str:
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
+    # Tick lock — prevent re-entrant cron runs (harness-v2 pattern)
+    _db = None
+    if _harness_db_available:
+        try:
+            _db = get_db()
+            if not acquire_tick_lock(_db, "slack-poller"):
+                log("Tick already running — skipping this cron run")
+                return 0
+        except Exception as e:
+            log(f"WARNING: tick lock unavailable ({e}) — proceeding without lock")
+            _db = None
+
+    try:
+        return _main_body()
+    finally:
+        if _db:
+            try:
+                release_tick_lock(_db)
+                _db.close()
+            except Exception:
+                pass
+
+
+def _main_body() -> int:
     slack_cfg = load_config(SLACK_CONFIG)
     token     = slack_cfg.get("SLACK_TOKEN") or os.environ.get("SLACK_TOKEN")
     bot_token = slack_cfg.get("BOT_TOKEN")   or os.environ.get("BOT_TOKEN")
