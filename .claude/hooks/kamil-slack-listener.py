@@ -1146,7 +1146,7 @@ def main():
         # Skip polling during active reconnection to avoid network spam
         if poll_minutes >= 2 and not reconnecting[0]:
             last_poll_time[0] = now
-            missed = process_missed_messages(web_ref[0], dm_channel, bot_token=bot_token)
+            missed = process_missed_messages(web_ref[0], dm_channel, bot_token=bot_token) or 0
             if missed > 0:
                 log(f"[poll] Recovered {missed} missed message(s)")
 
