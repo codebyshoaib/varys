@@ -62,6 +62,125 @@ KAMAL_USER_ID   = "U0AV1DX3WSE"
 KAMIL_BOT_USER  = "U0B4L7RVA8L"  # Kamil's own bot user — skip in catchup
 DB_PAGE_HARNESS = "de10157da3e34ef58a74ea240f31fe98"
 
+# Channels where Kamil auto-answers engineering questions
+ENGINEERING_CHANNELS = {
+    "C0AUM8DQ2KA",  # #engineering-learning
+    "C0AUM8DQ2KB",  # #engineering-ai (if exists)
+}
+
+# Tracks thread_ts of posts Kamil originated — auto-answer replies in these
+_kamil_thread_origins: set[str] = set()
+
+# Replied-to dedup: (channel, thread_ts) → True
+_auto_replied: set[tuple] = set()
+
+_QUESTION_SIGNALS = ("?", "how ", "why ", "what ", "should we", "can we",
+                     "is it", "does ", "when ", "which ", "would ")
+_STOP_WORDS = {
+    "a", "an", "the", "is", "it", "in", "of", "to", "and", "or", "for",
+    "we", "i", "my", "our", "your", "this", "that", "with", "on", "at",
+    "be", "by", "as", "if", "so", "do", "did", "was", "are", "not",
+    "you", "he", "she", "they", "but", "its", "from", "about", "when",
+    "can", "will", "just", "also", "into", "more", "any", "all", "has",
+}
+
+
+def _extract_keywords(text: str) -> list[str]:
+    """Pull meaningful keywords from a message for registry lookup."""
+    words = re.findall(r"[a-z0-9_\-]+", text.lower())
+    return [w for w in words if w not in _STOP_WORDS and len(w) > 2][:10]
+
+
+def _is_question(text: str) -> bool:
+    """Return True if text looks like a genuine question."""
+    clean = text.lower().strip()
+    return any(sig in clean for sig in _QUESTION_SIGNALS)
+
+
+def auto_answer_engineering_question(
+    text: str, channel: str, thread_ts: str, sender_id: str,
+    sender_name: str, web: WebClient, bot_token: str,
+) -> bool:
+    """
+    If the message is a question and the NLM registry has a matching notebook,
+    query it and post a cited reply in the thread.
+    Returns True if a reply was posted, False otherwise.
+    """
+    dedup_key = (channel, thread_ts, sender_id)
+    if dedup_key in _auto_replied:
+        return False
+    if not _is_question(text):
+        return False
+    # Skip Kamil's own messages
+    if sender_id == KAMIL_BOT_USER:
+        return False
+
+    keywords = _extract_keywords(text)
+    if not keywords:
+        return False
+
+    # Import here to avoid circular — notebooklm_handler already imported at top
+    try:
+        from notebooklm_handler import registry_search, _inject_profile, run_nlm
+    except ImportError:
+        return False
+
+    hits = registry_search(keywords)
+    if not hits:
+        # No notebook match — post a gentle nudge
+        _auto_replied.add(dedup_key)
+        try:
+            mention = f"<@{sender_id}>"
+            nudge = (
+                f"{mention} — no research notebook on this topic yet. "
+                f"Say `nlm research {keywords[0]}` to build one. 🤖 Kamil"
+            )
+            web.chat_postMessage(channel=channel, thread_ts=thread_ts, text=nudge)
+        except Exception:
+            pass
+        return False
+
+    best = hits[0]
+    nb_id = best.get("id", "")
+    alias = best.get("alias", nb_id[:8])
+    if not nb_id:
+        return False
+
+    _auto_replied.add(dedup_key)
+
+    # Query the notebook
+    try:
+        ok, out = run_nlm(
+            ["notebook", "query", nb_id, text[:300], "--json", "--profile", "default"],
+            timeout=120,
+        )
+        if not ok:
+            return False
+
+        data = json.loads(out)
+        answer = data.get("value", {}).get("answer", "")[:1200]
+        if not answer:
+            return False
+
+        mention = f"<@{sender_id}>"
+        reply = (
+            f"{mention} — queried the research on this.\n\n"
+            f"{answer}\n\n"
+            f"_Source: NotebookLM `{alias}` — ask more with_ `nlm ask {alias} \"[question]\"`\n"
+            f"🤖 Kamil"
+        )
+        web.chat_postMessage(channel=channel, thread_ts=thread_ts, text=reply)
+
+        klog("auto_answer_engineering", component="slack_listener",
+             action="auto_answer", channel=channel, notebook=nb_id,
+             alias=alias, sender=sender_id, keywords=keywords[:5])
+        log(f"[auto-answer] {alias} → {sender_name or sender_id}: {text[:60]}")
+        return True
+
+    except Exception as e:
+        klog_error(context="auto_answer_engineering_question", exc=e)
+        return False
+
 # Limits concurrent Claude invocations from message handling to 2
 _MSG_EXECUTOR = ThreadPoolExecutor(max_workers=2)
 
@@ -809,6 +928,10 @@ def make_handler(web: WebClient, dm_channel: str, bot_token: str):
         user    = event.get("user", "")
         channel = event.get("channel", "")
 
+        # Track Kamil's own posts so we can auto-answer replies in those threads
+        if user == KAMIL_BOT_USER and event_type == "message":
+            _kamil_thread_origins.add(ts)
+
         # 1. DM to Kamil bot — Kamal, Fatima, anyone. is_dm=True → flat history fetch
         if event_type == "message" and event.get("channel_type") == "im":
             dispatch(text, web, channel, ts, "DM", sender_id=user, is_dm=True, bot_token=bot_token)
@@ -818,6 +941,24 @@ def make_handler(web: WebClient, dm_channel: str, bot_token: str):
             thread = event.get("thread_ts") or ts
             dispatch(text, web, channel, thread, f"mention in {channel}",
                      sender_id=user, is_dm=False, bot_token=bot_token)
+
+        # 3. Thread reply or channel message in engineering channels — auto-answer questions
+        elif event_type == "message" and user and user != KAMIL_BOT_USER:
+            thread = event.get("thread_ts") or ts
+            in_eng_channel  = channel in ENGINEERING_CHANNELS
+            in_kamil_thread = thread in _kamil_thread_origins or ts in _kamil_thread_origins
+
+            if in_eng_channel or in_kamil_thread:
+                try:
+                    info        = web.users_info(user=user)
+                    sender_name = info["user"]["profile"].get("real_name") or info["user"]["name"]
+                except Exception:
+                    sender_name = f"<@{user}>"
+
+                _MSG_EXECUTOR.submit(
+                    auto_answer_engineering_question,
+                    text, channel, thread, user, sender_name, web, bot_token,
+                )
 
     return handler
 
