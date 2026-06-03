@@ -43,12 +43,14 @@ TRACK_SUBREDDITS = {
     "fitness": ["bodyweightfitness", "calisthenics", "Fitness", "running", "swimming", "hiking"],
     "tech":    ["Python", "django", "programming", "ClaudeAI", "ChatGPTCoding", "webdev"],
     "vlog":    ["islamabad", "pakistan", "solotravel", "Pakistan", "streetphotography"],
+    "painting":["learnart", "ArtFundamentals", "painting", "Watercolor", "oilpainting"],
 }
 
 TRACK_NICHES = {
     "fitness": "calisthenics bodyweight fitness swimming hiking cycling workout pull-up transformation routine running",
     "tech":    "claude ai coding python django software developer tools agent llm prompt build",
     "vlog":    "islamabad pakistan daily life food travel vlog hike trail margalla",
+    "painting":"painting art watercolour oil canvas technique process studio learn",
 }
 
 # Engagement-signal words — titles that historically drive views/saves/follows.

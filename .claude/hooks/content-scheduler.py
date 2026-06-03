@@ -67,7 +67,7 @@ NOTION_CONTENT_LOG = "630d86afb17746f9ad6f9bc78afefa02"  # Content Log DB
 CANVA_BRAND_KIT_ID = os.environ.get("CANVA_BRAND_KIT_ID", "")
 CANVA_AGENT        = KAMIL_DIR / "agents" / "kamil_canva_agent.py"
 
-HANDLES = {"fitness": "@oykamal", "tech": "@oykamal", "vlog": "@oykamal"}
+HANDLES = {"fitness": "@oykamal", "tech": "@oykamal", "vlog": "@oykamal", "painting": "@oykamal"}
 
 # NLM artifact pollers run in non-daemon threads that outlive their track function.
 # They register here so run() can join() them before the process exits — otherwise
@@ -80,6 +80,92 @@ TRACK_CHANNEL = {
     "fitness": "kamalkeexercies",
     "tech":    "kamalkecoding",
     "vlog":    "oykamal",
+    "painting":"kamalkepainting",
+}
+
+# ─── Curated Topic Bank ───────────────────────────────────────────────────────
+# Personal story seeds — Kamal's real life, Islamabad-specific, personal angle.
+# These are seeded into Notion on first run; this dict is the source of truth.
+# Trend scanner adds to Notion but these always take priority.
+TOPIC_BANK = {
+    "fitness": [
+        "The first time I did a muscle-up — what nobody tells you about the transition",
+        "Margalla Trail 5 at 5am — what the city looks like from up there",
+        "Why I switched from gym to calisthenics (the real reason)",
+        "Swimming in Rawal Lake in October — what it actually feels like",
+        "30-day pull-up challenge: day 1 vs day 30, here's what changed",
+        "The Islamabad cycling route I do every Sunday (F-7 to Saidpur, 22km)",
+        "I tried running every morning for 2 weeks — this is what happened to my output",
+        "Hiking alone vs hiking with someone — which one builds you more",
+        "The calisthenics move that took me 6 months — here's the breakdown",
+        "Why most people quit exercise after 3 weeks (I almost did too)",
+        "Daman-e-Koh trail in rain — the best version of this city",
+        "How I track fitness without an app (analog method that actually works)",
+        "Cold water swimming: 3 months in, here's what changed in my brain",
+        "The 5 bodyweight exercises I do every single day",
+        "What I eat before a long trail run (real food, Islamabad edition)",
+        "I got injured and couldn't train for a month — here's what I learned",
+        "Margalla Hills vs Rawal Lake: which one is better for mental reset",
+        "The moment I realised calisthenics is actually harder than the gym",
+        "How I fit training into a life of building software products",
+        "Cycling at golden hour in Islamabad — a visual",
+    ],
+    "tech": [
+        "I built a Slack bot that runs my entire dev workflow — here's how",
+        "Why I use Claude Code for every PR now (not just hard problems)",
+        "The harness I built so I never write the same code twice",
+        "How I automated my content pipeline with Claude agents",
+        "Agentic workflows explained through the thing I actually built",
+        "The biggest mistake I made building AI agents (and how I fixed it)",
+        "How NotebookLM changed the way I research before building",
+        "My PR review workflow: from Slack mention to merged in under an hour",
+        "Building a job-finder that auto-applies — what I learned",
+        "Why my Claude agent has hooks that block it from doing bad things",
+        "How I built a Notion-backed memory system for my AI agent",
+        "The self-healing observer that fixes my cron jobs at 3am",
+        "From idea to shipped feature: my exact pipeline in a Django LMS",
+        "What I wish I knew about Django multi-tenancy before starting",
+        "How I use parallel agents to do 6 hours of work in 45 minutes",
+        "The one hook that saves me from AI hallucinations every day",
+        "Why I stopped writing tests manually (and what I do instead)",
+        "Building a content scheduler that actually knows what to post",
+        "Claude Sonnet vs Haiku: when I use each and why it matters",
+        "The git worktree pattern that lets me work on 3 features at once",
+    ],
+    "vlog": [
+        "A normal Sunday in Islamabad — F-7 chai, Margalla, back by noon",
+        "The morning routine that changed how I think about my day",
+        "Why I moved back to Islamabad (the real answer, not the polished one)",
+        "Saidpur Village on a quiet Tuesday — what this city feels like when you slow down",
+        "The project that almost broke me and what it taught me",
+        "What building software products actually looks like from the inside",
+        "A day where everything went wrong and I filmed it anyway",
+        "The chai spot in F-6 I've been going to for 3 years",
+        "Daman-e-Koh at dusk — the moment the city turns golden",
+        "Why I started painting again after 5 years",
+        "The conversation I had with a stranger on Trail 3 that I keep thinking about",
+        "What Islamabad looks like in January fog — a visual",
+        "I spent a week without my phone for an hour each morning — here's what happened",
+        "The thing about building things in Pakistan that nobody talks about",
+        "A birthday in Islamabad: what I did, where I went, what I felt",
+        "How I balance deep work with being present in life (still figuring it out)",
+        "The road from Islamabad to Murree — filmed it so you don't have to imagine",
+        "Friday jummah in G-7 — belonging in your own city",
+        "What I learned from shipping 3 products in one year",
+        "The version of this city most people never see",
+    ],
+    "painting": [
+        "Why I paint — and why I stopped for 5 years",
+        "The painting that took me 3 weeks and what it taught me about patience",
+        "Oil vs watercolour: what I switched and why",
+        "Painting Margalla Hills from memory — the colour I always get wrong",
+        "What happens to your mind when you paint for 2 hours without stopping",
+        "The reference photo vs the finished painting — a before/after",
+        "How painting made me a better software engineer",
+        "The Islamabad street scene I've been wanting to paint for a year",
+        "Studio setup: how I paint in a small apartment",
+        "Learning from a master painter — what I tried to steal from Monet",
+    ],
 }
 
 # ─── Slack ────────────────────────────────────────────────────────────────────
@@ -342,15 +428,32 @@ def run_trend_scan(track: str):
 # ─── Topic pick ───────────────────────────────────────────────────────────────
 
 def pick_topic(track: str) -> tuple | None:
-    """Returns (page_id, topic, post_type, score, reason, existing_nb_id) or None."""
-    pages = notion_query(NOTION_CONTENT_DB, {
-        "filter": {"and": [
+    """Returns (page_id, topic, post_type, score, reason, existing_nb_id) or None.
+
+    Priority order:
+    1. Curated topics (Source=curated) — Kamal's personal story bank
+    2. Any other Pending topic (trend scanner additions, manually queued)
+    """
+    # Try curated topics first
+    for source_filter in [
+        {"and": [
+            {"property": "Status", "select": {"equals": "Pending"}},
+            {"property": "Track",  "select": {"equals": track}},
+            {"property": "Source", "select": {"equals": "curated"}},
+        ]},
+        {"and": [
             {"property": "Status", "select": {"equals": "Pending"}},
             {"property": "Track",  "select": {"equals": track}},
         ]},
-        "sorts":     [{"property": "EngagementScore", "direction": "descending"}],
-        "page_size": 1,
-    })
+    ]:
+        pages = notion_query(NOTION_CONTENT_DB, {
+            "filter": source_filter,
+            "sorts":  [{"property": "EngagementScore", "direction": "descending"}],
+            "page_size": 1,
+        })
+        if pages:
+            break
+
     if not pages:
         return None
     page         = pages[0]
@@ -358,7 +461,7 @@ def pick_topic(track: str) -> tuple | None:
     topic        = prop_text(page, "Topic")
     post_type    = prop_text(page, "PostType") or "steps"
     score        = int(prop_text(page, "EngagementScore") or "60")
-    reason       = prop_text(page, "EngagementReason") or "pre-planned queue topic"
+    reason       = prop_text(page, "EngagementReason") or "Curated personal story topic"
     existing_nb  = prop_text(page, "NLMNotebookID")
     notion_update_page(page_id, {"Status": {"select": {"name": "In Progress"}}})
     return page_id, topic, post_type, score, reason, existing_nb
@@ -1106,21 +1209,24 @@ def run_vlog(token: str):
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
 def run():
-    """Run ALL 3 tracks every day in parallel — NLM gives 3 daily slots."""
+    """Run ALL 4 tracks every day in parallel — NLM gives 3 daily slots (painting uses Canva fallback)."""
     token = load_slack_token()
-    print(f"[scheduler] Starting {datetime.now().isoformat()} — running fitness + tech + vlog in parallel")
+    print(f"[scheduler] Starting {datetime.now().isoformat()} — running fitness + tech + vlog + painting in parallel")
 
     fitness_thread = threading.Thread(target=run_fitness_or_tech, args=("fitness", token))
     tech_thread    = threading.Thread(target=run_fitness_or_tech, args=("tech", token))
     vlog_thread    = threading.Thread(target=run_vlog, args=(token,))
+    painting_thread = threading.Thread(target=run_fitness_or_tech, args=("painting", token))
 
     fitness_thread.start()
     tech_thread.start()
     vlog_thread.start()
+    painting_thread.start()
 
     fitness_thread.join()
     tech_thread.join()
     vlog_thread.join()
+    painting_thread.join()
 
     # Wait for NLM artifact pollers (slides/infographic/mindmap) to finish
     # downloading + posting to Slack. Without this the process would exit and
