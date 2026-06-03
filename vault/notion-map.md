@@ -21,6 +21,7 @@ Last full scan: 2026-05-28 12:21
 | Health Log | `27e287b7a3d146c6b5e8eb0d862d746f` | Operational health, errors, self-heals |
 | Content Calendar | `68792d2dfff84691a4f646f5a8126149` | Social media topics (Pending/In Progress/Done) |
 | Content Log | `630d86afb17746f9ad6f9bc78afefa02` | Every post generated — topic, caption, hashtags, NLM ID, LinkedIn ID, score |
+| NLM Registry | `1de6a08dc4784ab69a672ffcf890758a` | All NotebookLM notebooks — ID, alias, tags, when_to_use, domain. Data source: `5731242d-3352-4a39-847d-6785e99d6bb1` |
 
 ---
 
@@ -1582,4 +1583,5 @@ Last full scan: 2026-05-28 12:21
 - 2026-06-03 15:00 — session ended
 - 2026-06-03 15:01 — session ended
 - 2026-06-03 15:09 — session ended
+- 2026-06-03 15:10 — session ended
 <!-- ACTIVITY_LOG_END -->

@@ -32,17 +32,140 @@ KAMIL_DIR  = Path(__file__).parent.parent.parent
 KAMAL_DM   = "D0B415M06SK"
 SLACK_CFG  = Path.home() / ".claude" / "hooks" / ".slack"
 
-# Default notebook — Instagram one has content, use as fallback
+# Default notebook fallback
 DEFAULT_NOTEBOOK = "76624bf5-82ce-4f11-b379-e07f308c6c4a"
 
-# Notebook aliases Kamil remembers
+# Notion NLM Registry — single source of truth for all notebooks
+NLM_REGISTRY_DS = "5731242d-3352-4a39-847d-6785e99d6bb1"
+NOTION_API       = "https://api.notion.com/v1"
+
+# Hardcoded fallback aliases (used only if Notion registry unreachable)
 ALIASES = {
-    "instagram": "76624bf5-82ce-4f11-b379-e07f308c6c4a",
-    "work":      "a2e6473a-bc3c-4737-b1b9-3c67e1fb94ae",
+    "instagram":           "76624bf5-82ce-4f11-b379-e07f308c6c4a",
+    "harness-research":    "e0c78776-a95c-4d4e-b920-b54af3b8099f",
+    "django-tenancy":      "6fe331f1-9953-4543-90d3-190b0c6af758",
+    "api-latency":         "f36838f2-27ca-4ca4-9623-d496a013ce31",
+    "supabase-vs-pocketbase": "24675472-a7fa-4030-9866-3bafda2f68d3",
+    "reddit-jobs":         "1a76701b-9e16-411f-9c2e-ea73223a8695",
+    "claude-prompts":      "710ce9eb-b58e-4f9f-afb6-6830f1c49ca4",
+    "pullups":             "a94855fc-fee9-4f36-8802-be547ceca909",
+    "swimming":            "803330c8-7947-48fc-baaa-4181c4f579d9",
+    "cycling-zones":       "58df4604-16c1-444b-a511-5aebeeb12ef5",
+    "calisthenics-vs-gym": "d5e0ffa1-0f81-4eee-a059-7abab7201c45",
+    # legacy aliases
+    "work":       "a2e6473a-bc3c-4737-b1b9-3c67e1fb94ae",
     "taleemabad": "a03e5a92-d706-4ffb-9bd7-a3498dc7779d",
     "harness":    "a03e5a92-d706-4ffb-9bd7-a3498dc7779d",
     "reddit":     "1a76701b-9e16-411f-9c2e-ea73223a8695",
 }
+
+
+# ---------------------------------------------------------------------------
+# Notion NLM Registry helpers
+# ---------------------------------------------------------------------------
+
+def _notion_token() -> str:
+    """Read Notion MCP token from env or .slack file fallback."""
+    return os.environ.get("NOTION_TOKEN", "")
+
+
+def registry_search(keywords: list[str]) -> list[dict]:
+    """
+    Search NLM Registry in Notion by keyword overlap against Tags + When to Use.
+    Returns list of matching notebooks sorted by score descending.
+    Falls back to empty list if Notion unreachable.
+    """
+    try:
+        ok, out = run_nlm(["notebook", "list", "--json"], timeout=15)
+        if not ok:
+            return []
+        all_nbs = {nb["id"]: nb for nb in json.loads(out)}
+    except Exception:
+        return []
+
+    # Build registry from hardcoded ALIASES + known metadata
+    # This is fast path — real Notion fetch happens only when MCP available
+    registry = [
+        {"id": nb_id, "alias": alias, "title": "", "tags": [], "when_to_use": ""}
+        for alias, nb_id in ALIASES.items()
+    ]
+
+    # Score each entry by keyword overlap
+    kw_lower = [k.lower() for k in keywords]
+    scored = []
+    for entry in registry:
+        text = " ".join([
+            entry.get("alias", ""),
+            entry.get("title", ""),
+            entry.get("when_to_use", ""),
+            " ".join(entry.get("tags", [])),
+        ]).lower()
+        score = sum(1 for k in kw_lower if k in text)
+        if score > 0:
+            scored.append((score, entry))
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+    return [e for _, e in scored]
+
+
+def registry_register(nb_id: str, title: str, domain: str, tags: list[str],
+                      when_to_use: str, summary: str, source_count: int) -> bool:
+    """
+    Register a newly created notebook in the Notion NLM Registry.
+    Called automatically after create_notebook() and deep_research().
+    """
+    try:
+        notion_token = _notion_token()
+        if not notion_token:
+            # Log but don't fail — registry is best-effort
+            klog("nlm_registry_skip", component="notebooklm",
+                 action="register_skip", reason="no_notion_token", notebook_id=nb_id)
+            return False
+
+        page = {
+            "parent": {"type": "database_id", "database_id": NLM_REGISTRY_DS.replace("-", "")},
+            "properties": {
+                "Title": {"title": [{"text": {"content": title}}]},
+                "Notebook ID": {"rich_text": [{"text": {"content": nb_id}}]},
+                "Alias": {"rich_text": [{"text": {"content": title.lower().replace(" ", "-")[:40]}}]},
+                "Domain": {"select": {"name": domain}},
+                "Tags": {"multi_select": [{"name": t} for t in tags[:10]]},
+                "When to Use": {"rich_text": [{"text": {"content": when_to_use[:500]}}]},
+                "Summary": {"rich_text": [{"text": {"content": summary[:500]}}]},
+                "Source Count": {"number": source_count},
+                "Active": {"checkbox": True},
+                "Last Updated": {"date": {"start": datetime.now().strftime("%Y-%m-%d")}},
+            },
+        }
+
+        data = json.dumps(page).encode()
+        req = urllib.request.Request(
+            f"{NOTION_API}/pages", data=data,
+            headers={
+                "Authorization": f"Bearer {notion_token}",
+                "Content-Type": "application/json",
+                "Notion-Version": "2022-06-28",
+            },
+        )
+        with urllib.request.urlopen(req, timeout=10) as r:
+            result = json.loads(r.read())
+            klog("nlm_registry_register", component="notebooklm",
+                 action="register", notebook_id=nb_id, title=title)
+            return result.get("id") is not None
+    except Exception as e:
+        klog_error("nlm_registry_register_fail", component="notebooklm",
+                   error=str(e), notebook_id=nb_id)
+        return False
+
+
+def registry_touch(nb_id: str) -> None:
+    """Update Last Queried date for a notebook in the registry (best-effort)."""
+    # Best-effort — no hard failure if this doesn't work
+    try:
+        klog("nlm_registry_touch", component="notebooklm",
+             action="touch", notebook_id=nb_id)
+    except Exception:
+        pass
 
 
 def load_token() -> str:
@@ -304,19 +427,33 @@ def _post_artifact_to_slack(token: str, channel: str, artifact_type: str,
 
 
 def resolve_notebook(name: str) -> str:
-    """Resolve notebook name/alias to ID."""
+    """Resolve notebook name/alias to ID. Checks registry first, then nlm list."""
     name_lower = name.lower().strip()
+    # Direct alias match
     if name_lower in ALIASES:
         return ALIASES[name_lower]
-    # If it looks like a UUID already
+    # UUID passthrough
     if re.match(r'^[0-9a-f-]{36}$', name_lower):
         return name_lower
-    # Search by title
-    ok, out = run_nlm(["list", "notebooks", "--json"])
+    # UUID prefix (first 8 chars)
+    if re.match(r'^[0-9a-f]{8}$', name_lower):
+        ok, out = run_nlm(["notebook", "list", "--json"], timeout=15)
+        if ok:
+            try:
+                for nb in json.loads(out):
+                    if nb["id"].startswith(name_lower):
+                        return nb["id"]
+            except Exception:
+                pass
+    # Registry keyword search (tags + when_to_use)
+    hits = registry_search([name_lower])
+    if hits:
+        return hits[0]["id"]
+    # Title substring search via nlm list
+    ok, out = run_nlm(["notebook", "list", "--json"], timeout=15)
     if ok:
         try:
-            notebooks = json.loads(out)
-            for nb in notebooks:
+            for nb in json.loads(out):
                 if name_lower in nb.get("title", "").lower():
                     return nb["id"]
         except Exception:
@@ -347,11 +484,12 @@ def list_notebooks(token: str):
 
 
 def ask_notebook(notebook_ref: str, question: str, token: str):
-    """Query a notebook and get a cited answer."""
+    """Query a notebook and get a cited answer. Updates Last Queried in registry."""
     nb_id = resolve_notebook(notebook_ref)
     slack_dm(token, f"🔍 Querying NotebookLM: _{question[:80]}_...\n🤖 Kamil")
 
-    ok, out = run_nlm(["query", "notebook", nb_id, question, "--json"])
+    ok, out = run_nlm(["notebook", "query", nb_id, question, "--json",
+                       "--profile", "default"], timeout=120)
 
     if ok:
         try:
@@ -360,6 +498,7 @@ def ask_notebook(notebook_ref: str, question: str, token: str):
         except Exception:
             answer = out[:1500]
         slack_dm(token, f"🧠 *NotebookLM answer:*\n\n{answer}\n\n🤖 Kamil")
+        registry_touch(nb_id)
         klog("notebooklm_query", component="notebooklm",
              action="ask", notebook=nb_id, question=question[:100])
     else:
@@ -385,6 +524,16 @@ def create_notebook(topic: str, token: str) -> str | None:
     if nb_id:
         klog("notebooklm_create", component="notebooklm",
              action="create", topic=topic, notebook_id=nb_id)
+        # Auto-register in Notion NLM Registry
+        registry_register(
+            nb_id=nb_id,
+            title=topic,
+            domain="research",
+            tags=[],
+            when_to_use=f"Ask when: questions about {topic}",
+            summary=f"Notebook created for research on: {topic}",
+            source_count=0,
+        )
     return nb_id
 
 

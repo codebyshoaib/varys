@@ -16,6 +16,7 @@
 | Working on taleemabad-core (STOP protocol) | `.claude/rules/taleemabad.md` |
 | Content pipeline + topic rules | `.claude/rules/content.md` |
 | Which skill for which issue | `.claude/rules/skills-router.md` |
+| NotebookLM registry + smart routing | `.claude/rules/notebooklm.md` |
 | Active work / decisions / failures | `.beads/` |
 | Doc-type, retrieval, invocation, metadata policy | `.claude/standards/` |
 | Eval harness | `.claude/evals/` |
