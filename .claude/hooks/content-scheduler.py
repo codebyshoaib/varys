@@ -29,12 +29,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 from kamil_log import klog, klog_error
 
-# NLM fallback: Claude research + Canva carousel
+# NLM fallback: Claude research + Canva infographic
 _SCRIPTS_DIR = Path(__file__).parent.parent.parent / "scripts"
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 from claude_researcher import research as claude_research, ResearchResult
-from canva_carousel import CarouselBrief, generate_carousel
+from canva_infographic import generate_infographic as canva_generate_infographic
 
 # ─── Emotional Content Playbook ───────────────────────────────────────────────
 # Loaded once at startup — injected into every caption/script/NLM prompt
@@ -783,38 +783,58 @@ def post_linkedin(caption: str, image_path: str | None) -> str:
         return f"❌ LinkedIn error: {e}"
 
 def run_nlm_fallback(token: str, topic: str, track: str) -> "ResearchResult | None":
-    """Claude research + Canva carousel when NLM quota is exhausted."""
+    """Claude research + Canva infographic when NLM quota is exhausted.
+
+    Produces ONE professional single-panel infographic matching NLM quality.
+    Returns ResearchResult so the caller can use .insights for the caption.
+    Also returns the local infographic path via result.infographic_path (set here).
+    """
     print(f"[scheduler] NLM fallback: running Claude research for '{topic}'")
     slack_dm(token,
-        f"🔄 *NLM quota hit — switching to Claude + Canva carousel for {track}*\n"
+        f"🔄 *NLM quota hit — switching to Claude + Canva infographic for {track}*\n"
         f"Researching: *{topic}*\n🤖 Kamil")
 
     result = claude_research(topic, track)
     print(f"[scheduler] Claude research done — hook: {result.hook[:60]}")
 
-    brief = CarouselBrief(
+    outfile = f"/tmp/canva-infographic-{track}-{int(time.time())}.png"
+    infographic = canva_generate_infographic(
         topic=topic,
         track=track,
         hook=result.hook,
         insights=result.insights,
+        angle=result.caption_angle if hasattr(result, "caption_angle") else "awe",
+        output_path=outfile,
     )
-    carousel = generate_carousel(brief)
-    slide_count = carousel["slide_count"]
-    edit_urls = [u for u in carousel["edit_urls"] if u]
-    errors = carousel["errors"]
 
-    if errors:
-        print(f"[scheduler] Carousel errors: {errors}")
+    if infographic.get("error"):
+        print(f"[scheduler] Canva infographic error: {infographic['error']}")
+        infographic_path = None
+    else:
+        infographic_path = infographic.get("local_path") or None
+        print(f"[scheduler] Canva infographic ready: {infographic_path}")
 
     insights_text = "\n".join(f"  {i+1}. {ins}" for i, ins in enumerate(result.insights))
-    urls_text = "\n".join(f"  Slide {i+1}: {u}" for i, u in enumerate(edit_urls))
+    edit_url = infographic.get("edit_url", "")
+
     slack_dm(token,
-        f"🎠 *Canva carousel ready — {topic}*\n\n"
+        f"🖼️ *Canva infographic ready — {topic}*\n\n"
         f"*Hook:* {result.hook}\n\n"
-        f"*Key insights ({len(result.insights)}):*\n{insights_text}\n\n"
-        f"*Research summary:* {result.summary}\n\n"
-        f"*Edit slides in Canva ({slide_count} slides):*\n{urls_text}\n\n"
-        f"🤖 Kamil")
+        f"*Key insights:*\n{insights_text}\n\n"
+        f"*Research summary:* {result.summary}"
+        + (f"\n\n*Edit in Canva:* {edit_url}" if edit_url else "")
+        + "\n\n🤖 Kamil")
+
+    if infographic_path and Path(infographic_path).exists():
+        slack_upload(token, infographic_path,
+                     title=f"{topic} — infographic",
+                     comment=f"🖼️ Infographic for *{topic}* ({track})")
+
+    # Attach path to result object so caller can use it for LinkedIn
+    try:
+        result.infographic_path = infographic_path
+    except Exception:
+        pass
 
     return result
 
@@ -867,6 +887,8 @@ def run_fitness_or_tech(track: str, token: str):
         f"Score: {score}/100 | {reason}\n"
         f"Checking NLM notebooks + generating...\n🤖 Kamil")
 
+    _fallback_infographic = None  # set by run_nlm_fallback() if quota hit
+
     # NLM pipeline — use Notion-stored notebook ID first, then search, then create
     if existing_nb_id:
         count = nlm_get_source_count(existing_nb_id)
@@ -895,6 +917,8 @@ def run_fitness_or_tech(track: str, token: str):
                         "\n".join(f"- {ins}" for ins in fallback_result.insights) +
                         f"\n\nSummary: {fallback_result.summary}"
                     )
+                    # Store fallback infographic path for LinkedIn use below
+                    _fallback_infographic = getattr(fallback_result, "infographic_path", None)
             else:
                 had_sources = True
         if nb_id and had_sources:
@@ -945,12 +969,15 @@ def run_fitness_or_tech(track: str, token: str):
         needs_review = [k for k, v in canva_results.items() if v.get("status") == "Needs-Kamal"]
         klog("canva_designs", passed=len(passed), needs_review=len(needs_review))
 
-    # LinkedIn (tech only) — wait for NLM infographic, fall back to text-only
+    # LinkedIn (tech only) — NLM infographic first, Canva fallback infographic second, text-only last
     li_result = ""
     if track == "tech":
         li_image = None
         if nb_id and artifacts_state.get("infographic") == "triggered":
             li_image = wait_for_nlm_infographic(nb_id, max_wait=300)
+        if not li_image and _fallback_infographic and Path(_fallback_infographic).exists():
+            li_image = _fallback_infographic
+            print(f"[scheduler] Using Canva fallback infographic for LinkedIn: {li_image}")
         li_result = post_linkedin(linkedin_caption, li_image)
         print(f"[scheduler] LinkedIn: {li_result}")
 
