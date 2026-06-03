@@ -128,8 +128,14 @@ def _page_title(page: dict) -> str:
 
 def _page_status(page: dict) -> str:
     props = page.get("properties", {})
-    status_prop = props.get("Status", {})
-    return status_prop.get("status", {}).get("name", "Unknown")
+    # Harness DB uses "Phase" (select), not "Status"
+    for name in ("Phase", "Status"):
+        prop = props.get(name, {})
+        if prop.get("type") == "select":
+            return prop.get("select", {}).get("name", "Unknown") or "Unknown"
+        if prop.get("type") == "status":
+            return prop.get("status", {}).get("name", "Unknown") or "Unknown"
+    return "Unknown"
 
 
 def _build_subagent_prompt(
