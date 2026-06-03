@@ -24,6 +24,10 @@ try:
     import kamil_log as _k
 except Exception:
     _k = None
+try:
+    from kamil_notion import notion_request as _notion_request
+except Exception:
+    _notion_request = None
 
 NOTION_CONFIG   = Path.home() / ".claude" / "hooks" / ".notion"
 DB_PAGE_WORK_LOG = "0b71db855f914d18ac6d97c0f77fc21e"
@@ -62,10 +66,17 @@ def notion_create_page(api_key: str, db_id: str, properties: dict, content: str 
         },
         method="POST",
     )
+    # COMMIT-POINT RULE (harness-v2):
+    # For UPDATE flows: always write Status LAST — a successful Status write = work complete.
+    # This file only does CREATE (all-or-nothing) — rule applies when extending to updates.
     try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            result = json.loads(resp.read())
-            return "id" in result
+        if _notion_request:
+            _, body = _notion_request(req)
+            result = json.loads(body)
+        else:
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                result = json.loads(resp.read())
+        return "id" in result
     except urllib.error.HTTPError as e:
         err = e.read().decode()
         print(f"[stop-notion] Notion create error {e.code}: {err[:200]}", file=sys.stderr)

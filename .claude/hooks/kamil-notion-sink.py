@@ -3,6 +3,12 @@
 'Kamil Observability' DB. If no direct Notion token, queue for MCP flush. Never raises."""
 import json, os, sys, urllib.request
 from pathlib import Path
+import sys as _sys
+_sys.path.insert(0, str(Path(__file__).parent))
+try:
+    from kamil_notion import notion_request as _notion_request
+except Exception:
+    _notion_request = None
 
 OBS_DB = os.environ.get("KAMIL_OBS_DB", "8b0f5754470540dfb832a61380a2a9b9")  # Kamil Observability DB
 TOKEN_FILE = Path.home() / ".claude" / "hooks" / ".notion"
@@ -45,7 +51,10 @@ def push(*, title, severity, component, event, trace_id="", root_cause="",
         req = urllib.request.Request("https://api.notion.com/v1/pages", data=payload,
             headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json",
                      "Notion-Version": "2022-06-28"})
-        with urllib.request.urlopen(req, timeout=10): pass
+        if _notion_request:
+            _notion_request(req)
+        else:
+            with urllib.request.urlopen(req, timeout=10): pass
         return "sent"
     except Exception:
         try:
