@@ -17,6 +17,7 @@
 | Content pipeline + topic rules | `.claude/rules/content.md` |
 | Which skill for which issue | `.claude/rules/skills-router.md` |
 | NotebookLM registry + smart routing | `.claude/rules/notebooklm.md` |
+| Team orchestrator rules + event types | `.claude/rules/orchestrator.md` |
 | Active work / decisions / failures | `.beads/` |
 | Doc-type, retrieval, invocation, metadata policy | `.claude/standards/` |
 | Eval harness | `.claude/evals/` |
@@ -41,7 +42,23 @@ SessionStart hook→ surfaces unsynced Slack items + tells Claude to fetch Notio
 Stop hook        → writes Work Log to Notion + commits vault/logs
 Job Hunter       → job-finder.py cron; internet-scanner; auto-apply (score≥75); OpenOutreach monitor
 NotebookLM       → nlm CLI; trigger with "nlm ..." on Slack (list/ask/research/podcast/slides/mindmap/quiz)
+Team Orchestrator→ /loop 270s — see .claude/rules/orchestrator.md for full rules
 ```
+
+## Team Orchestrator (/loop — 270s tick, never change interval without asking Kamal)
+
+```
+1. kamil_harness_db: acquire tick lock → read last_sync_at
+   (if lock held: exit immediately — another tick is running)
+2. poll-harness-notion.py  → Notion Harness DB: new/updated tickets assigned to Kamil
+3. poll-eng-slack.py       → #engineering-* channels: @Kamil mentions (SLACK_USER_TOKEN)
+4. poll-taleemabad-github.py → taleemabad-core: PRs on agent branches (entity-filtered)
+   (if ANY poller fails: release lock, abort — do NOT update last_sync_at)
+5. orchestrator-dispatch.py → group pending events by context_key → spawn subagents
+6. kamil_harness_db: set last_sync_at=now → release tick lock
+```
+
+Detail: `.claude/rules/orchestrator.md` · DB: `~/.kamil-harness/harness.db`
 
 ## NotebookLM (Slack "nlm" prefix)
 `nlm list | ask [nb] [q] | research [topic] | create | podcast | brief | debate | slides | mindmap | quiz`.
