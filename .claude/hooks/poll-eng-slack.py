@@ -71,10 +71,10 @@ def _load_config() -> dict:
 def _slack_search(user_token: str, oldest_ts: str) -> list[dict]:
     """Search all engineering channels for @Kamil mentions since oldest_ts."""
     params = urllib.parse.urlencode({
-        "query": f"<@U0B4L7RVA8L> OR @Kamil OR Kamil in:#engineering-learning",
+        "query": "in:#engineering-learning",
         "sort": "timestamp",
         "sort_dir": "asc",
-        "count": 20,
+        "count": 50,
     })
     req = urllib.request.Request(
         f"https://slack.com/api/search.messages?{params}",
@@ -88,12 +88,18 @@ def _slack_search(user_token: str, oldest_ts: str) -> list[dict]:
         raise RuntimeError(f"search.messages failed: {data.get('error')}")
 
     messages = data.get("messages", {}).get("matches", [])
-    # Filter to engineering channels and messages newer than oldest_ts
+    # Filter: engineering channel + newer than oldest_ts + mentions Kamil
     filtered = []
     for m in messages:
         ch = m.get("channel", {}).get("id", "")
         ts = m.get("ts", "0")
-        if ch in ENGINEERING_CHANNELS and float(ts) > float(oldest_ts):
+        text = m.get("text", "").lower()
+        mentions_kamil = (
+            "u0b4l7rva8l" in text or   # bot user ID mention
+            "@kamil" in text or
+            "kamil" in text
+        )
+        if ch in ENGINEERING_CHANNELS and float(ts) > float(oldest_ts) and mentions_kamil:
             filtered.append(m)
     return filtered
 
