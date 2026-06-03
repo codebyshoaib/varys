@@ -587,10 +587,8 @@ Reply now. Do NOT output any mode label, header, or internal reasoning — just 
     answer = run_claude(prompt, cwd=str(KAMIL_DIR), timeout=300, event_context=source)
     latency = round(time.time() - t0, 1)
 
-    # DMs must NOT use thread_ts — it creates hidden sub-threads invisible in main DM view
-    reply_kwargs = {"channel": channel, "text": answer}
-    if not is_dm:
-        reply_kwargs["thread_ts"] = thread_ts
+    # Always reply with thread_ts so the reply appears directly below the original message
+    reply_kwargs = {"channel": channel, "text": answer, "thread_ts": thread_ts}
     web.chat_postMessage(**reply_kwargs)
     log(f"[{source}] replied: {answer[:80]}")
 
