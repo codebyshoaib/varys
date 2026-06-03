@@ -581,7 +581,7 @@ When Kamal asks about a person ("how is Fatima?", "what does Haroon need?"):
 Source: {source}
 Kamal says: "{text}"
 
-Pick your mode. Execute. Sign off: 🤖 Kamil"""
+Reply now. Do NOT output any mode label, header, or internal reasoning — just the response itself. Sign off: 🤖 Kamil"""
 
     t0 = time.time()
     answer = run_claude(prompt, cwd=str(KAMIL_DIR), timeout=300, event_context=source)
