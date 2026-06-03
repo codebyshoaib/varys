@@ -886,61 +886,58 @@ def post_linkedin(caption: str, image_path: str | None) -> str:
     except Exception as e:
         return f"❌ LinkedIn error: {e}"
 
-def run_nlm_fallback(token: str, topic: str, track: str) -> "ResearchResult | None":
-    """Claude research + Canva infographic when NLM quota is exhausted.
+def _try_nlm_research_and_visuals(topic: str, profile: str) -> tuple[str | None, str]:
+    """Try to create/reuse an NLM notebook and trigger visuals using the given profile.
 
-    Produces ONE professional single-panel infographic matching NLM quality.
-    Returns ResearchResult so the caller can use .insights for the caption.
-    Also returns the local infographic path via result.infographic_path (set here).
+    Returns (nb_id, insights) or (None, "") on quota/failure.
+    Temporarily overrides NLM_PROFILE for this call via a local wrapper.
     """
-    print(f"[scheduler] NLM fallback: running Claude research for '{topic}'")
-    slack_dm(token,
-        f"🔄 *NLM quota hit — switching to Claude + Canva infographic for {track}*\n"
-        f"Researching: *{topic}*\n🤖 Kamil")
-
-    result = claude_research(topic, track)
-    print(f"[scheduler] Claude research done — hook: {result.hook[:60]}")
-
-    outfile = f"/tmp/canva-infographic-{track}-{int(time.time())}.png"
-    infographic = canva_generate_infographic(
-        topic=topic,
-        track=track,
-        hook=result.hook,
-        insights=result.insights,
-        angle=result.caption_angle if hasattr(result, "caption_angle") else "awe",
-        output_path=outfile,
-    )
-
-    if infographic.get("error"):
-        print(f"[scheduler] Canva infographic error: {infographic['error']}")
-        infographic_path = None
-    else:
-        infographic_path = infographic.get("local_path") or None
-        print(f"[scheduler] Canva infographic ready: {infographic_path}")
-
-    insights_text = "\n".join(f"  {i+1}. {ins}" for i, ins in enumerate(result.insights))
-    edit_url = infographic.get("edit_url", "")
-
-    slack_dm(token,
-        f"🖼️ *Canva infographic ready — {topic}*\n\n"
-        f"*Hook:* {result.hook}\n\n"
-        f"*Key insights:*\n{insights_text}\n\n"
-        f"*Research summary:* {result.summary}"
-        + (f"\n\n*Edit in Canva:* {edit_url}" if edit_url else "")
-        + "\n\n🤖 Kamil")
-
-    if infographic_path and Path(infographic_path).exists():
-        slack_upload(token, infographic_path,
-                     title=f"{topic} — infographic",
-                     comment=f"🖼️ Infographic for *{topic}* ({track})")
-
-    # Attach path to result object so caller can use it for LinkedIn
+    orig = os.environ.get("NLM_PROFILE")
+    os.environ["NLM_PROFILE"] = profile
     try:
-        result.infographic_path = infographic_path
-    except Exception:
-        pass
+        nb_id, had_sources = nlm_get_or_create_notebook(topic)
+        if not nb_id:
+            return None, ""
+        if not had_sources:
+            ok = nlm_research(nb_id, topic)
+            if not ok:
+                run_nlm(["delete", "notebook", nb_id, "--confirm"], timeout=30)
+                return None, ""
+        insights = nlm_query_for_content(nb_id, topic)
+        if not insights:
+            run_nlm(["delete", "notebook", nb_id, "--confirm"], timeout=30)
+            return None, ""
+        nlm_trigger_visuals(nb_id, topic)
+        return nb_id, insights
+    finally:
+        if orig is None:
+            os.environ.pop("NLM_PROFILE", None)
+        else:
+            os.environ["NLM_PROFILE"] = orig
 
-    return result
+
+def run_nlm_with_profile_fallback(token: str, topic: str, track: str) -> tuple[str | None, str, dict]:
+    """Try work NLM profile, then personal profile. Returns (nb_id, insights, artifacts_state).
+
+    If both profiles are quota-exhausted: DMs Kamal, returns (None, "", {}).
+    Canva is NOT used as fallback — if both NLM accounts are out, we skip visuals.
+    """
+    for profile, label in [(NLM_PROFILE, "work"), (NLM_PROFILE_PERSONAL, "personal")]:
+        print(f"[scheduler] Trying NLM profile: {label} ({profile})")
+        nb_id, insights = _try_nlm_research_and_visuals(topic, profile)
+        if nb_id and insights:
+            print(f"[scheduler] NLM {label} profile succeeded: notebook {nb_id[:8]}")
+            artifacts_state = {"slide_deck": "triggered", "infographic": "triggered", "mind_map": "triggered"}
+            return nb_id, insights, artifacts_state
+        print(f"[scheduler] NLM {label} profile exhausted or failed")
+
+    # Both profiles exhausted
+    print(f"[scheduler] Both NLM profiles exhausted for '{topic}' — skipping visuals")
+    slack_dm(token,
+        f"⚠️ *Both NLM accounts quota-exhausted for {track}*\n"
+        f"Topic: *{topic}*\n"
+        f"Caption will still go out — no infographic today for this track.\n🤖 Kamil")
+    return None, "", {}
 
 
 # ─── Canva ───────────────────────────────────────────────────────────────────
@@ -991,97 +988,43 @@ def run_fitness_or_tech(track: str, token: str):
         f"Score: {score}/100 | {reason}\n"
         f"Checking NLM notebooks + generating...\n🤖 Kamil")
 
-    _fallback_infographic = None  # set by run_nlm_fallback() if quota hit
+    # NLM pipeline — try work profile first, personal profile second, skip visuals if both exhausted
+    # If Notion has a stored notebook ID, try to reuse it on the work profile first
+    nlm_insights = ""
+    artifacts_state = {}
+    nb_id = None
 
-    # NLM pipeline — use Notion-stored notebook ID first, then search, then create
     if existing_nb_id:
         count = nlm_get_source_count(existing_nb_id)
         print(f"[scheduler] Notion-stored NLM notebook {existing_nb_id[:8]} has {count} sources")
-        nb_id, had_sources = existing_nb_id, count > 0
-    else:
-        nb_id, had_sources = nlm_get_or_create_notebook(topic)
-    nlm_insights = ""
-    artifacts_state = {}
-    if nb_id:
-        if not had_sources:
-            research_ok = nlm_research(nb_id, topic)
-            if not research_ok:
-                print(f"[scheduler] NLM research failed (API quota/error), running Claude+Canva fallback")
-                klog_error("nlm_research_failed",
-                          component="content-scheduler",
-                          topic=topic, track=track,
-                          severity="warning")
-                run_nlm(["delete", "notebook", nb_id, "--confirm"], timeout=30)
-                nb_id = None  # Clear notebook ID to skip Notion save + artifact polling
-                fallback_result = run_nlm_fallback(token, topic, track)
-                if fallback_result:
-                    nlm_insights = (
-                        f"Hook: {fallback_result.hook}\n\n"
-                        f"Insights:\n" +
-                        "\n".join(f"- {ins}" for ins in fallback_result.insights) +
-                        f"\n\nSummary: {fallback_result.summary}"
-                    )
-                    # Store fallback infographic path for LinkedIn use below
-                    _fallback_infographic = getattr(fallback_result, "infographic_path", None)
-            else:
-                had_sources = True
-        if nb_id and had_sources:
-            nlm_insights = nlm_query_for_content(nb_id, topic)
-            # Only trigger visuals if we have insights
+        if count > 0:
+            nlm_insights = nlm_query_for_content(existing_nb_id, topic)
             if nlm_insights:
-                nlm_trigger_visuals(nb_id, topic)
-                # Mark all 3 artifacts as triggered only if we have insights
+                nlm_trigger_visuals(existing_nb_id, topic)
+                nb_id = existing_nb_id
                 artifacts_state = {"slide_deck": "triggered", "infographic": "triggered", "mind_map": "triggered"}
-            else:
-                # Query returned empty — don't attempt artifact triggering
-                print(f"[scheduler] NLM query returned no insights, skipping artifact generation")
-                nb_id = None
-        elif nb_id:
-            # Notebook exists but has 0 sources — verify source count before proceeding
-            final_count = nlm_get_source_count(nb_id)
-            if final_count == 0:
-                print(f"[scheduler] NLM notebook {nb_id[:8]} still has 0 sources after check, deleting")
-                run_nlm(["delete", "notebook", nb_id, "--confirm"], timeout=30)
-                nb_id = None
-            else:
-                # Sources exist but had_sources was False — query and proceed
-                nlm_insights = nlm_query_for_content(nb_id, topic)
-                if nlm_insights:
-                    nlm_trigger_visuals(nb_id, topic)
-                    artifacts_state = {"slide_deck": "triggered", "infographic": "triggered", "mind_map": "triggered"}
-                else:
-                    run_nlm(["delete", "notebook", nb_id, "--confirm"], timeout=30)
-                    nb_id = None
+
+    if not nb_id:
+        nb_id, nlm_insights, artifacts_state = run_nlm_with_profile_fallback(token, topic, track)
+        if not nb_id:
+            klog_error("nlm_both_profiles_exhausted",
+                       component="content-scheduler",
+                       topic=topic, track=track, severity="warning")
 
     # Store NLM notebook ID back on the Content Calendar page for future runs
     if nb_id:
         notion_update_page(page_id, {"NLMNotebookID": {"rich_text": [{"text": {"content": nb_id}}]}})
 
-    # Branded image (for Instagram/TikTok/Slack preview — NOT LinkedIn)
-    image_path = generate_image(topic, track)
-
-    # Caption for Instagram/TikTok/Reels
+    # Captions
     caption = generate_caption(topic, track, score, reason, nlm_insights)
-
-    # LinkedIn caption — professional, separate from social caption
     linkedin_caption = generate_linkedin_caption(topic, score, reason, nlm_insights) if track == "tech" else ""
 
-    # ── Canva designs ────────────────────────────────────────────────────
-    canva_results = run_canva_designs(topic=topic, copy=caption[:120])
-    if canva_results:
-        passed = [k for k, v in canva_results.items() if v.get("status") == "draft"]
-        needs_review = [k for k, v in canva_results.items() if v.get("status") == "Needs-Kamal"]
-        klog("canva_designs", passed=len(passed), needs_review=len(needs_review))
-
-    # LinkedIn (tech only) — NLM infographic first, Canva fallback infographic second, text-only last
+    # LinkedIn (tech only) — wait for NLM infographic, text-only if not available
     li_result = ""
     if track == "tech":
         li_image = None
         if nb_id and artifacts_state.get("infographic") == "triggered":
             li_image = wait_for_nlm_infographic(nb_id, max_wait=300)
-        if not li_image and _fallback_infographic and Path(_fallback_infographic).exists():
-            li_image = _fallback_infographic
-            print(f"[scheduler] Using Canva fallback infographic for LinkedIn: {li_image}")
         li_result = post_linkedin(linkedin_caption, li_image)
         print(f"[scheduler] LinkedIn: {li_result}")
 
@@ -1092,32 +1035,23 @@ def run_fitness_or_tech(track: str, token: str):
         "NLMNotebookID":  {"rich_text": [{"text": {"content": nb_id or ""}}]},
     })
 
-    li_line  = f"\n✅ Auto-posted to LinkedIn: {li_result}" if track == "tech" else ""
-    nb_line  = f"\n📓 NLM `{nb_id[:8]}...` — slides + mindmap still rendering" if nb_id else ""
-
-    li_section = (
-        f"\n\n*LinkedIn post (already live):*\n{linkedin_caption}"
-        if linkedin_caption else ""
-    )
+    li_line = f"\n✅ Auto-posted to LinkedIn: {li_result}" if track == "tech" else ""
+    nb_line = f"\n📓 NLM `{nb_id[:8]}...` — infographic + slides + mindmap delivering shortly" if nb_id else "\n⚠️ No NLM visuals (both accounts quota-exhausted)"
+    li_section = f"\n\n*LinkedIn post (already live):*\n{linkedin_caption}" if linkedin_caption else ""
 
     slack_dm(token,
         f"📊 *{track.upper()} content ready — {topic}*\n"
         f"Score: {score}/100 — {reason}"
         f"{li_line}{nb_line}"
         f"{li_section}\n\n"
-        f"*Instagram/TikTok caption (paste this):*\n{caption}\n\n"
-        f"📱 Post to Instagram + TikTok (branded image coming)\n🤖 Kamil")
-
-    if image_path:
-        slack_upload(token, image_path,
-                     title=f"{topic} — branded",
-                     comment=f"🎨 Branded image for *{topic}*")
+        f"*Instagram/TikTok caption:*\n{caption}\n\n"
+        f"📱 Post to Instagram + TikTok\n🤖 Kamil")
 
     # Extract hashtags from caption for logging
     hashtag_line = " ".join(w for w in caption.split() if w.startswith("#"))
-    vlog_angle = f"Behind the build: the moment that made '{topic}' worth posting — what was happening in Islamabad when this was created."
+    vlog_angle = f"Behind the build: '{topic}'"
 
-    # Log everything to Notion Content Log — get back the log page ID
+    # Log everything to Notion Content Log
     platforms = ["TikTok", "Instagram", "YouTube Shorts", "Facebook"]
     if track == "tech" and li_result and "✅" in li_result:
         platforms.append("LinkedIn")
@@ -1127,7 +1061,7 @@ def run_fitness_or_tech(track: str, token: str):
         caption=caption, hashtags=hashtag_line, nb_id=nb_id or "",
         li_post_id=li_result if li_result and "urn:" in li_result else "",
         vlog_angle=linkedin_caption or vlog_angle, platforms=platforms,
-        status="Posted" if (image_path or li_result) else "Generated",
+        status="Posted" if li_result else ("Generated" if nb_id else "No visuals"),
         nlm_insights=nlm_insights,
         nlm_artifacts=artifacts_state,
         calendar_page_id=page_id,
