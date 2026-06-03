@@ -12,30 +12,29 @@
 After reviewing orchestration-harness-v2, we found 8 concrete patterns the Kamil agent is either missing or doing incorrectly. More importantly, the harness-v2 architecture — Notion+Slack+GitHub unified into one orchestration loop — is exactly what Kamil needs to become a **team orchestrator**, not just Kamal's personal agent.
 
 This plan has two layers:
-1. **Foundation fixes** (Tasks 7–11): Apply harness-v2 learnings to existing Kamil hooks
+1. **Foundation fixes** (Tasks 8–11): Apply harness-v2 learnings to existing Kamil hooks
 2. **Team orchestrator** (Task 12): Evolve Kamil into a system that coordinates work across the whole taleemabad engineering team
 
 ---
 
-## Layer 1: Foundation Fixes
+## NotebookLM Usage Policy (Updated)
 
-### Task 7 — Create NLM Notebook from orchestration-harness-v2
-**File:** Slack trigger → `nlm research`  
-**Time:** 10 min
+NotebookLM is a **content and research tool**, not a knowledge base for engineering patterns.
 
-**Problem:** The harness-v2 knowledge lives in a cloned repo on disk. If someone asks Kamil about orchestration patterns, entity graphs, or tick design 3 months from now, the repo might be gone and the knowledge is lost.
+| Use NLM for | Do NOT use NLM for |
+|---|---|
+| Content creation (scripts, posts, carousels) | Engineering Q&A |
+| Internet research on a topic (fitness, niches, trends) | Pattern lookups from code repos |
+| Podcast/slides/mindmap generation | Answering Slack engineering questions |
+| Pre-researched topic deep-dives for content | Storing architectural knowledge |
 
-**Fix:** Create a NotebookLM notebook with the key docs as sources, register it in the Notion NLM Registry so Kamil can query it forever.
+**When Kamil gets an engineering question:** Read the actual source — the repo, the code, the docs — directly. Use `gh repo clone`, `Read`, `Grep`, `WebFetch`. Live source is always more accurate than a stale notebook copy.
 
-**Exact steps:**
-1. Run: `nlm research "orchestration-harness-v2 patterns"` on Slack → creates notebook
-2. Add sources: CONTEXT.md, design spec, all 6 skill files, schema.sql, CLAUDE.md from `/tmp/orchestration-harness-v2/`
-3. Update registry entry: alias=`harness-orchestration`, domain=`engineering`, tags=`[harness, ai-agents, django, taleemabad, orchestration]`, when_to_use=`"Ask when: event loop design, tick lock patterns, entity graph, Notion polling, deterministic event IDs, subagent context injection, SQLite orchestration state"`
-4. Update `ALIASES` in `notebooklm_handler.py` to include `"harness-orchestration": "<new_nb_id>"`
-
-**Verification:** `nlm ask harness-orchestration "what is the tick lock pattern?"` → returns cited answer
+**Task 7 is removed.** Creating a NotebookLM notebook from harness-v2 would add indirection and create a stale copy of living code. The harness-v2 repo IS the source. Kamil reads it directly when needed.
 
 ---
+
+## Layer 1: Foundation Fixes
 
 ### Task 8 — Tick Lock in `slack-poller.py`
 **File:** `.claude/hooks/slack-poller.py`  
@@ -397,7 +396,6 @@ Subagent (taleemabad-core worktree)
 ## Implementation Sequence
 
 ```
-Task 7  (10 min)  → NLM notebook + registry entry
 Task 8  (30 min)  → Tick lock in slack-poller.py
 Task 9  (45 min)  → Persistent dedup in kamil-slack-listener.py
 Task 11 (30 min)  → kamil_notion.py shared utility + audit all hooks
@@ -405,7 +403,7 @@ Task 10 (20 min)  → Commit-point comment + retry in stop-notion.py (uses Task 
 Task 12 (separate session) → Full team orchestrator build
 ```
 
-**Total for foundation fixes:** ~2.5 hours  
+**Total for foundation fixes:** ~2 hours  
 **Total for team orchestrator:** ~1 full day (planned separately)
 
 ---
@@ -417,7 +415,6 @@ Task 12 (separate session) → Full team orchestrator build
 - [ ] `kamil-slack-listener.py`: kill + restart → no duplicate message processing
 - [ ] `stop-notion.py`: force 429 → retries once, succeeds
 - [ ] `kamil_notion.py`: all 4 hook files import and use it
-- [ ] NLM notebook: `nlm ask harness-orchestration "tick lock pattern"` → cited answer
 
 **Team orchestrator done when:**
 - [ ] Create Notion Harness ticket assigned to Kamil → subagent spawns within 270s

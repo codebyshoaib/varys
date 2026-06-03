@@ -9,16 +9,27 @@ last_verified: 2026-06-03
 Every notebook Kamil creates is registered in **Notion NLM Registry** (`1de6a08dc4784ab69a672ffcf890758a`).
 This registry is the single source of truth. **Always check it before answering any research question.**
 
+## When to Use NotebookLM
+
+NotebookLM is a **content and research tool**. Use it for:
+- Content creation (scripts, posts, carousels, podcasts, mindmaps)
+- Internet research on a topic (fitness, niches, trends, freelance)
+- Pre-researched deep-dives for content generation
+
+**Do NOT use NotebookLM for:**
+- Engineering Q&A — read the actual source code/repo/docs directly
+- Pattern lookups from code repos — clone and read the repo
+- Answering Slack engineering questions — use WebFetch, Grep, or gh CLI
+- Storing architectural knowledge — living code is always more accurate
+
 ## The Rule
 
-> Before answering any question about a topic Kamil has researched, check the NLM Registry.
-> If a matching notebook exists — query it. Answer with cited evidence, not from training memory.
+> For engineering questions: read the source directly (repo, code, docs).
+> For content/research questions: check the NLM Registry first.
 
-This applies in ALL contexts:
-- Slack question arrives → search registry → query notebook → answer with citations
-- Someone wants to implement something → find relevant notebook → pull implementation guidance
-- Working on a taleemabad feature → check if there's engineering research on the pattern
-- Kamal asks "how do I..." → registry first, training data second
+Engineering question arrives on Slack → use tools (WebFetch, gh CLI, Read) to find the answer from the actual source. Never create a NotebookLM notebook as a proxy for a live codebase.
+
+Content/research question arrives → check NLM Registry → query matching notebook → answer with citations.
 
 ## How to Search
 
