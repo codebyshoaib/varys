@@ -43,7 +43,8 @@ HARNESS_CFG = Path.home() / ".kamil-harness" / "config.json"
 ENGINEERING_CHANNELS = [
     "C0AUM8DQ2KA",  # #engineering-learning
 ]
-KAMIL_BOT_USER = "U0B4L7RVA8L"
+KAMIL_BOT_USER  = "U0B4L7RVA8L"
+KAMIL_SLACK_ID  = "U0AV1DX3WSE"   # Kamal's personal Slack user ID (for @Kamil go detection)
 
 NOTION_HARNESS_DB = "de10157da3e34ef58a74ea240f31fe98"
 
@@ -223,6 +224,42 @@ def main() -> int:
         )
         if db.execute("SELECT changes()").fetchone()[0] > 0:
             new_events += 1
+
+        # Detect "@Kamil go" — triggers Phase 2 worker for awaiting_approval sessions
+        text_lower = msg.get("text", "").lower()
+        if "go" in text_lower and (
+            "kamil" in text_lower or
+            f"<@{KAMIL_SLACK_ID}>" in msg.get("text", "")
+        ):
+            go_thread_ts = msg.get("thread_ts") or msg.get("ts")
+            ext_id       = f"{channel_id}/{go_thread_ts}"
+            linked_ctx   = db.execute(
+                "SELECT e.id FROM entities e "
+                "JOIN links l ON l.entity_a = e.id OR l.entity_b = e.id "
+                "JOIN entities e2 ON (l.entity_a = e2.id OR l.entity_b = e2.id) "
+                "WHERE e2.source='slack' AND e2.external_id=? AND e.source='notion'",
+                (ext_id,)
+            ).fetchone()
+            if linked_ctx:
+                context_key = linked_ctx[0]
+                waiting = db.execute(
+                    "SELECT id FROM sessions WHERE context_key=? AND status='awaiting_approval'",
+                    (context_key,)
+                ).fetchone()
+                if waiting:
+                    go_event_id = f"slack-go-{channel_id}-{msg.get('ts', '')}"
+                    db.execute(
+                        "INSERT OR IGNORE INTO events "
+                        "(id, source, type, context_key, payload, status, received_at) "
+                        "VALUES (?, 'slack', 'message.go_signal', ?, ?, 'pending', datetime('now'))",
+                        (go_event_id, context_key,
+                         json.dumps({"session_id": waiting[0], "channel": channel_id,
+                                     "thread_ts": go_thread_ts}))
+                    )
+                    if db.execute("SELECT changes()").fetchone()[0] > 0:
+                        print(f"[poll-slack] go_signal queued for context_key={context_key}")
+                        new_events += 1
+
         db.commit()
 
     print(f"[poll-slack] Done. {len(messages)} messages, {new_events} new events.")
