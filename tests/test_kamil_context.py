@@ -77,12 +77,15 @@ def test_resolve_person_not_found_raises():
     import kamil_context as kc
     kc.HARNESS_DB = path
     kc.init_schema()
+    orig = kc._notion_fetch_person
     kc._notion_fetch_person = lambda name: None
     try:
         kc.resolve_person("Nobody Here")
         assert False, "Should have raised PersonNotFound"
     except kc.PersonNotFound:
         pass
+    finally:
+        kc._notion_fetch_person = orig
 
 def test_resolve_person_ambiguous_raises():
     import tempfile
@@ -92,9 +95,12 @@ def test_resolve_person_ambiguous_raises():
     kc.HARNESS_DB = path
     _seed_person(path, "Mah Noor", "U111", aliases=["Mahnoor"])
     _seed_person(path, "Mahnoor Khan", "U222", aliases=["Mahnoor"])
+    orig = kc._notion_fetch_person
     kc._notion_fetch_person = lambda name: None
     try:
         kc.resolve_person("Mahnoor")
         assert False, "Should have raised PersonAmbiguous"
     except kc.PersonAmbiguous as e:
         assert len(e.candidates) >= 2
+    finally:
+        kc._notion_fetch_person = orig

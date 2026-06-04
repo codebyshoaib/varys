@@ -164,10 +164,10 @@ def _upsert_person_entity(person: dict) -> str:
     return entity_id
 
 def _score_match(row, term: str) -> int:
-    """Return match score: 3=exact name, 2=alias exact, 1=partial. 0=no match."""
+    """Return match score: 3=exact name/external_id, 2=alias list-membership, 1=partial. 0=no match."""
     name = (row["name"] or "").lower()
     term_l = term.lower()
-    if name == term_l:
+    if name == term_l or (row["external_id"] or "").lower() == term_l:
         return 3
     aliases = [a.strip().lower() for a in (row["aliases_text"] or "").split(",") if a.strip()]
     if term_l in aliases:
