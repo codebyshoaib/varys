@@ -818,11 +818,15 @@ def dispatch(text: str, web: WebClient, channel: str, thread_ts: str, source: st
     if sender_id == KAMAL_USER_ID and is_notebooklm_command(clean):
         cfg       = load_config()
         bot_token_cfg = cfg.get("BOT_TOKEN")
-        threading.Thread(
-            target=nlm_handle,
-            args=(clean, bot_token_cfg),
-            daemon=True,
-        ).start()
+        if _context_available and job_id:
+            mark_job_processing(job_id)
+            tracked_thread(job_id, nlm_handle, bot_token_cfg)
+        else:
+            threading.Thread(
+                target=nlm_handle,
+                args=(clean, bot_token_cfg),
+                daemon=True,
+            ).start()
         return
 
     if _context_available and job_id:
