@@ -859,7 +859,7 @@ def dispatch(text: str, web: WebClient, channel: str, thread_ts: str, source: st
         bot_token_cfg = cfg.get("BOT_TOKEN")
         if _context_available and job_id:
             mark_job_processing(job_id)
-            tracked_thread(job_id, nlm_handle, bot_token_cfg)
+            tracked_thread(job_id, nlm_handle, clean, bot_token_cfg)
         else:
             threading.Thread(
                 target=nlm_handle,
@@ -1170,9 +1170,7 @@ def main():
         import threading as _threading
         _threading.Thread(target=run_sync_loop, args=(60,), daemon=True).start()
         log("[kamil_context] sync loop started")
-        from kamil_context import run_stale_job_checker
-        _threading.Thread(target=run_stale_job_checker, args=(300,), daemon=True).start()
-        log("[kamil_context] stale job checker started")
+        pass
 
     klog_system_start("listener")
     log("Kamil listener starting (Socket Mode)...")
@@ -1276,4 +1274,9 @@ def main():
 
 
 if __name__ == "__main__":
+    if _context_available:
+        import threading as _t2
+        from kamil_context import run_stale_job_checker
+        _t2.Thread(target=run_stale_job_checker, args=(300,), daemon=True).start()
+        log("[kamil_context] stale job checker started")
     main()
