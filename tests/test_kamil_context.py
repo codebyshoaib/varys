@@ -199,6 +199,34 @@ def test_lookup_context_web_fallback():
         kc._nlm_query = orig_nlm
         kc._web_search = orig_web
 
+def test_jobs_table_exists():
+    import tempfile
+    with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as f:
+        path = f.name
+    import kamil_context as kc
+    kc.HARNESS_DB = path
+    kc.init_schema()
+    import sqlite3
+    conn = sqlite3.connect(path)
+    tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+    conn.close()
+    assert 'jobs' in tables
+    assert 'suppression_log' in tables
+
+def test_suppression_log_columns():
+    import tempfile
+    with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as f:
+        path = f.name
+    import kamil_context as kc
+    kc.HARNESS_DB = path
+    kc.init_schema()
+    import sqlite3
+    conn = sqlite3.connect(path)
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(suppression_log)").fetchall()}
+    conn.close()
+    assert 'reason_code' in cols
+    assert 'event_id' in cols
+
 def test_lookup_context_person_skips_freshness_gate():
     import tempfile
     with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as f:

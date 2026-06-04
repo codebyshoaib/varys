@@ -59,6 +59,38 @@ CREATE INDEX IF NOT EXISTS idx_entities_type_extid ON entities(type, external_id
 CREATE INDEX IF NOT EXISTS idx_relations_from ON relations(from_id, rel_type);
 CREATE INDEX IF NOT EXISTS idx_relations_to   ON relations(to_id,   rel_type);
 CREATE INDEX IF NOT EXISTS idx_interactions_person ON interactions(person_id, created_at);
+CREATE TABLE IF NOT EXISTS jobs (
+    id             TEXT PRIMARY KEY,
+    event_id       TEXT NOT NULL,
+    source         TEXT NOT NULL,
+    intent         TEXT,
+    raw_text       TEXT,
+    channel        TEXT,
+    thread_ts      TEXT,
+    sender_id      TEXT,
+    status         TEXT NOT NULL DEFAULT 'received',
+    failure_reason TEXT,
+    steps_total    INTEGER DEFAULT 1,
+    steps_done     INTEGER DEFAULT 0,
+    created_at     INTEGER NOT NULL,
+    updated_at     INTEGER NOT NULL,
+    delivered_at   INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status, created_at);
+CREATE INDEX IF NOT EXISTS idx_jobs_event  ON jobs(event_id);
+CREATE TABLE IF NOT EXISTS suppression_log (
+    id          TEXT PRIMARY KEY,
+    event_id    TEXT,
+    reason_code TEXT NOT NULL,
+    raw_text    TEXT,
+    channel     TEXT,
+    sender_id   TEXT,
+    job_id      TEXT,
+    details     TEXT,
+    created_at  INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_suppression_event  ON suppression_log(event_id);
+CREATE INDEX IF NOT EXISTS idx_suppression_reason ON suppression_log(reason_code, created_at);
 """
 
 def _conn() -> sqlite3.Connection:

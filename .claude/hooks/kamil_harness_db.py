@@ -103,11 +103,12 @@ def get_db() -> sqlite3.Connection:
 
 def migrate_db(db: sqlite3.Connection) -> None:
     """Apply incremental migrations. Safe to run on every startup."""
-    # Migration 001: sessions.phase column for two-phase manager flow
-    cols = [row[1] for row in db.execute("PRAGMA table_info(sessions)").fetchall()]
-    if "phase" not in cols:
-        db.execute("ALTER TABLE sessions ADD COLUMN phase TEXT DEFAULT 'manager'")
-        db.commit()
+    with _db_lock:
+        # Migration 001: sessions.phase column for two-phase manager flow
+        cols = [row[1] for row in db.execute("PRAGMA table_info(sessions)").fetchall()]
+        if "phase" not in cols:
+            db.execute("ALTER TABLE sessions ADD COLUMN phase TEXT DEFAULT 'manager'")
+            db.commit()
 
 
 # ── Tick lock ─────────────────────────────────────────────────────────────────
