@@ -58,7 +58,13 @@ except Exception:
     _harness_db_available = False
 
 try:
-    from kamil_context import resolve_person, record_interaction, run_sync_loop, PersonNotFound, PersonAmbiguous
+    from kamil_context import (
+        resolve_person, record_interaction, run_sync_loop,
+        PersonNotFound, PersonAmbiguous,
+        create_job, mark_job_processing, mark_job_delivered, mark_job_failed,
+        log_suppression, log_milestone, fetch_thread_context, extract_pr_url,
+        tracked_thread,
+    )
     _context_available = True
 except Exception:
     _context_available = False
@@ -441,7 +447,7 @@ def log_humor(prompt_text: str, response_text: str):
 def handle_message(text: str, thread_history: str, web: WebClient, channel: str,
                    thread_ts: str, source: str, sender_id: str = None,
                    sender_name: str = None, is_third_party: bool = False,
-                   is_dm: bool = False):
+                   is_dm: bool = False, job_id: str = ""):
     """
     One Claude call with full context.
     is_third_party=True when Fatima (or anyone not Kamal) is the sender — Kamil
@@ -596,6 +602,10 @@ Reply now. Do NOT output any mode label, header, or internal reasoning — just 
     # Always reply with thread_ts so the reply appears directly below the original message
     reply_kwargs = {"channel": channel, "text": answer, "thread_ts": thread_ts}
     web.chat_postMessage(**reply_kwargs)
+
+    # Mark job delivered AFTER successful send — never before
+    if _context_available and job_id:
+        mark_job_delivered(job_id)
 
     # Write-back: log this interaction to per-person memory
     if _context_available and sender_name:
@@ -752,7 +762,27 @@ def dispatch(text: str, web: WebClient, channel: str, thread_ts: str, source: st
 
     clean = re.sub(r"<@[A-Z0-9]+>", "", text).strip()
     if not clean:
+        if _context_available:
+            log_suppression(
+                event_id=thread_ts or "",
+                reason_code="empty_after_strip",
+                raw_text=text[:200],
+                channel=channel,
+                sender_id=sender_id or "",
+            )
         return
+
+    # Create job row for this inbound event
+    job_id = ""
+    if _context_available:
+        job_id = create_job(
+            event_id=f"{channel}_{thread_ts}",
+            source=source,
+            raw_text=clean,
+            channel=channel,
+            thread_ts=thread_ts,
+            sender_id=sender_id or "",
+        )
 
     log(f"[{source}] {clean[:80]}")
 
@@ -795,10 +825,12 @@ def dispatch(text: str, web: WebClient, channel: str, thread_ts: str, source: st
         ).start()
         return
 
+    if _context_available and job_id:
+        mark_job_processing(job_id)
     _MSG_EXECUTOR.submit(
         handle_message,
         clean, thread_history, web, channel, thread_ts, source,
-        sender_id, sender_name, is_third_party, is_dm,
+        sender_id, sender_name, is_third_party, is_dm, job_id,
     )
 
 
