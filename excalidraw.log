@@ -6799,3 +6799,7 @@
 2026-06-04 11:02:31.093 [info] Excalidraw MCP server running on stdio
 2026-06-04 11:02:31.148 [info] Listing available tools
 2026-06-04 11:02:31.158 [info] Listing available tools
+2026-06-04 11:04:31.948 [info] Starting Excalidraw MCP server...
+2026-06-04 11:04:31.950 [debug] Connecting to stdio transport...
+2026-06-04 11:04:31.950 [info] Excalidraw MCP server running on stdio
+2026-06-04 11:04:31.964 [info] Listing available tools
