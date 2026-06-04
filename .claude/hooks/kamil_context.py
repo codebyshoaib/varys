@@ -231,3 +231,137 @@ def resolve_person(name_or_id: str) -> PersonRecord:
         )
 
     raise PersonAmbiguous([{"entity_id": r["id"], "name": r["name"]} for r in top])
+
+# ── record_interaction ─────────────────────────────────────────────────────────
+
+def record_interaction(
+    person_id: str,
+    source: str,
+    external_id: str,
+    raw: str,
+    summary: str,
+    open_items: str,
+) -> str:
+    """
+    Log an interaction. Unit = thread (keyed on external_id).
+    Same external_id → UPDATE (same thread got more replies).
+    New external_id → INSERT.
+    Caller MUST provide agent-distilled summary — do not pass raw text as summary.
+    Returns the interaction id.
+    """
+    iid = hashlib.sha256(f"{source}:{external_id}".encode()).hexdigest()
+    now = int(time.time())
+    c = _conn()
+    try:
+        existing = c.execute("SELECT id FROM interactions WHERE id=?", (iid,)).fetchone()
+        if existing:
+            c.execute(
+                "UPDATE interactions SET raw=?, summary=?, open_items=?, updated_at=? WHERE id=?",
+                (raw, summary, open_items, now, iid)
+            )
+        else:
+            c.execute(
+                """INSERT INTO interactions
+                   (id,person_id,source,external_id,raw,summary,open_items,
+                    synced_notion,sync_retries,created_at,updated_at)
+                   VALUES(?,?,?,?,?,?,?,0,0,?,?)""",
+                (iid, person_id, source, external_id, raw, summary, open_items, now, now)
+            )
+        c.commit()
+    finally:
+        c.close()
+    return iid
+
+# ── Sync loop ──────────────────────────────────────────────────────────────────
+
+def _get_notion_page_id(entity_id: str) -> str:
+    c = _conn()
+    try:
+        row = c.execute("SELECT meta FROM entities WHERE id=?", (entity_id,)).fetchone()
+        return json.loads(row["meta"] or "{}").get("notion_page_id", "") if row else ""
+    finally:
+        c.close()
+
+def _iso_now() -> str:
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S+00:00")
+
+def _upsert_slack_inbox(row) -> None:
+    """Create a Slack Inbox page in Notion linked to the thread."""
+    from kamil_notion import notion_request
+    notion_request("POST", "/pages", {
+        "parent": {"database_id": "6d14f1b6b8cd4ff68fd40efdfc3f304e"},
+        "properties": {
+            "Name": {"title": [{"text": {"content": row["external_id"]}}]},
+            "Raw": {"rich_text": [{"text": {"content": (row["raw"] or "")[:2000]}}]},
+        }
+    })
+
+def _log_dead_letter(row, error: str) -> None:
+    try:
+        from kamil_health import log_health_event
+        log_health_event(
+            event_type="sync_dead_letter",
+            component="kamil_context",
+            message=f"interaction {row['id']} dead-letter: {error}",
+            severity="ERROR"
+        )
+    except Exception:
+        pass
+
+def _sync_one_row(row, c) -> bool:
+    """Sync a single pending interaction to Notion. Returns True on success."""
+    import sys
+    try:
+        from kamil_notion import notion_request
+        page_id = _get_notion_page_id(row["person_id"])
+        if page_id:
+            notion_request("PATCH", f"/pages/{page_id}", {
+                "properties": {
+                    "Open Items": {"rich_text": [{"text": {"content": row["summary"]}}]},
+                    "Last Interaction": {"date": {"start": _iso_now()}},
+                }
+            })
+        if row["source"] == "slack":
+            _upsert_slack_inbox(row)
+        c.execute("UPDATE interactions SET synced_notion=1 WHERE id=?", (row["id"],))
+        return True
+    except Exception as e:
+        print(f"[sync] Failed {row['id']}: {e}", file=sys.stderr)
+        new_retries = row["sync_retries"] + 1
+        if new_retries >= 5:
+            c.execute(
+                "UPDATE interactions SET synced_notion=-1, sync_retries=? WHERE id=?",
+                (new_retries, row["id"])
+            )
+            _log_dead_letter(row, str(e))
+        else:
+            c.execute(
+                "UPDATE interactions SET sync_retries=? WHERE id=?",
+                (new_retries, row["id"])
+            )
+        return False
+
+def run_sync_loop(interval: int = 60) -> None:
+    """Run the Notion sync loop forever. Call in a background thread."""
+    import sys
+    while True:
+        try:
+            c = _conn()
+            try:
+                rows = c.execute(
+                    "SELECT * FROM interactions WHERE synced_notion=0 AND sync_retries < 5 "
+                    "ORDER BY created_at ASC"
+                ).fetchall()
+                for row in rows:
+                    _sync_one_row(row, c)
+                c.execute(
+                    "INSERT OR REPLACE INTO health(key,value,updated_at) VALUES(?,?,?)",
+                    ("last_sync_at", _iso_now(), int(time.time()))
+                )
+                c.commit()
+            finally:
+                c.close()
+        except Exception as e:
+            print(f"[sync_loop] Error: {e}", file=sys.stderr)
+        time.sleep(interval)

@@ -104,3 +104,39 @@ def test_resolve_person_ambiguous_raises():
         assert len(e.candidates) >= 2
     finally:
         kc._notion_fetch_person = orig
+
+def test_record_interaction_inserts():
+    import tempfile, json
+    with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as f:
+        path = f.name
+    import kamil_context as kc
+    kc.HARNESS_DB = path
+    import sqlite3
+    eid = _seed_person(path, "Mahnoor Baig", "U123")
+    iid = kc.record_interaction(
+        person_id=eid, source='slack',
+        external_id='C01_1234567890.000100',
+        raw='test thread', summary='Mahnoor asked about sprint',
+        open_items=json.dumps(['Follow up on ticket'])
+    )
+    conn = sqlite3.connect(path)
+    row = conn.execute("SELECT * FROM interactions WHERE id=?", (iid,)).fetchone()
+    conn.close()
+    assert row is not None
+
+def test_record_interaction_dedup():
+    import tempfile
+    with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as f:
+        path = f.name
+    import kamil_context as kc
+    kc.HARNESS_DB = path
+    eid = _seed_person(path, "Mahnoor Baig", "U123")
+    ext_id = 'C01_9999999999.000100'
+    id1 = kc.record_interaction(eid, 'slack', ext_id, 'raw1', 'summary1', '[]')
+    id2 = kc.record_interaction(eid, 'slack', ext_id, 'raw2-updated', 'summary2-updated', '[]')
+    assert id1 == id2  # same thread → same id
+    import sqlite3
+    conn = sqlite3.connect(path)
+    row = conn.execute("SELECT raw FROM interactions WHERE id=?", (id1,)).fetchone()
+    conn.close()
+    assert 'updated' in row[0]  # row was updated, not duplicated
