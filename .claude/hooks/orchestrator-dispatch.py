@@ -233,6 +233,61 @@ GITHUB REPO: {github_repo}
 """
 
 
+def _spawn_manager(
+    context_key: str,
+    session_id: str,
+    events: list,
+    notion_page,
+    slack_messages: list,
+    github_pr,
+) -> bool:
+    """
+    Spawn kamil-manager.py Phase 1 instead of the old generic prompt.
+    Writes context to temp JSON files, calls manager with --phase manager.
+    Returns True on success.
+    """
+    import tempfile
+    import shutil
+
+    tmpdir = Path(tempfile.mkdtemp(prefix="kamil-dispatch-"))
+    try:
+        events_file  = tmpdir / "events.json"
+        notion_file  = tmpdir / "notion.json"
+        slack_file   = tmpdir / "slack.json"
+        github_file  = tmpdir / "github.json"
+
+        events_file.write_text(json.dumps(events))
+        notion_file.write_text(json.dumps(notion_page or {}))
+        slack_file.write_text(json.dumps(slack_messages or []))
+        github_file.write_text(json.dumps(github_pr or {}))
+
+        manager_script = Path(__file__).parent / "kamil-manager.py"
+        nvm_source = (
+            'export NVM_DIR="$HOME/.nvm"; '
+            '[ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"'
+        )
+        cmd = (
+            f'{nvm_source} && python3 {manager_script} '
+            f'--context-key "{context_key}" '
+            f'--session-id "{session_id}" '
+            f'--phase manager '
+            f'--events-file "{events_file}" '
+            f'--notion-page-file "{notion_file}" '
+            f'--slack-msgs-file "{slack_file}" '
+            f'--github-pr-file "{github_file}"'
+        )
+        result = subprocess.run(
+            ["bash", "-c", cmd],
+            cwd=str(KAMIL_DIR),
+            capture_output=True,
+            text=True,
+            timeout=180,
+        )
+        return result.returncode == 0
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
+
 def main() -> int:
     cfg = _load_config()
     api_key   = cfg.get("NOTION_API_KEY")
@@ -330,53 +385,55 @@ def main() -> int:
         )
         db.commit()
 
-        # ── Step 6: Build prompt and spawn subagent ──
-        prompt = _build_subagent_prompt(
-            context_key=context_key,
-            events=events,
-            notion_page=notion_page,
-            linked_entities=linked,
-            slack_messages=slack_messages,
-            github_pr=github_pr,
-            session_id=session_id,
-            cfg=cfg,
-        )
+        # ── Step 6: Dispatch via kamil-manager.py ──
+
+        # Check for go-signal — triggers Phase 2 worker
+        go_events = [e for e in events if e["type"] == "message.go_signal"]
+        if go_events:
+            go_payload = go_events[0]["payload"]
+            worker_session_id = go_payload.get("session_id")
+            if worker_session_id:
+                print(f"[dispatch] @Kamil go received — spawning worker for session {worker_session_id[:16]}")
+                nvm_source = 'export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"'
+                manager_script = KAMIL_DIR / ".claude" / "hooks" / "kamil-manager.py"
+                cmd = (
+                    f'{nvm_source} && python3 {manager_script} '
+                    f'--context-key "{context_key}" '
+                    f'--session-id "{worker_session_id}" '
+                    f'--phase worker'
+                )
+                subprocess.run(["bash", "-c", cmd], cwd=str(KAMIL_DIR),
+                               capture_output=True, text=True, timeout=600)
+                db.execute(
+                    "UPDATE events SET status='done', processed_at=datetime('now') "
+                    "WHERE context_key=? AND type='message.go_signal'",
+                    (context_key,)
+                )
+                db.commit()
+                continue  # Don't also run Phase 1 for this context_key
 
         title = _page_title(notion_page) if notion_page else context_key[:20]
-        print(f"[dispatch] Spawning subagent for: {title[:60]} ({event_types})")
-
-        # Write prompt to temp file so we can pass it cleanly
-        prompt_file = Path(f"/tmp/kamil-dispatch-{session_id}.txt")
-        prompt_file.write_text(prompt)
+        print(f"[dispatch] Spawning manager for: {title[:60]} ({event_types})")
 
         try:
-            nvm_source = (
-                'export NVM_DIR="$HOME/.nvm"; '
-                '[ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"'
+            success = _spawn_manager(
+                context_key=context_key,
+                session_id=session_id,
+                events=events,
+                notion_page=notion_page,
+                slack_messages=slack_messages,
+                github_pr=github_pr,
             )
-            cmd = (
-                f'{nvm_source} && claude --dangerously-skip-permissions '
-                f'--print -p "$(cat {prompt_file})"'
-            )
-            result = subprocess.run(
-                ["bash", "-c", cmd],
-                cwd=str(WORKSPACE) if WORKSPACE.exists() else str(KAMIL_DIR),
-                capture_output=True,
-                text=True,
-                timeout=600,  # 10 min max per subagent
-            )
-
-            if result.returncode == 0:
+            if success:
                 spawned += 1
                 klog("dispatch-spawn", component="orchestrator",
                      session_id=session_id, context_key=context_key,
                      event_types=event_types)
             else:
-                raise RuntimeError(f"claude exited {result.returncode}: {result.stderr[:300]}")
+                raise RuntimeError("manager process exited non-zero")
 
         except Exception as e:
-            # ── Step 7: Failure — revert session + events ──
-            print(f"[dispatch] ERROR spawning subagent for {context_key[:16]}: {e}",
+            print(f"[dispatch] ERROR spawning manager for {context_key[:16]}: {e}",
                   file=sys.stderr)
             klog_error("dispatch-spawn-fail", e, component="orchestrator",
                        session_id=session_id)
@@ -390,9 +447,6 @@ def main() -> int:
                 (context_key,),
             )
             db.commit()
-        finally:
-            if prompt_file.exists():
-                prompt_file.unlink()
 
     print(f"[dispatch] Done. {spawned}/{len(context_keys)} subagents spawned.")
     klog("dispatch-complete", component="orchestrator",
