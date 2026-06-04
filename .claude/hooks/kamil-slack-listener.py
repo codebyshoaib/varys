@@ -57,6 +57,12 @@ try:
 except Exception:
     _harness_db_available = False
 
+try:
+    from kamil_context import resolve_person, record_interaction, run_sync_loop, PersonNotFound, PersonAmbiguous
+    _context_available = True
+except Exception:
+    _context_available = False
+
 # ── Config ────────────────────────────────────────────────────────────────────
 SLACK_CONFIG = Path.home() / ".claude" / "hooks" / ".slack"
 KAMIL_DIR    = Path(__file__).parent.parent.parent
@@ -590,6 +596,29 @@ Reply now. Do NOT output any mode label, header, or internal reasoning — just 
     # Always reply with thread_ts so the reply appears directly below the original message
     reply_kwargs = {"channel": channel, "text": answer, "thread_ts": thread_ts}
     web.chat_postMessage(**reply_kwargs)
+
+    # Write-back: log this interaction to per-person memory
+    if _context_available and sender_name:
+        try:
+            person = resolve_person(sender_name)
+            _summary_prompt = (
+                f"Summarize in 1-2 sentences: what was asked, what was decided, any open items. "
+                f"Request: '{text[:200]}' Reply: '{answer[:200]}'"
+            )
+            summary = run_claude(_summary_prompt, timeout=30)
+            record_interaction(
+                person_id=person.entity_id,
+                source='slack',
+                external_id=f"{channel}_{thread_ts}",
+                raw=thread_history or text,
+                summary=summary,
+                open_items="[]",
+            )
+        except (PersonNotFound, PersonAmbiguous):
+            pass
+        except Exception as _e:
+            log(f"[record_interaction] failed: {_e}")
+
     log(f"[{source}] replied: {answer[:80]}")
 
     conv_id = f"{channel}-{thread_ts}"
@@ -1042,6 +1071,11 @@ def main():
     # Connect via Socket Mode
     socket_client = SocketModeClient(app_token=app_token, web_client=web)
     socket_client.socket_mode_request_listeners.append(make_handler(web, dm_channel, bot_token))
+
+    if _context_available:
+        import threading as _threading
+        _threading.Thread(target=run_sync_loop, args=(60,), daemon=True).start()
+        log("[kamil_context] sync loop started")
 
     klog_system_start("listener")
     log("Kamil listener starting (Socket Mode)...")
