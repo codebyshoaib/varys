@@ -19,6 +19,11 @@ try:
     import kamil_log as _k
 except Exception:
     _k = None
+try:
+    from kamil_context import resolve_person, record_interaction, PersonNotFound, PersonAmbiguous
+    _context_available = True
+except Exception:
+    _context_available = False
 
 def run_cmd(cmd: list[str], cwd: str = None) -> tuple[bool, str]:
     """Execute shell command; return (success, output)."""
@@ -127,6 +132,65 @@ def mempalace_sync(workspace_root: Path) -> bool:
         print(f"[stop] MemPalace sync error: {e}", file=sys.stderr)
         return False
 
+_DECISION_KEYWORDS = ["decided", "agreed", "approved", "blocked", "will do", "confirmed", "done"]
+
+def _is_meaningful(turn_text: str, person_ids: list) -> bool:
+    t = turn_text.lower()
+    return bool(person_ids) or any(kw in t for kw in _DECISION_KEYWORDS)
+
+def _extract_persons(text: str) -> list:
+    """Try to resolve every Title Case word sequence as a person name."""
+    if not _context_available:
+        return []
+    import re
+    candidates = re.findall(r'\b([A-Z][a-z]+(?: [A-Z][a-z]+)+)\b', text)
+    persons, seen_ids = [], set()
+    for name in candidates:
+        try:
+            p = resolve_person(name)
+            if p.entity_id not in seen_ids:
+                persons.append(p)
+                seen_ids.add(p.entity_id)
+        except (PersonNotFound, PersonAmbiguous):
+            pass
+    return persons
+
+def log_session_interactions(workspace_root: Path, session_id: str) -> None:
+    """
+    Read today's log, extract meaningful turns involving named people,
+    and record each via record_interaction().
+    """
+    if not _context_available:
+        return
+    today = datetime.now().strftime("%Y-%m-%d")
+    log_file = workspace_root / "vault" / "logs" / f"{today}.md"
+    if not log_file.exists():
+        return
+    try:
+        lines = log_file.read_text(encoding="utf-8").splitlines()
+    except Exception as e:
+        print(f"[stop] log_session_interactions read error: {e}", file=sys.stderr)
+        return
+    for turn_index, line in enumerate(lines):
+        if not line.strip():
+            continue
+        persons = _extract_persons(line)
+        if not _is_meaningful(line, persons):
+            continue
+        for person in persons:
+            try:
+                record_interaction(
+                    person_id=person.entity_id,
+                    source='claude_session',
+                    external_id=f"{session_id}_{turn_index:04d}",
+                    raw=line,
+                    summary=line,
+                    open_items="[]",
+                )
+            except Exception as e:
+                print(f"[stop] record_interaction failed for {person.name}: {e}", file=sys.stderr)
+
+
 def main():
     """Hook entry point."""
     workspace_root = Path(__file__).parent.parent.parent
@@ -137,6 +201,11 @@ def main():
     if not git_commit(workspace_root):
         print("[stop] Git commit failed; continuing with other steps", file=sys.stderr)
         # Don't exit; try other steps
+
+    # Log meaningful session interactions to per-person memory
+    import uuid as _uuid
+    session_id = str(_uuid.uuid4())[:8]
+    log_session_interactions(workspace_root, session_id)
 
     # 2. Update STANDUP.md
     if not update_standup(workspace_root):
