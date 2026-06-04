@@ -7,9 +7,13 @@ metadata:
 
 # Kamil — Face & Visual Identity
 
-## Canonical Image Prompt
+## Canonical Image Prompt (Cartoon — preferred)
 
-> A photorealistic portrait of a Pakistani man in his late 20s. Medium-brown skin, warm undertone. Clean short hair, slight fade on the sides. Thin well-groomed beard, close-cut. Dark brown eyes — calm, intelligent, slightly amused like he knows something you don't yet. Strong jaw, relaxed expression — not smiling, not serious, somewhere in between. The face of someone who just solved a hard problem and didn't make a big deal about it. Plain dark background. Soft studio lighting from the left. Square crop, centered on face. Photorealistic, natural, no filters.
+> A simple flat-design cartoon avatar of a Pakistani man. Round friendly face, medium-brown skin, short black hair with a slight fade. Minimal thin beard. Large calm eyes with a subtle smirk — not a full smile, just knows something. Wearing a plain black hoodie. Dark navy background. Clean vector style, bold outlines, limited color palette. Think Notion avatar meets Slack emoji meets a dev who runs on coffee and Claude.
+
+## Archived: Realistic Prompt (deprecated — Kamal didn't like it)
+
+> A photorealistic portrait of a Pakistani man in his late 20s. Medium-brown skin, warm undertone. Clean short hair, slight fade on the sides. Thin well-groomed beard, close-cut. Dark brown eyes — calm, intelligent, slightly amused like he knows something you don't yet. Strong jaw, relaxed expression — not smiling, not serious, somewhere in between. Plain dark background. Soft studio lighting from the left. Square crop, centered on face. Photorealistic, natural, no filters.
 
 ## Key Attributes (for variations)
 
