@@ -10,14 +10,14 @@ metadata:
 ## Approved Avatar
 
 File: `vault/memory/kamil_avatar.png`
-Generated: 2026-06-04 via Gemini
+Generated: 2026-06-04 via Gemini (v2 — upgraded)
 Status: **approved by Kamal** — this is the canonical face
 
 ---
 
 ## Canonical Image Prompt (Cartoon — preferred)
 
-> Flat-design cartoon avatar of a Pakistani man, circular crop. Medium-brown skin, short black hair tight fade. Small dark eyes, one eyebrow slightly raised, subtle closed-mouth smirk — calm and knowing, not happy. Light stubble beard. Black hoodie with hood visible. Dark navy circular background, white outer background. Clean bold outlines, thick strokes, minimal detail. Flat vector illustration style. No shadows. Face centered, shoulders visible.
+> Semi-realistic cartoon avatar of a Pakistani man. Medium-brown skin, black hair swept to one side with a fade on the sides. Full well-groomed beard, dark. Brown calm eyes, subtle knowing half-smile — not happy, just confident. Black hoodie with drawstrings visible. Dark navy square background. Clean vector illustration style with soft shading — more detailed than flat design. Face and upper chest visible, centered. Small 4-pointed star in bottom right corner.
 
 ## Archived: Realistic Prompt (deprecated — Kamal didn't like it)
 
