@@ -26,9 +26,17 @@ Three layers:
 ## Section 1: SQLite Schema
 
 ```sql
--- Schema version marker
+-- Schema version (immutable single row — never write runtime state here)
 CREATE TABLE schema_meta (version INTEGER NOT NULL);
 INSERT INTO schema_meta VALUES (1);
+
+-- Mutable runtime health state (heartbeat, counters, last sync timestamps)
+CREATE TABLE health (
+  key        TEXT PRIMARY KEY,
+  value      TEXT,
+  updated_at INTEGER
+);
+-- Keys used: last_sync_at, dead_letter_count
 
 -- Core entities
 CREATE TABLE entities (
@@ -36,7 +44,8 @@ CREATE TABLE entities (
   type        TEXT NOT NULL,            -- person | pr | thread | ticket | notebook | job
   external_id TEXT,                     -- slack_id, notion_page_id, gh_pr_number, etc.
   name        TEXT,
-  meta        JSON                      -- includes aliases: ["Mahnoor","@m.noor"]
+  aliases_text TEXT,                    -- denormalized comma-separated aliases for fast LIKE matching
+  meta        JSON                      -- canonical alias source: aliases: ["Mahnoor","@m.noor"]
 );
 CREATE INDEX idx_entities_type_extid ON entities(type, external_id);
 
@@ -53,17 +62,21 @@ CREATE INDEX idx_relations_from ON relations(from_id, rel_type);
 CREATE INDEX idx_relations_to   ON relations(to_id,   rel_type);
 
 -- Interaction log
+-- Unit of interaction is a THREAD (not a message). Key is {channel}_{thread_ts} for Slack.
+-- New replies to the same thread UPDATE the row (raw, summary, open_items, updated_at) rather than insert new rows.
+-- This prevents the same conversation appearing fragmented across N rows in per-person history.
 CREATE TABLE interactions (
-  id           TEXT PRIMARY KEY,        -- sha256(source + external_id) — dedup key
+  id           TEXT PRIMARY KEY,        -- sha256(source + ":" + external_id) — dedup key
   person_id    TEXT NOT NULL REFERENCES entities(id),
   source       TEXT NOT NULL,           -- slack | claude_session
-  external_id  TEXT NOT NULL,           -- slack: "{channel}_{ts}", session: "{session_id}_{turn_index}"
+  external_id  TEXT NOT NULL,           -- slack: "{channel}_{thread_ts}", session: "{session_id}_{turn_index}"
   raw          TEXT,
   summary      TEXT,                    -- agent-distilled at interaction time (caller's responsibility)
   open_items   TEXT,                    -- JSON list; promote to own table if cross-person queries needed
   synced_notion INTEGER DEFAULT 0,      -- 0=pending, 1=synced, -1=dead-letter
   sync_retries  INTEGER DEFAULT 0,      -- capped at 5; dead-letter after cap
-  created_at   INTEGER NOT NULL
+  created_at   INTEGER NOT NULL,
+  updated_at   INTEGER NOT NULL
 );
 CREATE INDEX idx_interactions_person ON interactions(person_id, created_at);
 
@@ -91,11 +104,12 @@ CREATE TABLE nlm_notebooks (
 ### `resolve_person(name_or_id) → PersonRecord`
 
 ```
-1. SQLite: match entities WHERE type='person' AND (
-     name = ? (exact, case-insensitive)
-     OR meta->>aliases LIKE ?
-     OR external_id = ?
-   )
+1. SQLite: match entities WHERE type='person' using three passes in priority order:
+   a. name = ? (exact, case-insensitive) OR external_id = ?
+   b. aliases_text LIKE '%{term}%'  — aliases_text is a denormalized TEXT column (comma-separated)
+      kept in sync with meta.aliases. Use this column for LIKE matching, not json_each() on meta,
+      to avoid substring collisions across JSON array boundaries.
+   c. If still 0 hits, fall through to Notion fetch (step 2)
 2. If 0 hits → query People Intelligence (Notion MCP) → upsert to SQLite → return
 3. If 1 hit → return PersonRecord
 4. If 2+ hits:
@@ -115,13 +129,23 @@ CREATE TABLE nlm_notebooks (
 Route log: [] — appended at every step, returned in ContextResult.source_chain
 
 1. Freshness gate:
-   - Keywords: price, news, status, CI, job posting, PR, today, current, latest
-   - If match → log "freshness:web" → skip to step 4
-   - Log every gate decision (fired/not fired) with matched keywords or "no match"
+   - ONLY fires when person_id is None (impersonal query).
+   - If person_id is set: always go to step 2 first regardless of keywords.
+     (A question like "what did Mahnoor say about my PR" must check person history, not jump to web.)
+   - Keywords for impersonal freshness: price, news, job posting, today, current, latest
+     (removed "PR" and "status" — these are frequently person-contextual)
+   - If match AND person_id is None → log "freshness:web" → skip to step 4
+   - Log every gate decision (fired/not fired) with matched keyword or "no match"
 
-2. Notion fetch:
-   - Select DB by topic: people question → People Intelligence; PR/work → My PRs / Harness; 
-     inbox → Slack Inbox; content → Content Calendar
+2. Notion fetch — topic classifier (v1, explicit rules):
+   - person_id passed OR question contains a resolvable name → People Intelligence
+   - question contains: PR, pull request, CI, merge, review → My PRs + Harness
+   - question contains: message, slack, inbox, replied → Slack Inbox
+   - question contains: content, post, caption, linkedin, topic → Content Calendar
+   - question contains: job, apply, application, freelance → Job Tracker
+   - default fallback → Harness
+   - This classifier is v1-crude and will misroute. Log the chosen DB with every query
+     so real misroutes surface in Observability and the rules can be tightened from data.
    - Query via MCP → assess answer quality (empty / thin / clear)
    - If clear → return with source_chain=["notion:<db>"]
 
@@ -152,6 +176,7 @@ Route log: [] — appended at every step, returned in ContextResult.source_chain
 
 Sync loop (background, runs every ~60s):
   SELECT * FROM interactions WHERE synced_notion=0 AND sync_retries < 5
+  ORDER BY created_at ASC   -- chronological order so summaries append in sequence
   For each row:
     - Append summary to People Intelligence page (Notion MCP)
     - Update Last Interaction date on person's Notion page
@@ -159,7 +184,7 @@ Sync loop (background, runs every ~60s):
     - On success: SET synced_notion=1
     - On failure: INCREMENT sync_retries; if sync_retries >= 5: SET synced_notion=-1 (dead-letter), log error
 
-Heartbeat: sync loop writes last_sync_at timestamp to schema_meta or a health row.
+Heartbeat: sync loop writes last_sync_at to health(key='last_sync_at') after every successful pass.
 Dead-letter rows: logged to Observability DB + Axiom with person_id and failure reason.
 ```
 
@@ -206,23 +231,31 @@ record_interaction(
 )
 ```
 
-**`stop.py` Stop hook** — at session end, for each qualifying interaction:
+**`stop.py` Stop hook** — at session end:
 ```python
-# Relevance filter — only log if:
-# - a decision was made
-# - a named person was involved
+# Step 1: person extraction — who is this turn about?
+# - Extract all named people mentioned in the turn via resolve_person() (try each name token)
+# - If 0 people resolved: skip (not a person-relevant turn)
+# - If 1 person resolved: person_id = that person
+# - If 2+ people: log one row per person (same external_id, different person_id)
+# - Caller is responsible for producing summary and open_items; do NOT pass raw turn as summary
+
+# Step 2: relevance filter — skip turns that are pure back-and-forth
+# Log only if ANY of:
+# - a decision was made (keywords: decided, agreed, approved, blocked, will do)
+# - a named person was involved (from step 1)
 # - an open item was created or closed
 # - work was completed
-# Skip pure back-and-forth turns
-if is_meaningful(turn):
-    record_interaction(
-        person_id=...,
-        source='claude_session',
-        external_id=f"{session_id}_{turn_index}",  # turn_index monotonic, never resets
-        raw=turn_text,
-        summary=agent_distill(turn),
-        open_items=extract_open_items(turn)
-    )
+for person_id in extracted_person_ids:
+    if is_meaningful(turn):
+        record_interaction(
+            person_id=person_id,
+            source='claude_session',
+            external_id=f"{session_id}_{turn_index}",  # monotonic, never resets within session
+            raw=turn_text,
+            summary=agent_distill(turn),
+            open_items=extract_open_items(turn)
+        )
 ```
 
 ### Docs Update
@@ -253,8 +286,34 @@ if is_meaningful(turn):
 .claude/hooks/kamil_context.py          — new: core module (resolve_person, lookup_context, record_interaction)
 .claude/hooks/merge-people-dbs.py       — new: one-time migration script
 .claude/hooks/kamil-slack-listener.py   — modified: wire record_interaction
-.claude/hooks/stop.py                   — modified: wire record_interaction with relevance filter
+.claude/hooks/stop.py                   — modified: wire record_interaction with relevance filter + person extraction
 .claude/rules/notion.md                 — modified: one-line defer to kamil_context.py
 .claude/rules/slack.md                  — modified: one-line defer to kamil_context.py
 ~/.kamil-harness/harness.db             — modified: new tables added (migration from schema v_current to v1)
 ```
+
+**DB path:** `kamil_context.py` resolves the harness DB path from a single config constant:
+```python
+HARNESS_DB = os.path.expanduser("~/.kamil-harness/harness.db")
+```
+Never use relative paths. Scripts invoke `kamil_context.py` from varying working directories; a relative path will silently open a different file or create a new DB.
+
+---
+
+## Build Sequence
+
+Ordered rollout — each step gates the next. Step 2 requires Kamil's approval before proceeding.
+
+1. **Create SQLite schema** — run `CREATE TABLE` DDL against `~/.kamil-harness/harness.db`. Adds `entities`, `relations`, `interactions`, `nlm_notebooks`, `schema_meta`, `health` tables with all indexes. Existing tables (tick_lock, events, etc.) untouched.
+
+2. **Build `resolve_person` + dry-run merge** — implement `resolve_person()` in `kamil_context.py`; implement `merge-people-dbs.py --dry-run`. Run the dry run and produce the fuzzy-match report. **Kamil reviews and approves the match list before any write.**
+
+3. **Run merge `--write`** — after approval: merge fields, grep entire repo for `bbf6ade2`, rewire all references to `c976d58e`, confirm zero remaining references. Keep old DB live-but-unreferenced.
+
+4. **Build `lookup_context` + `record_interaction` + sync loop** — implement remaining functions in `kamil_context.py`; implement background sync loop with heartbeat writing to `health`.
+
+5. **Wire Slack listener** — add `record_interaction()` call to `kamil-slack-listener.py` after every sent reply. Test with a real thread.
+
+6. **Wire Stop hook** — add person-extraction + relevance filter + `record_interaction()` to `stop.py`. Test with a session that involves a named person.
+
+7. **Swap docs + archive old DB** — replace retrieval/write specs in `notion.md` and `slack.md` with the one-liner. After the one-week verification window (People Intelligence confirmed receiving all writes), rename `Team People / focus` to `[ARCHIVED] Team People` in Notion.
