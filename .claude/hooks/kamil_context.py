@@ -549,3 +549,83 @@ def lookup_context(question: str, person_id: Optional[str] = None) -> ContextRes
         return ContextResult(answer=answer, source_chain=source_chain)
 
     return ContextResult(answer=None, source_chain=source_chain, needs_escalation=True)
+
+# ── Job State Machine ──────────────────────────────────────────────────────────
+
+def create_job(
+    event_id: str,
+    source: str,
+    intent: str = None,
+    raw_text: str = "",
+    channel: str = "",
+    thread_ts: str = "",
+    sender_id: str = "",
+    steps_total: int = 1,
+) -> str:
+    """
+    Create a job row for an inbound event. Idempotent — same event_id+source returns same job_id.
+    Returns job_id (sha256 of source:event_id).
+    """
+    job_id = hashlib.sha256(f"{source}:{event_id}".encode()).hexdigest()
+    now = int(time.time())
+    c = _conn()
+    try:
+        c.execute(
+            """INSERT OR IGNORE INTO jobs
+               (id, event_id, source, intent, raw_text, channel, thread_ts, sender_id,
+                status, steps_total, steps_done, created_at, updated_at)
+               VALUES (?,?,?,?,?,?,?,?,'received',?,0,?,?)""",
+            (job_id, event_id, source, intent, raw_text, channel, thread_ts, sender_id,
+             steps_total, now, now)
+        )
+        c.commit()
+    finally:
+        c.close()
+    return job_id
+
+def mark_job_processing(job_id: str) -> None:
+    now = int(time.time())
+    c = _conn()
+    try:
+        c.execute("UPDATE jobs SET status='processing', updated_at=? WHERE id=?", (now, job_id))
+        c.commit()
+    finally:
+        c.close()
+
+def mark_job_delivered(job_id: str) -> None:
+    now = int(time.time())
+    c = _conn()
+    try:
+        c.execute(
+            "UPDATE jobs SET status='delivered', delivered_at=?, updated_at=? WHERE id=?",
+            (now, now, job_id)
+        )
+        c.commit()
+    finally:
+        c.close()
+
+def mark_job_failed(job_id: str, reason: str) -> None:
+    now = int(time.time())
+    c = _conn()
+    try:
+        c.execute(
+            "UPDATE jobs SET status='failed', failure_reason=?, updated_at=? WHERE id=?",
+            (reason, now, job_id)
+        )
+        c.commit()
+    finally:
+        c.close()
+
+def get_stale_jobs(threshold_seconds: int = 300) -> list:
+    """Return jobs stuck in 'processing' for longer than threshold_seconds."""
+    cutoff = int(time.time()) - threshold_seconds
+    c = _conn()
+    try:
+        rows = c.execute(
+            "SELECT id, event_id, source, intent, raw_text, channel, thread_ts, created_at "
+            "FROM jobs WHERE status='processing' AND created_at < ?",
+            (cutoff,)
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        c.close()
