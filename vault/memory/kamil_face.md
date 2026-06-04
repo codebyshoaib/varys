@@ -7,9 +7,17 @@ metadata:
 
 # Kamil — Face & Visual Identity
 
+## Approved Avatar
+
+File: `vault/memory/kamil_avatar.png`
+Generated: 2026-06-04 via Gemini
+Status: **approved by Kamal** — this is the canonical face
+
+---
+
 ## Canonical Image Prompt (Cartoon — preferred)
 
-> A simple flat-design cartoon avatar of a Pakistani man. Round friendly face, medium-brown skin, short black hair with a slight fade. Minimal thin beard. Large calm eyes with a subtle smirk — not a full smile, just knows something. Wearing a plain black hoodie. Dark navy background. Clean vector style, bold outlines, limited color palette. Think Notion avatar meets Slack emoji meets a dev who runs on coffee and Claude.
+> Flat-design cartoon avatar of a Pakistani man, circular crop. Medium-brown skin, short black hair tight fade. Small dark eyes, one eyebrow slightly raised, subtle closed-mouth smirk — calm and knowing, not happy. Light stubble beard. Black hoodie with hood visible. Dark navy circular background, white outer background. Clean bold outlines, thick strokes, minimal detail. Flat vector illustration style. No shadows. Face centered, shoulders visible.
 
 ## Archived: Realistic Prompt (deprecated — Kamal didn't like it)
 
