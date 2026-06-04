@@ -140,3 +140,44 @@ def test_record_interaction_dedup():
     row = conn.execute("SELECT raw FROM interactions WHERE id=?", (id1,)).fetchone()
     conn.close()
     assert 'updated' in row[0]  # row was updated, not duplicated
+
+def test_record_interaction_synced_notion_default_zero():
+    import tempfile, sqlite3
+    with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as f:
+        path = f.name
+    import kamil_context as kc
+    kc.HARNESS_DB = path
+    eid = _seed_person(path, "Mahnoor Baig", "U123")
+    iid = kc.record_interaction(eid, 'slack', 'C_test_1', 'raw', 'summary', '[]')
+    conn = sqlite3.connect(path)
+    row = conn.execute("SELECT synced_notion, sync_retries FROM interactions WHERE id=?", (iid,)).fetchone()
+    conn.close()
+    assert row[0] == 0   # not yet synced
+    assert row[1] == 0   # no retries
+
+def test_sync_one_row_dead_letter_after_5_failures():
+    import tempfile, sqlite3
+    with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as f:
+        path = f.name
+    import kamil_context as kc
+    kc.HARNESS_DB = path
+    eid = _seed_person(path, "Mahnoor Baig", "U123")
+    iid = kc.record_interaction(eid, 'slack', 'C_test_dl', 'raw', 'summary', '[]')
+    # Simulate 4 failures bringing retries to 4
+    conn = sqlite3.connect(path)
+    conn.execute("UPDATE interactions SET sync_retries=4 WHERE id=?", (iid,))
+    conn.commit()
+    # Patch kamil_notion to raise so _sync_one_row fails
+    import sys
+    sys.modules['kamil_notion'] = type(sys)('kamil_notion')
+    sys.modules['kamil_notion'].notion_request = lambda *a, **kw: (_ for _ in ()).throw(Exception("Notion down"))
+    row_obj = conn.execute("SELECT * FROM interactions WHERE id=?", (iid,)).fetchone()
+    # Convert to dict-like using sqlite3.Row
+    conn.row_factory = sqlite3.Row
+    row_obj = conn.execute("SELECT * FROM interactions WHERE id=?", (iid,)).fetchone()
+    kc._sync_one_row(row_obj, conn)
+    conn.commit()
+    final = conn.execute("SELECT synced_notion, sync_retries FROM interactions WHERE id=?", (iid,)).fetchone()
+    conn.close()
+    assert final[0] == -1   # dead-letter
+    assert final[1] == 5    # retries maxed

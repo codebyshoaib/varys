@@ -314,11 +314,12 @@ def _sync_one_row(row, c) -> bool:
     import sys
     try:
         from kamil_notion import notion_request
-        page_id = _get_notion_page_id(row["person_id"])
+        meta_row = c.execute("SELECT meta FROM entities WHERE id=?", (row["person_id"],)).fetchone()
+        page_id = json.loads(meta_row["meta"] or "{}").get("notion_page_id", "") if meta_row else ""
         if page_id:
             notion_request("PATCH", f"/pages/{page_id}", {
                 "properties": {
-                    "Open Items": {"rich_text": [{"text": {"content": row["summary"]}}]},
+                    "Open Items": {"rich_text": [{"text": {"content": row["open_items"] or ""}}]},
                     "Last Interaction": {"date": {"start": _iso_now()}},
                 }
             })
