@@ -459,6 +459,34 @@ def handle_message(text: str, thread_history: str, web: WebClient, channel: str,
     ])
     mode = "human" if is_fun else ("third_party" if is_third_party else "work")
 
+    # For PR review requests from Kamal: extract URL from trigger or thread.
+    # If no URL is found, ask instead of silently passing an empty context to Claude.
+    _is_pr_review = (
+        not is_third_party
+        and any(w in text.lower() for w in ["review this pr", "review the pr", "review pr", "code review"])
+    )
+    if _is_pr_review and _context_available:
+        pr_url = extract_pr_url(trigger_text=text, thread_context=thread_history or "")
+        if pr_url is None:
+            log_suppression(
+                event_id=f"{channel}_{thread_ts}",
+                reason_code="no_url_in_context",
+                raw_text=text[:200],
+                channel=channel,
+                sender_id=sender_id or "",
+                job_id=job_id,
+                details="PR review requested but no GitHub URL found in trigger or thread",
+            )
+            reply_kwargs = {
+                "channel": channel,
+                "text": "I couldn't find a PR URL in this thread — can you share the link? 🤖 Kamil",
+                "thread_ts": thread_ts,
+            }
+            web.chat_postMessage(**reply_kwargs)
+            if job_id:
+                mark_job_failed(job_id, "no_url_in_context")
+            return
+
     if is_third_party:
         person_context = build_person_context(sender_name or "Unknown", sender_id or "")
 
@@ -789,7 +817,16 @@ def dispatch(text: str, web: WebClient, channel: str, thread_ts: str, source: st
     log(f"[{source}] {clean[:80]}")
 
     # For DMs: read flat channel history. For channel threads: read thread replies.
-    thread_history = fetch_thread_history(web, channel, thread_ts, is_dm=is_dm, bot_token=bot_token)
+    if _context_available:
+        thread_history = fetch_thread_context(
+            channel=channel,
+            thread_ts=thread_ts,
+            web=web,
+            event_id=f"{channel}_{thread_ts}",
+            sender_id=sender_id or "",
+        )
+    else:
+        thread_history = fetch_thread_history(web, channel, thread_ts, is_dm=is_dm, bot_token=bot_token)
 
     # Resolve sender identity
     is_third_party = sender_id is not None and sender_id != KAMAL_USER_ID
