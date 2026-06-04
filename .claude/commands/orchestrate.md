@@ -59,6 +59,14 @@ python3 .claude/hooks/poll-taleemabad-github.py
 
 If exit code != 0: **release lock, stop**.
 
+### Step 4.5 — Poll proactive Slack channels
+
+```bash
+python3 .claude/hooks/poll-proactive-slack.py
+```
+
+If exit code != 0: **release lock, stop**.
+
 ### Step 5 — Dispatch subagents
 
 ```bash
@@ -66,6 +74,14 @@ python3 .claude/hooks/orchestrator-dispatch.py
 ```
 
 Dispatcher handles its own failures per context_key — this step always succeeds at the tick level.
+
+### Step 5.5 — Run gap watcher
+
+```bash
+python3 .claude/hooks/kamil-gap-watcher.py
+```
+
+Gap watcher monitors for stalled contexts and escalates timeouts. Always succeeds at the tick level.
 
 ### Step 6 — Update last_sync_at + release lock
 
