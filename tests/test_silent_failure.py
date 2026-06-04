@@ -162,3 +162,19 @@ def test_tracked_thread_marks_failed_on_exception():
     conn.close()
     assert row[0] == 'failed'
     assert 'boom' in row[1]
+
+def test_stale_job_checker_marks_timed_out():
+    import kamil_context as kc, time as _t, sqlite3
+    kc.HARNESS_DB = make_test_db()
+    job_id = kc.create_job(event_id='evt_stale_001', source='slack_mention')
+    conn = sqlite3.connect(kc.HARNESS_DB)
+    conn.execute("UPDATE jobs SET status='processing', created_at=? WHERE id=?",
+                 (int(_t.time()) - 400, job_id))
+    conn.commit()
+    conn.close()
+    count = kc.check_and_mark_stale_jobs(threshold_seconds=300)
+    assert count >= 1
+    conn = sqlite3.connect(kc.HARNESS_DB)
+    row = conn.execute("SELECT status FROM jobs WHERE id=?", (job_id,)).fetchone()
+    conn.close()
+    assert row[0] == 'timed_out'

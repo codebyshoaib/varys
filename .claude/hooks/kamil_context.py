@@ -630,6 +630,53 @@ def get_stale_jobs(threshold_seconds: int = 300) -> list:
     finally:
         c.close()
 
+def check_and_mark_stale_jobs(threshold_seconds: int = 300) -> int:
+    """Mark stale processing jobs as timed_out. Returns count of jobs marked."""
+    import sys
+    stale = get_stale_jobs(threshold_seconds=threshold_seconds)
+    count = 0
+    for job in stale:
+        try:
+            now = int(time.time())
+            c = _conn()
+            try:
+                c.execute(
+                    "UPDATE jobs SET status='timed_out', failure_reason='stale', updated_at=? WHERE id=?",
+                    (now, job['id'])
+                )
+                c.commit()
+            finally:
+                c.close()
+            log_suppression(
+                event_id=job.get('event_id', ''),
+                reason_code='budget_exhausted',
+                raw_text=job.get('raw_text', ''),
+                channel=job.get('channel', ''),
+                job_id=job['id'],
+                details=f"Job stuck in processing for >{threshold_seconds}s",
+            )
+            count += 1
+        except Exception as e:
+            print(f"[check_and_mark_stale_jobs] error: {e}", file=sys.stderr)
+    return count
+
+def run_stale_job_checker(interval: int = 300) -> None:
+    """Run stale job checker forever in a background thread."""
+    import sys
+    while True:
+        try:
+            count = check_and_mark_stale_jobs(threshold_seconds=300)
+            if count > 0:
+                try:
+                    from kamil_log import klog
+                    klog("stale_jobs_marked", component="listener",
+                         count=count, severity="WARNING")
+                except Exception:
+                    pass
+        except Exception as e:
+            print(f"[run_stale_job_checker] error: {e}", file=sys.stderr)
+        time.sleep(interval)
+
 # ── Suppression + Milestone logging ────────────────────────────────────────────
 
 def log_suppression(

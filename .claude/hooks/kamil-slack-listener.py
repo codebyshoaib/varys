@@ -898,6 +898,18 @@ def _maybe_run_daily_content():
 
     log("First message of the day — running content pipeline")
 
+    pipeline_job_id = ""
+    if _context_available:
+        import datetime as _dt
+        pipeline_job_id = create_job(
+            event_id=f"daily_content_{_dt.datetime.now().strftime('%Y-%m-%d')}",
+            source='cron',
+            intent='content_pipeline',
+            steps_total=8,
+        )
+        mark_job_processing(pipeline_job_id)
+        log_milestone(pipeline_job_id, 'pipeline_started', 1, 8, 'completed')
+
     def run_pipeline():
         try:
             import subprocess, os
@@ -958,6 +970,8 @@ English only. Both accounts every day.
 BOT_TOKEN is in ~/.claude/hooks/.slack"""
 
             env["KAMIL_CONTENT_PROMPT"] = prompt
+            if _context_available and pipeline_job_id:
+                log_milestone(pipeline_job_id, 'content_generation_spawn', 2, 8, 'completed')
             subprocess.Popen(
                 ["bash", "-c", f'{nvm} && claude --dangerously-skip-permissions --print -p "$KAMIL_CONTENT_PROMPT"'],
                 cwd=kamil_dir, env=env,
@@ -985,9 +999,14 @@ BOT_TOKEN is in ~/.claude/hooks/.slack"""
             linkedin_caption = TECH_CAPTIONS[_day % 10]
             li_result = post_to_linkedin(linkedin_caption)
             log(f"LinkedIn auto-post: {li_result}")
+            if _context_available and pipeline_job_id:
+                log_milestone(pipeline_job_id, 'linkedin_posted', 8, 8, 'completed')
+                mark_job_delivered(pipeline_job_id)
 
         except Exception as e:
             log(f"Content pipeline error: {e}")
+            if _context_available and pipeline_job_id:
+                mark_job_failed(pipeline_job_id, str(e))
 
     threading.Thread(target=run_pipeline, daemon=True).start()
 
@@ -1151,6 +1170,9 @@ def main():
         import threading as _threading
         _threading.Thread(target=run_sync_loop, args=(60,), daemon=True).start()
         log("[kamil_context] sync loop started")
+        from kamil_context import run_stale_job_checker
+        _threading.Thread(target=run_stale_job_checker, args=(300,), daemon=True).start()
+        log("[kamil_context] stale job checker started")
 
     klog_system_start("listener")
     log("Kamil listener starting (Socket Mode)...")
