@@ -711,3 +711,52 @@ def log_milestone(
                  status=status, details=details)
     except Exception as e:
         print(f"[log_milestone] Axiom write failed: {e}", file=sys.stderr)
+
+# ── Thread context enrichment ──────────────────────────────────────────────────
+
+def fetch_thread_context(
+    channel: str,
+    thread_ts: str,
+    web,
+    event_id: str = "",
+    sender_id: str = "",
+) -> str:
+    """
+    Fetch the full Slack thread via conversations.replies.
+    Returns formatted string for Claude prompts.
+    On failure: logs suppression event and returns "" — never raises.
+    """
+    import sys
+    try:
+        resp = web.conversations_replies(channel=channel, ts=thread_ts, limit=50)
+        messages = resp.get("messages", [])
+        lines = []
+        for m in messages:
+            user = m.get("user", "unknown")
+            text = m.get("text", "")
+            ts   = m.get("ts", "")
+            lines.append(f"[{ts}] <{user}>: {text}")
+        return "\n".join(lines)
+    except Exception as e:
+        log_suppression(
+            event_id=event_id or thread_ts,
+            reason_code="thread_fetch_failed",
+            raw_text="",
+            channel=channel,
+            sender_id=sender_id,
+            details=str(e),
+        )
+        return ""
+
+def extract_pr_url(trigger_text: str, thread_context: str) -> Optional[str]:
+    """
+    Search for a GitHub PR URL in trigger text first, then full thread.
+    Returns the first match or None.
+    """
+    import re
+    pattern = r'https://github\.com/[^\s>)"<]+'
+    for text in [trigger_text, thread_context]:
+        match = re.search(pattern, text)
+        if match:
+            return match.group(0)
+    return None

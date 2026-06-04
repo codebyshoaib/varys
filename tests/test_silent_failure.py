@@ -103,3 +103,33 @@ def test_log_milestone_updates_steps_done():
     row = conn.execute("SELECT steps_done FROM jobs WHERE id=?", (job_id,)).fetchone()
     conn.close()
     assert row[0] == 1
+
+def test_extract_pr_url_from_trigger():
+    import kamil_context as kc
+    url = kc.extract_pr_url(
+        trigger_text='please review https://github.com/Orenda-Project/taleemabad-core/pull/5151',
+        thread_context=''
+    )
+    assert url == 'https://github.com/Orenda-Project/taleemabad-core/pull/5151'
+
+def test_extract_pr_url_from_thread():
+    import kamil_context as kc
+    url = kc.extract_pr_url(
+        trigger_text='@Kamil review this PR',
+        thread_context='[123.456] <U01>: https://github.com/Orenda-Project/taleemabad-core/pull/5151\n@channel Please review.'
+    )
+    assert url == 'https://github.com/Orenda-Project/taleemabad-core/pull/5151'
+
+def test_extract_pr_url_returns_none_when_missing():
+    import kamil_context as kc
+    url = kc.extract_pr_url(trigger_text='review this', thread_context='no url here')
+    assert url is None
+
+def test_fetch_thread_context_returns_empty_on_failure():
+    import kamil_context as kc
+    kc.HARNESS_DB = make_test_db()
+    class FakeWeb:
+        def conversations_replies(self, **kwargs):
+            raise Exception("Network error")
+    result = kc.fetch_thread_context('C01', '123.456', FakeWeb(), event_id='evt_ft_001')
+    assert result == ''
