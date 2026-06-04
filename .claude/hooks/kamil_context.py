@@ -629,3 +629,85 @@ def get_stale_jobs(threshold_seconds: int = 300) -> list:
         return [dict(r) for r in rows]
     finally:
         c.close()
+
+# ── Suppression + Milestone logging ────────────────────────────────────────────
+
+def log_suppression(
+    event_id: str,
+    reason_code: str,
+    raw_text: str = "",
+    channel: str = "",
+    sender_id: str = "",
+    job_id: str = "",
+    details: str = "",
+) -> None:
+    """
+    Record a suppressed/dropped inbound message.
+    Writes to SQLite suppression_log + Axiom via kamil_log.
+    Never raises.
+    """
+    import sys
+    row_id = hashlib.sha256(f"{event_id}:{reason_code}:{int(time.time())}".encode()).hexdigest()
+    now = int(time.time())
+    try:
+        c = _conn()
+        try:
+            c.execute(
+                "INSERT OR IGNORE INTO suppression_log "
+                "(id, event_id, reason_code, raw_text, channel, sender_id, job_id, details, created_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?)",
+                (row_id, event_id, reason_code, raw_text[:500], channel,
+                 sender_id, job_id, details[:500], now)
+            )
+            c.commit()
+        finally:
+            c.close()
+    except Exception as e:
+        print(f"[log_suppression] DB write failed: {e}", file=sys.stderr)
+    try:
+        from kamil_log import klog_suppression as _klog_sup
+        _klog_sup(
+            event_id=event_id,
+            reason_code=reason_code,
+            raw_text=raw_text,
+            channel=channel,
+            sender_id=sender_id,
+            job_id=job_id,
+            details=details,
+        )
+    except Exception as e:
+        print(f"[log_suppression] Axiom write failed: {e}", file=sys.stderr)
+
+def log_milestone(
+    job_id: str,
+    step_name: str,
+    step_index: int,
+    total_steps: int,
+    status: str,
+    details: str = "",
+) -> None:
+    """
+    Log a step milestone and update steps_done in the jobs table.
+    Never raises.
+    """
+    import sys
+    try:
+        if status == 'completed':
+            c = _conn()
+            try:
+                c.execute(
+                    "UPDATE jobs SET steps_done=steps_done+1, updated_at=? WHERE id=?",
+                    (int(time.time()), job_id)
+                )
+                c.commit()
+            finally:
+                c.close()
+    except Exception as e:
+        print(f"[log_milestone] DB write failed: {e}", file=sys.stderr)
+    try:
+        from kamil_log import klog_milestone as _klog_ms
+        _klog_ms(job_id=job_id, step_name=step_name,
+                 step_index=step_index, total_steps=total_steps,
+                 status=status, details=details)
+    except Exception as e:
+        print(f"[log_milestone] Axiom write failed: {e}", file=sys.stderr)

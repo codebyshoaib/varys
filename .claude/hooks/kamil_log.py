@@ -296,6 +296,51 @@ def klog_session_end(component: str, *, duration_s: float = 0, context_loaded: s
     _send([e])
 
 
+def klog_suppression(
+    event_id: str,
+    reason_code: str,
+    raw_text: str = "",
+    channel: str = "",
+    sender_id: str = "",
+    job_id: str = "",
+    details: str = "",
+) -> None:
+    """Log a suppressed/dropped inbound message event."""
+    klog(
+        "suppression",
+        component="listener",
+        event_id=event_id,
+        reason_code=reason_code,
+        raw_text=raw_text[:200],
+        channel=channel,
+        sender_id=sender_id,
+        job_id=job_id,
+        details=details[:500],
+        severity="WARNING",
+    )
+
+def klog_milestone(
+    job_id: str,
+    step_name: str,
+    step_index: int,
+    total_steps: int,
+    status: str,
+    details: str = "",
+) -> None:
+    """Log a step milestone for a multi-step job."""
+    klog(
+        "milestone",
+        component="listener",
+        job_id=job_id,
+        step_name=step_name,
+        step_index=step_index,
+        total_steps=total_steps,
+        status=status,
+        details=details[:500],
+        severity="INFO",
+    )
+
+
 # ── Legacy shim — so existing klog() calls don't break during transition ─────
 
 def klog(event: str, **fields):

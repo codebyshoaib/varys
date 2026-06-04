@@ -75,3 +75,31 @@ def test_mark_job_processing():
     conn.close()
     assert row[0] == 'processing'
     assert row[1] is not None
+
+def test_log_suppression_writes_to_db():
+    import kamil_context as kc
+    kc.HARNESS_DB = make_test_db()
+    kc.log_suppression(
+        event_id='evt_sup_001',
+        reason_code='no_url_in_context',
+        raw_text='review this PR',
+        channel='C01',
+        sender_id='U01',
+    )
+    conn = sqlite3.connect(kc.HARNESS_DB)
+    row = conn.execute(
+        "SELECT reason_code FROM suppression_log WHERE event_id='evt_sup_001'"
+    ).fetchone()
+    conn.close()
+    assert row is not None
+    assert row[0] == 'no_url_in_context'
+
+def test_log_milestone_updates_steps_done():
+    import kamil_context as kc
+    kc.HARNESS_DB = make_test_db()
+    job_id = kc.create_job(event_id='evt_ms_001', source='slack_mention', steps_total=3)
+    kc.log_milestone(job_id, 'fetch_thread', 1, 3, 'completed')
+    conn = sqlite3.connect(kc.HARNESS_DB)
+    row = conn.execute("SELECT steps_done FROM jobs WHERE id=?", (job_id,)).fetchone()
+    conn.close()
+    assert row[0] == 1
