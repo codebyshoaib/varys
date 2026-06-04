@@ -3,6 +3,12 @@
 > How to improve the system itself. Read when detecting a recurring pattern.
 > Propose improvements to Kamal — never apply without approval.
 
+## Core Rules
+- Detect patterns before proposing. 3+ occurrences = propose a fix.
+- Never apply changes to the harness without Kamal's explicit approval.
+- Every proposal goes to Kamal via Slack DM: what / why / what changes.
+- Log all proposals in the "Proposed Improvements Log" section below.
+
 ## CLAUDE.md Improvement Patterns
 - Rule keeps being violated → too vague, rewrite with an example
 - Context repeated 3+ sessions → extract to rules/ file

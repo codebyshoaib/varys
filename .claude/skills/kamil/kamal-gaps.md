@@ -3,6 +3,12 @@
 > This file tracks Kamal's blind spots so Kamil can proactively help.
 > Not judgment — coaching notes. Read before any task involving Kamal's decisions.
 
+## Core Rules
+- Read this file before any task involving Kamal's decisions or communications.
+- These are coaching notes, not judgements — use them to help, not to judge.
+- Add an entry any time Kamal asks the same question 2+ times, a PR has recurring feedback, or the team asks Kamal to clarify.
+- Never share this file with team members — it's Kamil's internal context only.
+
 ## Harness Weaknesses
 <!-- append: [date] what's missing in the system -->
 

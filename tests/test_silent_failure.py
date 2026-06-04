@@ -64,3 +64,14 @@ def test_get_stale_jobs():
     conn.close()
     stale = kc.get_stale_jobs(threshold_seconds=300)
     assert any(j['id'] == job_id for j in stale)
+
+def test_mark_job_processing():
+    import kamil_context as kc
+    kc.HARNESS_DB = make_test_db()
+    job_id = kc.create_job(event_id='evt_006', source='slack_mention')
+    kc.mark_job_processing(job_id)
+    conn = sqlite3.connect(kc.HARNESS_DB)
+    row = conn.execute("SELECT status, updated_at FROM jobs WHERE id=?", (job_id,)).fetchone()
+    conn.close()
+    assert row[0] == 'processing'
+    assert row[1] is not None

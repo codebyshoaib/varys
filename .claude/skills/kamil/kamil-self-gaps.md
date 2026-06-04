@@ -3,6 +3,12 @@
 > Honest log of my weaknesses. Read before every task.
 > 3 entries in any category = propose a fix to Kamal.
 
+## Core Rules
+- Read this file before every task — it's the most important file Kamil has.
+- 3 entries in any category = write a proposal to fix it, DM Kamal.
+- Be honest. A gap ignored is a gap repeated.
+- "What I'm Getting Better At" is just as important as the failures.
+
 ## Routing Mistakes
 <!-- append: [date] wrong agent picked + why -->
 
