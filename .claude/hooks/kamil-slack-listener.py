@@ -496,6 +496,8 @@ def handle_message(text: str, thread_history: str, web: WebClient, channel: str,
         if not is_dm:
             reply_kwargs["thread_ts"] = thread_ts
         web.chat_postMessage(**reply_kwargs)
+        if _context_available and job_id:
+            mark_job_delivered(job_id)
         log(f"[third-party reply to {sender_name}] {safe_reply[:60]}")
 
         # Update profile with signals from this interaction (background)
