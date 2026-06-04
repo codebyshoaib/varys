@@ -133,3 +133,32 @@ def test_fetch_thread_context_returns_empty_on_failure():
             raise Exception("Network error")
     result = kc.fetch_thread_context('C01', '123.456', FakeWeb(), event_id='evt_ft_001')
     assert result == ''
+
+def test_tracked_thread_marks_delivered():
+    import kamil_context as kc, time as _time
+    kc.HARNESS_DB = make_test_db()
+    job_id = kc.create_job(event_id='evt_tt_001', source='slack_mention')
+    results = []
+    def _work():
+        results.append('done')
+    t = kc.tracked_thread(job_id, _work)
+    t.join(timeout=3)
+    assert 'done' in results
+    conn = sqlite3.connect(kc.HARNESS_DB)
+    row = conn.execute("SELECT status FROM jobs WHERE id=?", (job_id,)).fetchone()
+    conn.close()
+    assert row[0] == 'delivered'
+
+def test_tracked_thread_marks_failed_on_exception():
+    import kamil_context as kc
+    kc.HARNESS_DB = make_test_db()
+    job_id = kc.create_job(event_id='evt_tt_002', source='slack_mention')
+    def _work():
+        raise ValueError("boom")
+    t = kc.tracked_thread(job_id, _work)
+    t.join(timeout=3)
+    conn = sqlite3.connect(kc.HARNESS_DB)
+    row = conn.execute("SELECT status, failure_reason FROM jobs WHERE id=?", (job_id,)).fetchone()
+    conn.close()
+    assert row[0] == 'failed'
+    assert 'boom' in row[1]

@@ -748,6 +748,33 @@ def fetch_thread_context(
         )
         return ""
 
+# ── Tracked thread wrapper ─────────────────────────────────────────────────────
+
+def tracked_thread(job_id: str, fn, *args, **kwargs):
+    """
+    Run fn(*args, **kwargs) in a daemon thread.
+    On success: marks job delivered.
+    On exception: marks job failed, logs error to Axiom.
+    Returns the Thread object (already started).
+    """
+    import threading, sys
+
+    def _run():
+        try:
+            fn(*args, **kwargs)
+            mark_job_delivered(job_id)
+        except Exception as e:
+            mark_job_failed(job_id, str(e))
+            try:
+                from kamil_log import klog_error
+                klog_error("tracked_thread", e, component="listener", severity="ERROR")
+            except Exception:
+                print(f"[tracked_thread] job={job_id} failed: {e}", file=sys.stderr)
+
+    t = threading.Thread(target=_run, daemon=True)
+    t.start()
+    return t
+
 def extract_pr_url(trigger_text: str, thread_context: str) -> Optional[str]:
     """
     Search for a GitHub PR URL in trigger text first, then full thread.
