@@ -817,7 +817,7 @@ def dispatch(text: str, web: WebClient, channel: str, thread_ts: str, source: st
     log(f"[{source}] {clean[:80]}")
 
     # For DMs: read flat channel history. For channel threads: read thread replies.
-    if _context_available:
+    if _context_available and not is_dm:
         thread_history = fetch_thread_context(
             channel=channel,
             thread_ts=thread_ts,
