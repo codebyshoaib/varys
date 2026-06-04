@@ -541,7 +541,7 @@ except ImportError:
                 dp[j] = prev[j - 1] if a[i-1] == b[j-1] else 1 + min(prev[j], dp[j-1], prev[j-1])
         return dp[n]
 
-SOURCE_DB_ID = "bbf6ade203e543f39f4c64a2f05fe29e"   # Team People / focus
+SOURCE_DB_ID = "c976d58ea4e34b0585f245529cdc4528"   # People Intelligence (canonical; old Team People/focus bbf6ade2 retired)
 TARGET_DB_ID = "c976d58ea4e34b0585f245529cdc4528"   # People Intelligence (canonical)
 
 def _fetch_db_pages(db_id: str) -> list:

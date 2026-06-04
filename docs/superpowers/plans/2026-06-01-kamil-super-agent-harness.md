@@ -220,7 +220,7 @@ All Notion reads/writes use `mcp__claude_ai_Notion__*` tools (no API key file). 
 |---|---|---|
 | Open PRs | `18017a67136a4561ada9818c239b8f33` | PRs, CI state, review status |
 | Slack Inbox | `6d14f1b6b8cd4ff68fd40efdfc3f304e` | Classified messages needing action |
-| Team People / focus | `bbf6ade203e543f39f4c64a2f05fe29e` | Teammate roles + current focus |
+| Team People / focus | `c976d58ea4e34b0585f245529cdc4528` | Teammate roles + current focus (canonical: People Intelligence; old bbf6ade2 retired) |
 | Last Work Log | `0b71db855f914d18ac6d97c0f77fc21e` | Daily session summaries |
 | Harness backlog | `de10157da3e34ef58a74ea240f31fe98` | Kamil's feature backlog + self-evolution |
 | People Intelligence | `c976d58ea4e34b0585f245529cdc4528` | Mood, needs, recurring topics, what works |
