@@ -181,3 +181,40 @@ def test_sync_one_row_dead_letter_after_5_failures():
     conn.close()
     assert final[0] == -1   # dead-letter
     assert final[1] == 5    # retries maxed
+
+def test_lookup_context_web_fallback():
+    import kamil_context as kc
+    orig_notion = kc._notion_query
+    orig_nlm = kc._nlm_query
+    orig_web = kc._web_search
+    kc._notion_query = lambda db_id, question: (None, "thin")
+    kc._nlm_query = lambda question: (None, "thin")
+    kc._web_search = lambda question: ("web result", "clear")
+    try:
+        result = kc.lookup_context("what is the latest news?")
+        assert result.answer == "web result"
+        assert "web" in result.source_chain
+    finally:
+        kc._notion_query = orig_notion
+        kc._nlm_query = orig_nlm
+        kc._web_search = orig_web
+
+def test_lookup_context_person_skips_freshness_gate():
+    import tempfile
+    with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as f:
+        path = f.name
+    import kamil_context as kc
+    kc.HARNESS_DB = path
+    eid = _seed_person(path, "Mahnoor Baig", "U123")
+    calls = []
+    orig_notion = kc._notion_query
+    orig_web = kc._web_search
+    kc._notion_query = lambda db_id, q: (calls.append(db_id) or ("notion answer", "clear"))
+    kc._web_search = lambda q: ("web answer", "clear")
+    try:
+        result = kc.lookup_context("what is Mahnoor's latest news?", person_id=eid)
+        assert len(calls) > 0, "Notion must be queried even with freshness keywords when person_id set"
+        assert "notion" in result.source_chain[0]
+    finally:
+        kc._notion_query = orig_notion
+        kc._web_search = orig_web

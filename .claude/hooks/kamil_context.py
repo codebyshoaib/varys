@@ -366,3 +366,154 @@ def run_sync_loop(interval: int = 60) -> None:
         except Exception as e:
             print(f"[sync_loop] Error: {e}", file=sys.stderr)
         time.sleep(interval)
+
+# ── ContextResult ──────────────────────────────────────────────────────────────
+
+@dataclass
+class ContextResult:
+    answer: Optional[str]
+    source_chain: List[str] = field(default_factory=list)
+    needs_escalation: bool = False
+
+# ── Notion DB map and topic classifier ────────────────────────────────────────
+
+_NOTION_DB_MAP = {
+    "people":   "c976d58ea4e34b0585f245529cdc4528",
+    "pr":       "18017a67136a4561ada9818c239b8f33",
+    "harness":  "de10157da3e34ef58a74ea240f31fe98",
+    "slack":    "6d14f1b6b8cd4ff68fd40efdfc3f304e",
+    "content":  "68792d2dfff84691a4f646f5a8126149",
+    "jobs":     "0d69c6ff83d844c794c2d341c4ded8d7",
+}
+
+def _classify_topic(question: str, person_id: Optional[str]) -> str:
+    """Return a key from _NOTION_DB_MAP. Logs every decision to stderr."""
+    import sys
+    q = question.lower()
+    if person_id or any(w in q for w in ["message", "dm", "email", "who is", "what did", "how is"]):
+        chosen = "people"
+    elif any(w in q for w in ["pr", "pull request", "ci", "merge", "review", "github"]):
+        chosen = "pr"
+    elif any(w in q for w in ["slack", "inbox", "replied", "thread"]):
+        chosen = "slack"
+    elif any(w in q for w in ["content", "post", "caption", "linkedin", "topic"]):
+        chosen = "content"
+    elif any(w in q for w in ["job", "apply", "application", "freelance"]):
+        chosen = "jobs"
+    else:
+        chosen = "harness"
+    print(f"[lookup_context] classifier: '{question[:60]}' → {chosen}", file=sys.stderr)
+    return chosen
+
+# ── Retrieval stubs (monkeypatchable) ─────────────────────────────────────────
+
+def _notion_query(db_id: str, question: str):
+    """Query a Notion DB. Returns (answer_text, quality) where quality is clear|thin|empty."""
+    try:
+        from kamil_notion import notion_request
+        resp = notion_request("POST", f"/databases/{db_id}/query", {
+            "filter": {"property": "Name", "rich_text": {"contains": question[:50]}}
+        })
+        results = resp.get("results", [])
+        if not results:
+            return None, "empty"
+        texts = []
+        for page in results[:3]:
+            props = page.get("properties", {})
+            for v in props.values():
+                items = v.get("rich_text") or v.get("title") or []
+                texts.append("".join(i["plain_text"] for i in items))
+        answer = " | ".join(t for t in texts if t)
+        quality = "clear" if len(answer) > 40 else "thin"
+        return answer or None, quality
+    except Exception:
+        return None, "empty"
+
+def _nlm_query(question: str):
+    """Query best-matching NLM notebook. Returns (answer, quality)."""
+    try:
+        import subprocess
+        q = question.lower()
+        c = _conn()
+        try:
+            notebooks = c.execute("SELECT * FROM nlm_notebooks").fetchall()
+        finally:
+            c.close()
+        best, best_hits = None, 0
+        for nb in notebooks:
+            keywords = (nb["keywords"] or "").lower().split()
+            hits = sum(1 for kw in keywords if kw in q)
+            if hits > best_hits:
+                best_hits, best = hits, nb
+        if not best or best_hits == 0:
+            return None, "empty"
+        result = subprocess.run(
+            ["nlm", "ask", best["alias"], question],
+            capture_output=True, text=True, timeout=30
+        )
+        answer = result.stdout.strip()
+        quality = "clear" if len(answer) > 40 else "thin"
+        c2 = _conn()
+        try:
+            c2.execute("UPDATE nlm_notebooks SET last_queried=? WHERE id=?",
+                       (int(time.time()), best["id"]))
+            c2.commit()
+        finally:
+            c2.close()
+        return answer or None, quality
+    except Exception:
+        return None, "empty"
+
+def _web_search(question: str):
+    """Web search stub. In a Claude session this is fulfilled by the WebSearch tool.
+    Returns (answer, quality). Override in tests or calling code."""
+    return None, "empty"
+
+_FRESHNESS_KEYWORDS = ["price", "news", "job posting", "today", "current", "latest", "right now"]
+
+# ── lookup_context ─────────────────────────────────────────────────────────────
+
+def lookup_context(question: str, person_id: Optional[str] = None) -> ContextResult:
+    """
+    Retrieve context automatically: Notion → NLM → web.
+    Never asks for permission. Returns ContextResult with full source_chain.
+    If person_id is set, freshness gate is skipped — Notion is always queried first.
+    """
+    import sys
+    source_chain: List[str] = []
+    q = question.lower()
+
+    # 1. Freshness gate — only for impersonal queries (person_id is None)
+    if person_id is None:
+        matched_kw = next((kw for kw in _FRESHNESS_KEYWORDS if kw in q), None)
+        if matched_kw:
+            print(f"[lookup_context] freshness gate fired: '{matched_kw}' → web", file=sys.stderr)
+            answer, quality = _web_search(question)
+            source_chain.append("web")
+            if quality == "clear":
+                return ContextResult(answer=answer, source_chain=source_chain)
+            return ContextResult(answer=None, source_chain=source_chain, needs_escalation=True)
+        print(f"[lookup_context] freshness gate: no match → Notion", file=sys.stderr)
+
+    # 2. Notion fetch
+    topic = _classify_topic(question, person_id)
+    db_id = _NOTION_DB_MAP[topic]
+    answer, quality = _notion_query(db_id, question)
+    source_chain.append(f"notion:{topic}")
+    if quality == "clear":
+        return ContextResult(answer=answer, source_chain=source_chain)
+
+    # 3. NLM check
+    answer, quality = _nlm_query(question)
+    if quality == "clear":
+        source_chain.append("nlm")
+        return ContextResult(answer=answer, source_chain=source_chain)
+    source_chain.append("nlm:miss")
+
+    # 4. Web search fallback
+    answer, quality = _web_search(question)
+    source_chain.append("web")
+    if quality == "clear":
+        return ContextResult(answer=answer, source_chain=source_chain)
+
+    return ContextResult(answer=None, source_chain=source_chain, needs_escalation=True)
