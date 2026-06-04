@@ -58,7 +58,16 @@ def _parse_channels_config():
     channels = []
     for line in CHANNELS_CFG.read_text().splitlines():
         line = line.strip()
-        if not line or line.startswith("#") or line.startswith("Format") or line.startswith("Modes") or line == "---":
+        # Skip empty lines, markdown headers (but not channel lines with |), and separators
+        if not line or line == "---":
+            continue
+        if line.startswith("Format") or line.startswith("Modes") or line.startswith("- `"):
+            continue
+        # Channel lines start with # but contain | — check for | to distinguish from markdown headers
+        if line.startswith("#") and "|" not in line:
+            continue
+        # Now split config lines (e.g., "#engineering-general | watch | broken,failing,error")
+        if "|" not in line:
             continue
         parts = [p.strip() for p in line.split("|")]
         if len(parts) >= 2:
