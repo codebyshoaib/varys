@@ -68,7 +68,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     channel        TEXT,
     thread_ts      TEXT,
     sender_id      TEXT,
-    status         TEXT NOT NULL DEFAULT 'received',
+    status         TEXT DEFAULT 'received',
     failure_reason TEXT,
     steps_total    INTEGER DEFAULT 1,
     steps_done     INTEGER DEFAULT 0,
