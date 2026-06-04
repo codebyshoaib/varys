@@ -11,13 +11,15 @@ paths:
 
 All Notion reads/writes use `mcp__claude_ai_Notion__*` tools (no API key file). **When Kamal asks about work context → fetch Notion via MCP first, then the Slack inbox file if needed.**
 
+## Retrieval and Write Rules
+Retrieval and write rules are defined in `.claude/hooks/kamil_context.py` — do not re-specify here.
+
 ## Databases
 
 | DB | ID | Purpose |
 |---|---|---|
 | Open PRs | `18017a67136a4561ada9818c239b8f33` | PRs, CI state, review status |
 | Slack Inbox | `6d14f1b6b8cd4ff68fd40efdfc3f304e` | Classified messages needing action |
-| Team People / focus | `c976d58ea4e34b0585f245529cdc4528` | Teammate roles + current focus (canonical: People Intelligence) |
 | Last Work Log | `0b71db855f914d18ac6d97c0f77fc21e` | Daily session summaries |
 | Harness backlog | `de10157da3e34ef58a74ea240f31fe98` | Kamil's feature backlog + self-evolution |
 | People Intelligence | `c976d58ea4e34b0585f245529cdc4528` | Mood, needs, recurring topics, what works |
