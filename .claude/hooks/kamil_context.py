@@ -62,6 +62,7 @@ CREATE INDEX IF NOT EXISTS idx_interactions_person ON interactions(person_id, cr
 """
 
 def _conn() -> sqlite3.Connection:
+    os.makedirs(os.path.dirname(HARNESS_DB), exist_ok=True)
     c = sqlite3.connect(HARNESS_DB)
     c.row_factory = sqlite3.Row
     return c
