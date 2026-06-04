@@ -647,7 +647,7 @@ def log_suppression(
     Never raises.
     """
     import sys
-    row_id = hashlib.sha256(f"{event_id}:{reason_code}:{int(time.time())}".encode()).hexdigest()
+    row_id = hashlib.sha256(f"{event_id}:{reason_code}".encode()).hexdigest()
     now = int(time.time())
     try:
         c = _conn()
