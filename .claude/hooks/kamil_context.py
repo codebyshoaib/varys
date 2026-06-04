@@ -78,3 +78,156 @@ def init_schema() -> None:
         c.commit()
     finally:
         c.close()
+
+# ── Exceptions ────────────────────────────────────────────────────────────────
+
+class PersonNotFound(Exception):
+    pass
+
+class PersonAmbiguous(Exception):
+    def __init__(self, candidates):
+        self.candidates = candidates
+        super().__init__(f"Ambiguous person — candidates: {[c['name'] for c in candidates]}")
+
+# ── PersonRecord ───────────────────────────────────────────────────────────────
+
+@dataclass
+class PersonRecord:
+    entity_id: str
+    slack_id: str
+    notion_page_id: str
+    name: str
+    aliases: List[str]
+    display_name: str
+
+# ── Internal helpers ───────────────────────────────────────────────────────────
+
+def _notion_fetch_person(name: str) -> Optional[dict]:
+    """
+    Query People Intelligence (Notion MCP) for a person by name.
+    Returns dict with keys: name, slack_id, notion_page_id, aliases — or None.
+    Monkeypatch this in tests.
+    """
+    try:
+        from kamil_notion import notion_request
+        results = notion_request(
+            "POST",
+            "/databases/c976d58ea4e34b0585f245529cdc4528/query",
+            {"filter": {"property": "Name", "rich_text": {"contains": name}}}
+        )
+        if not results or not results.get("results"):
+            return None
+        page = results["results"][0]
+        props = page.get("properties", {})
+        def text_val(p):
+            items = p.get("rich_text") or p.get("title") or []
+            return "".join(i["plain_text"] for i in items) if items else ""
+        return {
+            "notion_page_id": page["id"],
+            "name": text_val(props.get("Name", {})),
+            "slack_id": text_val(props.get("Slack ID", {})),
+            "aliases": [a.strip() for a in text_val(props.get("Aliases", {})).split(",") if a.strip()],
+        }
+    except Exception:
+        return None
+
+def _upsert_person_entity(person: dict) -> str:
+    """Insert or update a person in SQLite entities. Returns entity_id."""
+    import uuid as _uuid
+    aliases_text = ",".join(person.get("aliases", []))
+    meta = json.dumps({
+        "aliases": person.get("aliases", []),
+        "slack_id": person.get("slack_id", ""),
+        "notion_page_id": person.get("notion_page_id", ""),
+    })
+    ext_id = person.get("slack_id") or person.get("notion_page_id", "")
+    c = _conn()
+    try:
+        row = c.execute(
+            "SELECT id FROM entities WHERE type='person' AND external_id=?", (ext_id,)
+        ).fetchone()
+        if row:
+            entity_id = row["id"]
+            c.execute(
+                "UPDATE entities SET name=?, aliases_text=?, meta=? WHERE id=?",
+                (person["name"], aliases_text, meta, entity_id)
+            )
+        else:
+            entity_id = str(_uuid.uuid4())
+            c.execute(
+                "INSERT INTO entities(id,type,external_id,name,aliases_text,meta) VALUES(?,?,?,?,?,?)",
+                (entity_id, 'person', ext_id, person["name"], aliases_text, meta)
+            )
+        c.commit()
+    finally:
+        c.close()
+    return entity_id
+
+def _score_match(row, term: str) -> int:
+    """Return match score: 3=exact name, 2=alias exact, 1=partial. 0=no match."""
+    name = (row["name"] or "").lower()
+    term_l = term.lower()
+    if name == term_l:
+        return 3
+    aliases = [a.strip().lower() for a in (row["aliases_text"] or "").split(",") if a.strip()]
+    if term_l in aliases:
+        return 2
+    if term_l in name or any(term_l in a for a in aliases):
+        return 1
+    return 0
+
+# ── resolve_person ─────────────────────────────────────────────────────────────
+
+def resolve_person(name_or_id: str) -> PersonRecord:
+    """
+    Find a person by name, alias, Slack ID, or Notion page ID.
+    Raises PersonNotFound if not found after Notion fetch.
+    Raises PersonAmbiguous if multiple candidates tie on score.
+    """
+    import sys
+    term = name_or_id.strip()
+    c = _conn()
+    try:
+        rows = c.execute("SELECT * FROM entities WHERE type='person'").fetchall()
+    finally:
+        c.close()
+
+    scored = [(r, _score_match(r, term)) for r in rows]
+    scored = [(r, s) for r, s in scored if s > 0]
+
+    if not scored:
+        person = _notion_fetch_person(term)
+        if not person:
+            raise PersonNotFound(term)
+        entity_id = _upsert_person_entity(person)
+        return PersonRecord(
+            entity_id=entity_id,
+            slack_id=person.get("slack_id", ""),
+            notion_page_id=person.get("notion_page_id", ""),
+            name=person["name"],
+            aliases=person.get("aliases", []),
+            display_name=person["name"],
+        )
+
+    max_score = max(s for _, s in scored)
+    top = [r for r, s in scored if s == max_score]
+
+    if len(top) == 1:
+        if max_score < 3:
+            print(
+                f"[resolve_person] Warning: '{term}' matched '{top[0]['name']}' (score={max_score}); "
+                f"other candidates: {[r['name'] for r, _ in scored if r['id'] != top[0]['id']]}",
+                file=sys.stderr
+            )
+        r = top[0]
+        meta = json.loads(r["meta"] or "{}")
+        return PersonRecord(
+            entity_id=r["id"],
+            slack_id=meta.get("slack_id", ""),
+            notion_page_id=meta.get("notion_page_id", ""),
+            name=r["name"],
+            aliases=meta.get("aliases", []),
+            display_name=r["name"],
+        )
+
+    raise PersonAmbiguous([{"entity_id": r["id"], "name": r["name"]} for r in top])
