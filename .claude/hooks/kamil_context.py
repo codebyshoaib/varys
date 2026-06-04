@@ -69,11 +69,12 @@ def _conn() -> sqlite3.Connection:
 
 def init_schema() -> None:
     """Create tables if they don't exist. Safe to call multiple times."""
-    with _conn() as c:
-        for stmt in _SCHEMA.strip().split(';'):
-            stmt = stmt.strip()
-            if stmt:
-                c.execute(stmt)
+    c = _conn()
+    try:
+        c.executescript(_SCHEMA)
         existing = c.execute("SELECT version FROM schema_meta").fetchone()
         if not existing:
             c.execute("INSERT INTO schema_meta VALUES (1)")
+        c.commit()
+    finally:
+        c.close()
