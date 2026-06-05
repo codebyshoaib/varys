@@ -15,6 +15,7 @@
 | Notion ticket / update status / query DB | notion-agent | — |
 | who is X / how does X prefer / team context | people-agent | slack-agent |
 | avatar / image / profile photo / character / visual identity | character-agent | — |
+| what did X say / do you remember / find everything about X / what's connected to X | brain-agent | — |
 | unknown / ambiguous | manager reasons first → capability-gap log | — |
 
 ## What Works
