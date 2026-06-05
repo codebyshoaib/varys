@@ -40,5 +40,36 @@
 - Any file affecting the tick loop
 - Deleting any rule or memory file
 
+## SkillHound Auto-Discovery
+
+When a capability gap is logged 3+ times (via kamil-gap-watcher.py), before proposing to build from scratch:
+
+1. **Search SkillHound first:**
+```bash
+curl -s "https://www.skillhound.ai/api/search?q=<gap_topic>&limit=5" 2>/dev/null || \
+  echo "Manual search: https://www.skillhound.ai/?q=<gap_topic>"
+```
+
+2. **If a skill exists (★ > 10):** fetch it and install:
+```bash
+# Find the raw file on GitHub
+curl -s "https://api.github.com/repos/<owner>/<repo>/git/trees/main?recursive=1" | \
+  python3 -c "import json,sys; [print(i['path']) for i in json.load(sys.stdin).get('tree',[]) if 'SKILL' in i['path'].upper()]"
+
+# Fetch and install
+curl -s "https://raw.githubusercontent.com/<owner>/<repo>/main/<path>" \
+  > .claude/skills/kamil/<skill-name>.md
+```
+
+3. **If nothing good exists:** build it using `skill-creator` skill, then publish to GitHub so it appears on SkillHound.
+
+4. **DM Kamal** with: "Found skill `<name>` on SkillHound (★X). Installed. Gap closed."
+
+**SkillHound URL:** https://www.skillhound.ai
+**Already installed from SkillHound:**
+- [2026-06-05] code-review-excellence (wshobson/agents ★36K)
+- [2026-06-05] database-migration (wshobson/agents ★36K)
+- [2026-06-05] github-pr-review (ComeOnOliver/skillshub ★46)
+
 ## Proposed Improvements Log
 <!-- append: [date] what / why / status (proposed|approved|applied) -->
