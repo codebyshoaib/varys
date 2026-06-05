@@ -106,11 +106,25 @@ Prompt suffix: `thinking pose, one hand on chin, looking slightly up, dark navy 
 
 ---
 
+## Locked Base (v4 — FINAL, do not change without Kamal approval)
+
+Reference file: `vault/memory/kamil_avatar.png`
+Approved: 2026-06-05
+
+Exact face attributes from approved image:
+- Strong angular jaw, slightly wide
+- Black hair swept back with volume, fade on sides
+- Full medium-length beard, dark, defined edges
+- Eyes: dark, half-lidded, left brow slightly raised
+- Expression: closed mouth, subtle smirk right side — calm and knowing
+- Rounded square border with dark navy frame
+- 4-pointed silver star bottom-right
+
 ## Master Prompt Template
 
 Use this base for every asset — append the asset-specific suffix:
 
-> **Stylised game character avatar. Male character, warm medium-brown skin (#8B5E3C), strong angular jaw, short black hair pushed back loosely, full short dark beard with defined edges. Dark half-lidded calm eyes, one eyebrow slightly raised, subtle smirk on right side only — 70% neutral 30% amused. Black technical hoodie (#1C1C1E), drawstrings visible. Dark navy background (#0D1B2A). Semi-realistic cartoon style with soft shading, clean bold outlines. Consistent character design, game asset quality. Small 4-pointed star (#C8D6E5) bottom-right corner. [ASSET SUFFIX HERE]**
+> **Same character as reference: stylised game character, male, warm medium-brown skin, strong angular jaw, black hair swept back with volume, full dark beard with defined edges, dark half-lidded eyes, left eyebrow slightly raised, subtle smirk right side only. Black technical hoodie with drawstrings. Dark navy background #0D1B2A. Rounded square border. Semi-realistic cartoon style, clean bold outlines, soft shading. Game asset quality. 4-pointed silver star bottom-right corner. [ASSET SUFFIX HERE]**
 
 ---
 
@@ -133,3 +147,4 @@ Use this base for every asset — append the asset-specific suffix:
 | v1 | 2026-06-04 | First cartoon — circular, minimal |
 | v2 | 2026-06-04 | Full beard, swept hair, semi-realistic |
 | v3 | 2026-06-05 | Full redesign — game character spec, asset library, locked palette |
+| v4 | 2026-06-05 | Base face approved — locked. Asset 1 saved. |
