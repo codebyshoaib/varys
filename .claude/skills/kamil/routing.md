@@ -14,6 +14,7 @@
 | message X / DM / notify / post in #channel | slack-agent | — |
 | Notion ticket / update status / query DB | notion-agent | — |
 | who is X / how does X prefer / team context | people-agent | slack-agent |
+| avatar / image / profile photo / character / visual identity | character-agent | — |
 | unknown / ambiguous | manager reasons first → capability-gap log | — |
 
 ## What Works

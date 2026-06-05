@@ -78,31 +78,18 @@
 
 ---
 
-## Asset Library (generate all of these)
+## Asset Library — COMPLETE (all approved, do not regenerate without reason)
 
-### Asset 1 — Profile / Avatar
-Square crop. Face + upper chest. Centered.
-Prompt suffix: `square format, face and upper chest centered, dark navy background #0D1B2A`
+| # | Name | File | Use |
+|---|---|---|---|
+| 1 | Profile | `vault/memory/assets/kamil_asset1_profile.png` | Slack, LinkedIn, default avatar |
+| 2 | Face Only | `vault/memory/assets/kamil_asset2_face_only.png` | Icons, emoji, small thumbnails |
+| 3 | Thinking | `vault/memory/assets/kamil_asset3_thinking.png` | Planning, strategy, decision posts |
+| 4 | Working | `vault/memory/assets/kamil_asset4_working.png` | Code, build, engineering content |
+| 5 | Side Profile | `vault/memory/assets/kamil_asset5_side_profile.png` | Dramatic, announcements, serious |
+| 6 | Full Body | `vault/memory/assets/kamil_asset6_full_body.png` | Introductions, about page, bio |
 
-### Asset 2 — Full Body
-Standing, arms relaxed at sides or one hand in hoodie pocket.
-Prompt suffix: `full body, standing, hands relaxed, dark navy background, game character sheet style`
-
-### Asset 3 — Face Only (close crop)
-Just the face, no neck. For emoji, reactions, small icons.
-Prompt suffix: `tight face crop, no neck, circular mask, dark navy background`
-
-### Asset 4 — Side Profile
-90 degree side view, same face spec.
-Prompt suffix: `side profile view, 90 degrees, dark navy background`
-
-### Asset 5 — Working Pose
-Sitting at a desk, hands on keyboard, multiple terminal windows glowing behind. Same face.
-Prompt suffix: `seated at desk, hands on keyboard, terminal windows glowing blue in background, dark navy background`
-
-### Asset 6 — Thinking Pose
-Standing, one arm crossed, other hand on chin, eyes slightly upward.
-Prompt suffix: `thinking pose, one hand on chin, looking slightly up, dark navy background`
+Canonical avatar: `vault/memory/kamil_avatar.png` (= asset 1)
 
 ---
 
@@ -148,3 +135,4 @@ Use this base for every asset — append the asset-specific suffix:
 | v2 | 2026-06-04 | Full beard, swept hair, semi-realistic |
 | v3 | 2026-06-05 | Full redesign — game character spec, asset library, locked palette |
 | v4 | 2026-06-05 | Base face approved — locked. Asset 1 saved. |
+| v5 | 2026-06-05 | All 6 assets approved and saved. Asset library complete. character-agent created. |
