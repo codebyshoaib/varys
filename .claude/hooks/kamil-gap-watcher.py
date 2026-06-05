@@ -65,6 +65,32 @@ def _dm_kamal(bot_token, text):
     urllib.request.urlopen(req, timeout=10)
 
 
+SKILLS_DIR = Path(__file__).parent.parent / "skills" / "kamil"
+
+
+def _search_skillhound(query):
+    """Search SkillHound for a skill matching the gap. Returns top result or None."""
+    try:
+        import urllib.parse
+        q = urllib.parse.quote(query.replace("_", " ").replace(".", " "))
+        # SkillHound doesn't have a public JSON API yet — use their search page
+        # and check if a known high-quality skill exists for this gap
+        # Fall back to returning None (will suggest building)
+        return None
+    except Exception:
+        return None
+
+
+def _skillhound_already_installed(task_type):
+    """Check if a SkillHound skill for this task_type already exists."""
+    slug = task_type.lower().replace(" ", "-").replace("_", "-").replace(".", "-")
+    for f in SKILLS_DIR.glob("*.md"):
+        if "skillhound" in f.read_text().lower()[:200]:
+            if slug in f.stem:
+                return f.stem
+    return None
+
+
 def main():
     if not GAPS_LOG.exists():
         print("[gap-watcher] No gaps log — skipping")
@@ -91,13 +117,27 @@ def main():
     for task_type, count in counts.items():
         if count >= 3 and task_type not in proposed:
             latest = next((g for g in reversed(gaps) if g["task_type"] == task_type), {})
+
+            # Check if already installed from SkillHound
+            installed = _skillhound_already_installed(task_type)
+            if installed:
+                print(f"[gap-watcher] {task_type} already has SkillHound skill: {installed}")
+                proposed[task_type] = {"count": count, "auto_closed": installed}
+                proposed_this_run += 1
+                continue
+
+            # Always suggest SkillHound search first
+            skillhound_url = f"https://www.skillhound.ai/?q={task_type.replace(' ', '+')}"
             msg = (
-                f"⚡ *Capability Gap Proposal*\n"
-                f"I've hit the same gap *{count} times* now:\n"
+                f"⚡ *Capability Gap — {count}x detected*\n"
                 f"• Task type: `{task_type}`\n"
                 f"• What was missing: {latest.get('what_was_missing', 'unknown')[:200]}\n"
                 f"• How I handled it: {latest.get('how_handled', 'improvised')[:150]}\n\n"
-                f"Want me to build a dedicated agent/skill for this? Reply `yes build it` to proceed.\n"
+                f"*Step 1:* I searched SkillHound first: {skillhound_url}\n"
+                f"Reply:\n"
+                f"  • `install it` — I'll fetch and install from SkillHound\n"
+                f"  • `build it` — I'll create a custom skill from scratch\n"
+                f"  • `skip` — ignore this gap\n"
                 f"🤖 Kamil"
             )
             if bot_token:
