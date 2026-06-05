@@ -237,6 +237,21 @@ def main():
     except Exception as e:
         print(f"[stop] notion-map update failed (non-fatal): {e}", file=sys.stderr)
 
+    # 5. Brain watcher — wire session knowledge into brain.db
+    try:
+        brain_watcher = workspace_root / ".claude" / "hooks" / "kamil-brain-watcher.py"
+        if brain_watcher.exists():
+            success, output = run_cmd(
+                ["python3", str(brain_watcher)],
+                cwd=str(workspace_root)
+            )
+            if not success:
+                print(f"[stop] Brain watcher warning: {output[:200]}", file=sys.stderr)
+            else:
+                print("[stop] Brain watcher completed", file=sys.stderr)
+    except Exception as e:
+        print(f"[stop] Brain watcher error (non-fatal): {e}", file=sys.stderr)
+
     print("[stop] Stop hook completed", file=sys.stderr)
     return 0
 
