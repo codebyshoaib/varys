@@ -990,6 +990,75 @@ def run_canva_designs(topic: str, copy: str, content_db_ref: str = "") -> dict:
         klog("canva_error", msg=str(e))
         return {}
 
+# ─── Canva fallback from NLM insights ────────────────────────────────────────
+
+def canva_infographic_from_nlm_insights(topic: str, track: str,
+                                         nlm_insights: str, token: str) -> str | None:
+    """Parse NLM insights text → extract hook + bullet points → generate Canva infographic.
+    Returns local PNG path on success, None on failure.
+    This is the fallback when NLM slides/infographic are rate-limited — the research
+    content is still used, just rendered via Canva instead of NotebookLM."""
+    if not nlm_insights:
+        return None
+
+    # Ask Claude to parse the raw NLM insights into structured hook + bullets
+    parse_prompt = (
+        f"Given this research text about '{topic}', extract:\n"
+        f"1. hook: one scroll-stopping line (max 12 words, no emoji, delayed-answer technique)\n"
+        f"2. insights: exactly 5 specific concrete facts/tips (max 12 words each, real numbers/names)\n"
+        f"3. angle: one of awe/longing/nostalgia/belonging\n\n"
+        f"Research text:\n{nlm_insights[:2000]}\n\n"
+        f"Output ONLY valid JSON: {{\"hook\": str, \"insights\": [str x5], \"angle\": str}}"
+    )
+    try:
+        r = subprocess.run(
+            ["claude", "--dangerously-skip-permissions", "--print", "-p", parse_prompt],
+            capture_output=True, text=True, timeout=60,
+        )
+        raw = r.stdout.strip()
+        start, end = raw.find("{"), raw.rfind("}") + 1
+        parsed = json.loads(raw[start:end]) if start >= 0 and end > start else {}
+    except Exception as e:
+        print(f"[scheduler] Canva: failed to parse NLM insights: {e}")
+        return None
+
+    hook     = parsed.get("hook", topic[:50])
+    insights = parsed.get("insights", [nlm_insights[:100]])
+    angle    = parsed.get("angle", "awe")
+
+    if not insights:
+        return None
+
+    print(f"[scheduler] Canva fallback: generating infographic for '{topic}' with {len(insights)} insights")
+
+    outfile = f"/tmp/canva-infographic-{datetime.now().strftime('%Y%m%d-%H%M%S')}.png"
+    try:
+        result = canva_generate_infographic(
+            topic=topic,
+            track=track,
+            hook=hook,
+            insights=insights,
+            angle=angle,
+            output_path=outfile,
+        )
+        if result.get("error"):
+            print(f"[scheduler] Canva infographic error: {result['error'][:100]}")
+            return None
+        local = result.get("local_path") or ""
+        if local and Path(local).exists():
+            print(f"[scheduler] Canva infographic ready: {local}")
+            return local
+        # No local file but have export_url — DM the URL instead
+        if result.get("export_url"):
+            slack_dm(token,
+                f"🖼️ *Canva infographic (NLM fallback):* {topic}\n"
+                f"View: {result['export_url']}\n🤖 Kamil")
+        return None
+    except Exception as e:
+        print(f"[scheduler] Canva infographic exception: {e}")
+        return None
+
+
 # ─── Track runners ────────────────────────────────────────────────────────────
 
 def run_fitness_or_tech(track: str, token: str):
@@ -1119,6 +1188,20 @@ def run_fitness_or_tech(track: str, token: str):
             print(f"[scheduler] Spawned {len(to_poll)} poller(s) for: {to_poll}")
         with _POLLERS_LOCK:
             ARTIFACT_POLLERS.extend(poller_threads)
+
+        # Canva fallback for rate-limited visual artifacts — uses NLM research content
+        rate_limited = [a for a in ["slide_deck", "infographic"]
+                        if artifacts_state.get(a) == "rate_limited"]
+        if rate_limited and nlm_insights:
+            print(f"[scheduler] NLM {rate_limited} rate-limited — running Canva fallback with NLM insights")
+            canva_th = threading.Thread(
+                target=_canva_fallback_thread,
+                args=(topic, track, nlm_insights, token, rate_limited),
+                daemon=False,
+            )
+            canva_th.start()
+            with _POLLERS_LOCK:
+                ARTIFACT_POLLERS.append(canva_th)
 
     klog("content_posted", component="content-scheduler",
          topic=topic, track=track, score=score,
