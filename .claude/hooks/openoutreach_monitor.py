@@ -155,6 +155,38 @@ def check_openoutreach() -> dict:
         return {"running": True, "error": str(e)}
 
 
+def get_conversation_context(lead_id: int, limit: int = 5) -> str:
+    """Return last `limit` messages for a lead as formatted string. Fails silently."""
+    if not OPENOUTREACH_DB.exists():
+        return ""
+    try:
+        conn = sqlite3.connect(str(OPENOUTREACH_DB))
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+        # chat_chatmessage.object_id = crm_lead.id (Django ContentType FK)
+        # is_outgoing: True = we sent, False = prospect replied
+        cur.execute("""
+            SELECT content, creation_date, is_outgoing
+            FROM chat_chatmessage
+            WHERE object_id = ?
+            ORDER BY creation_date DESC
+            LIMIT ?
+        """, (lead_id, limit))
+        rows = cur.fetchall()
+        conn.close()
+        if not rows:
+            return ""
+        lines = ["*Conversation (latest first):*"]
+        for row in rows:
+            content = (row["content"] or "")[:200]
+            ts = (row["creation_date"] or "")[:16]
+            direction = "You" if row["is_outgoing"] else "Prospect"
+            lines.append(f"  [{ts}] {direction}: {content}")
+        return "\n".join(lines)
+    except Exception:
+        return ""
+
+
 def run(token: str) -> int:
     """Main monitor run. Returns count of new events."""
     if not OPENOUTREACH_DB.exists():
@@ -220,6 +252,11 @@ def run(token: str) -> int:
         for r in new_replies[:3]:
             content = r.get("content", "")[:120]
             lines.append(f"• \"{content}\"")
+            lead_id = r.get("profile_id") or r.get("lead_id")
+            if lead_id:
+                ctx = get_conversation_context(int(lead_id))
+                if ctx:
+                    lines.append(ctx)
             seen_replies.add(str(r["id"]))
             new_events += 1
         lines.append("\n_Check OpenOutreach admin to respond: http://localhost:8000/admin_")
