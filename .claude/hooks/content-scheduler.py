@@ -1059,6 +1059,25 @@ def canva_infographic_from_nlm_insights(topic: str, track: str,
         return None
 
 
+def _canva_fallback_thread(topic: str, track: str, nlm_insights: str,
+                            token: str, artifacts: list):
+    """Background thread: generate Canva infographic from NLM insights and upload to Slack."""
+    local_path = canva_infographic_from_nlm_insights(topic, track, nlm_insights, token)
+    if local_path and Path(local_path).exists():
+        slack_upload(
+            token, local_path,
+            title=f"{topic} — infographic (Canva/NLM)",
+            comment=(
+                f"🖼️ *{topic}* — infographic\n"
+                f"_(NLM rate-limited → generated via Canva using NLM research insights)_\n"
+                f"🤖 Kamil"
+            ),
+        )
+        print(f"[scheduler] Canva fallback uploaded to Slack: {local_path}")
+    else:
+        print(f"[scheduler] Canva fallback produced no file — skipping Slack upload")
+
+
 # ─── Track runners ────────────────────────────────────────────────────────────
 
 def run_fitness_or_tech(track: str, token: str):
