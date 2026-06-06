@@ -644,23 +644,31 @@ def nlm_query_for_content(nb_id: str, topic: str) -> str:
 
 def nlm_trigger_visuals(nb_id: str, topic: str) -> dict:
     """Trigger slides + infographic + mindmap. Returns state dict per artifact:
-    'triggered' if creation started, 'rate_limited' if code 8, 'failed' otherwise."""
+    'triggered' if creation started, 'rate_limited' if code 8, 'failed' otherwise.
+    Falls back to personal profile if work profile is rate-limited per artifact."""
     state = {}
     cmds = {
         "slide_deck":  ["slides", "create", nb_id, "--focus", topic, "--confirm"],
         "infographic": ["infographic", "create", nb_id, "--focus", topic, "--confirm"],
         "mind_map":    ["mindmap", "create", nb_id, "--confirm"],
     }
+    profiles = [NLM_PROFILE, NLM_PROFILE_PERSONAL]
     for artifact, cmd in cmds.items():
-        ok, out = run_nlm(cmd, timeout=60)
-        if ok:
-            state[artifact] = "triggered"
-        elif "error code 8" in out.lower() or "rate limited" in out.lower():
-            state[artifact] = "rate_limited"
-            print(f"[scheduler] NLM {artifact} rate-limited (code 8) — skipping poller")
-        else:
-            state[artifact] = "failed"
-            print(f"[scheduler] NLM {artifact} failed: {out[:80]}")
+        for profile in profiles:
+            ok, out = run_nlm(cmd + ["--profile", profile], timeout=60)
+            if ok:
+                state[artifact] = "triggered"
+                print(f"[scheduler] NLM {artifact} triggered on profile={profile}")
+                break
+            elif "error code 8" in out.lower() or "rate limited" in out.lower():
+                print(f"[scheduler] NLM {artifact} rate-limited on profile={profile} — trying next")
+                if profile == profiles[-1]:
+                    state[artifact] = "rate_limited"
+                    print(f"[scheduler] NLM {artifact} rate-limited on all profiles — skipping poller")
+            else:
+                state[artifact] = "failed"
+                print(f"[scheduler] NLM {artifact} failed on profile={profile}: {out[:80]}")
+                break
     triggered = [k for k, v in state.items() if v == "triggered"]
     skipped   = [k for k, v in state.items() if v != "triggered"]
     print(f"[scheduler] NLM visuals: triggered={triggered} skipped={skipped}")
