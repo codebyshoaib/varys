@@ -148,7 +148,17 @@ def seed_from_nlm_insights(topic: str, track: str, nb_id: str,
     if not structured:
         return False
 
-    return _write_to_brain(topic, track, nb_id, structured, session_id, source="content_pipeline")
+    ok = _write_to_brain(topic, track, nb_id, structured, session_id, source="content_pipeline")
+    if ok:
+        # Application Agent: what should Kamil build given what he just learned?
+        try:
+            import threading
+            threading.Thread(
+                target=_run_application_agent, daemon=True
+            ).start()
+        except Exception as e:
+            print(f"[brain_seed] apply-learnings thread failed (non-fatal): {e}")
+    return ok
 
 
 def seed_from_notebook(nb_id: str, topic: str, track: str,
@@ -287,6 +297,29 @@ def seed_priority_notebooks():
 
     db.close()
     print(f"[brain_seed] Priority seed complete: {seeded} notebooks seeded into brain.db")
+
+
+def _run_application_agent():
+    """Fire kamil-apply-learnings in the same process environment. Non-blocking (called in thread)."""
+    try:
+        apply_mod_path = Path(__file__).parent / "kamil-apply-learnings.py"
+        if apply_mod_path.exists():
+            subprocess.run(
+                ["python3", str(apply_mod_path), "--days", "1"],
+                timeout=180,
+            )
+        else:
+            # Fallback: import and call directly
+            sys.path.insert(0, str(Path(__file__).parent))
+            import importlib.util
+            spec = importlib.util.spec_from_file_location(
+                "kamil_apply_learnings", apply_mod_path
+            )
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            mod.run(days=1)
+    except Exception as e:
+        print(f"[brain_seed] apply-learnings thread error (non-fatal): {e}")
 
 
 if __name__ == "__main__":
