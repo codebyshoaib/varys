@@ -105,6 +105,17 @@ def inject(
             VALUES ('Pending', '', 0, 0, ?, ?, ?, ?, ?, '')
         """, (now, now, campaign_id, lead_id, profile_summary))
 
+        if cur.rowcount == 0:
+            cur.execute("SELECT id FROM crm_deal WHERE lead_id=? AND campaign_id=?",
+                        (lead_id, campaign_id))
+            deal_row = cur.fetchone()
+            deal_id = deal_row["id"] if deal_row else None
+            conn.commit()
+            conn.close()
+            klog("signal_inject_skip", component="signal-injector",
+                 public_identifier=public_identifier, reason="deal_already_exists")
+            return {"status": "already_exists", "lead_id": lead_id, "deal_id": deal_id}
+
         deal_id = cur.lastrowid
         conn.commit()
         conn.close()
