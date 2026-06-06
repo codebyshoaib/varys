@@ -74,6 +74,7 @@ def _fetch_auto_tickets() -> list[dict]:
                 "Notion-Version": "2022-06-28",
             },
         )
+        # TODO: migrate to kamil_notion.notion_request() (orchestrator.md Hard Rule #3)
         with _ur.urlopen(req, timeout=8) as r:
             result = json.loads(r.read())
             tickets = []

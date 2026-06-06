@@ -190,6 +190,7 @@ def _fetch_existing_ticket_titles(notion_token: str) -> "set[str] | None":
             },
         )
         try:
+            # TODO: migrate to kamil_notion.notion_request() (orchestrator.md Hard Rule #3)
             with urllib.request.urlopen(req, timeout=10) as r:
                 result = json.loads(r.read())
         except Exception as e:
@@ -239,6 +240,7 @@ def create_harness_ticket(gap: dict, notion_token: str) -> str:
                 "Notion-Version": "2022-06-28",
             },
         )
+        # TODO: migrate to kamil_notion.notion_request() (orchestrator.md Hard Rule #3)
         with urllib.request.urlopen(req, timeout=10) as r:
             result = json.loads(r.read())
             page_id = result.get("id", "")
@@ -317,9 +319,13 @@ def run(days: int = 1, notify_slack: bool = True):
             raw_t = gap["title"].strip()
             clean_t = raw_t[7:].strip() if raw_t.lower().startswith("[auto]") else raw_t
             existing.add(f"[auto] {clean_t.lower()}")
-        created.append({"gap": gap, "page_id": page_id})
-        klog("apply_learning_ticket", component="kamil-apply-learnings",
-             title=gap["title"], priority=gap.get("priority"), page_id=page_id[:8] if page_id else "")
+            created.append({"gap": gap, "page_id": page_id})
+            klog("apply_learning_ticket", component="kamil-apply-learnings",
+                 title=gap["title"], priority=gap.get("priority"), page_id=page_id[:8])
+        else:
+            print(f"[apply-learnings] Notion creation failed for: {gap['title']}")
+            klog("apply_learning_ticket_failed", component="kamil-apply-learnings",
+                 title=gap["title"], priority=gap.get("priority"))
 
     if notify_slack and slack_token and created:
         text = _format_slack_message(created, [l["name"] for l in learnings])

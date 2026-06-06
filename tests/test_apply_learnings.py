@@ -28,7 +28,7 @@ def test_dedup_strips_auto_prefix_from_gap_title():
     import importlib.util, pathlib
     spec = importlib.util.spec_from_file_location(
         "kamil_apply_learnings",
-        pathlib.Path(".claude/hooks/kamil-apply-learnings.py")
+        pathlib.Path(__file__).parent.parent / ".claude/hooks/kamil-apply-learnings.py"
     )
     kal = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(kal)
@@ -43,7 +43,7 @@ def test_fetch_existing_titles_returns_none_on_network_error():
     from unittest.mock import patch
     spec = importlib.util.spec_from_file_location(
         "kamil_apply_learnings",
-        pathlib.Path(".claude/hooks/kamil-apply-learnings.py")
+        pathlib.Path(__file__).parent.parent / ".claude/hooks/kamil-apply-learnings.py"
     )
     kal = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(kal)
@@ -56,7 +56,7 @@ def test_slack_message_includes_why():
     import importlib.util, pathlib
     spec = importlib.util.spec_from_file_location(
         "kamil_apply_learnings",
-        pathlib.Path(".claude/hooks/kamil-apply-learnings.py")
+        pathlib.Path(__file__).parent.parent / ".claude/hooks/kamil-apply-learnings.py"
     )
     kal = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(kal)
