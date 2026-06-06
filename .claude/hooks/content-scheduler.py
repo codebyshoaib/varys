@@ -583,32 +583,40 @@ def nlm_get_or_create_notebook(topic: str) -> tuple[str, bool] | tuple[None, boo
 
 
 def nlm_research(nb_id: str, topic: str, retries: int = 2) -> bool:
-    """Research + auto-import sources. Returns True if sources were added. Retries on empty result."""
-    for attempt in range(retries):
-        ok, out = run_nlm([
-            "research", "start", topic,
-            "--notebook-id", nb_id,
-            "--mode", "deep",
-            "--auto-import",
-        ], timeout=420)
-        print(f"[scheduler] NLM research: {'ok' if ok else 'failed'} — {out[:80]} (attempt {attempt + 1}/{retries})")
+    """Research + auto-import sources. Returns True if sources were added.
+    Tries deep mode first; if Google API error code 8 (quota/expired), falls back to fast mode."""
+    for mode in ["deep", "fast"]:
+        for attempt in range(retries):
+            ok, out = run_nlm([
+                "research", "start", topic,
+                "--notebook-id", nb_id,
+                "--mode", mode,
+                "--force",
+                "--auto-import",
+            ], timeout=420 if mode == "deep" else 120)
+            print(f"[scheduler] NLM research ({mode}): {'ok' if ok else 'failed'} — {out[:80]} (attempt {attempt + 1}/{retries})")
 
-        # Check for quota errors (code 8, 429, etc) — don't retry these
-        if not ok and ("error code 8" in out.lower() or "quota" in out.lower() or "429" in out):
-            print(f"[scheduler] NLM quota/API error detected — skipping retries")
-            return False
+            # Deep mode quota/expired → fall back to fast immediately
+            if not ok and mode == "deep" and ("error code 8" in out.lower() or "quota" in out.lower() or "429" in out):
+                print(f"[scheduler] NLM deep mode quota/expired — falling back to fast mode")
+                break  # break inner retries loop, outer loop picks up fast mode
 
-        if not ok:
+            # Fast mode quota → give up entirely
+            if not ok and mode == "fast" and ("error code 8" in out.lower() or "quota" in out.lower() or "429" in out):
+                print(f"[scheduler] NLM fast mode also quota-exhausted — giving up")
+                return False
+
+            if not ok:
+                if attempt < retries - 1:
+                    time.sleep(10)
+                continue
+            # Verify sources actually landed
+            count = nlm_get_source_count(nb_id)
+            print(f"[scheduler] NLM source count after research ({mode}): {count}")
+            if count > 0:
+                return True
             if attempt < retries - 1:
                 time.sleep(10)
-            continue
-        # Verify sources actually landed
-        count = nlm_get_source_count(nb_id)
-        print(f"[scheduler] NLM source count after research: {count}")
-        if count > 0:
-            return True
-        if attempt < retries - 1:
-            time.sleep(10)
     return False
 
 
