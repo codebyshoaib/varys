@@ -122,25 +122,7 @@ def migrate_db(db: sqlite3.Connection) -> None:
             db.execute("ALTER TABLE sessions ADD COLUMN phase TEXT DEFAULT 'manager'")
             db.commit()
 
-        # Migration 002: capability_gaps table
-        tables = [r[0] for r in db.execute(
-            "SELECT name FROM sqlite_master WHERE type='table'"
-        ).fetchall()]
-        if "capability_gaps" not in tables:
-            db.executescript("""
-                CREATE TABLE IF NOT EXISTS capability_gaps (
-                    id            INTEGER PRIMARY KEY AUTOINCREMENT,
-                    gap_type      TEXT NOT NULL,
-                    request_text  TEXT,
-                    failed_step   TEXT,
-                    fallback_used TEXT,
-                    reaction      TEXT DEFAULT 'pending',
-                    ts            TEXT NOT NULL DEFAULT (datetime('now')),
-                    session_id    TEXT
-                );
-                CREATE INDEX IF NOT EXISTS idx_gaps_type_ts ON capability_gaps(gap_type, ts);
-            """)
-            db.commit()
+
 
 
 # ── Tick lock ─────────────────────────────────────────────────────────────────
@@ -294,22 +276,23 @@ def get_capability_gaps(
     Return aggregated gap counts for the last N days.
     Each dict: {gap_type, count, rejected_count, sample_requests, last_seen}
     """
-    rows = db.execute(
-        """
-        SELECT
-            gap_type,
-            COUNT(*) as count,
-            SUM(CASE WHEN reaction='rejected' THEN 1 ELSE 0 END) as rejected_count,
-            MAX(ts) as last_seen,
-            GROUP_CONCAT(DISTINCT request_text) as samples
-        FROM capability_gaps
-        WHERE ts >= datetime('now', ?)
-        GROUP BY gap_type
-        HAVING count >= ?
-        ORDER BY count DESC
-        """,
-        (f"-{days} days", min_count),
-    ).fetchall()
+    with _db_lock:
+        rows = db.execute(
+            """
+            SELECT
+                gap_type,
+                COUNT(*) as count,
+                SUM(CASE WHEN reaction='rejected' THEN 1 ELSE 0 END) as rejected_count,
+                MAX(ts) as last_seen,
+                GROUP_CONCAT(DISTINCT request_text) as samples
+            FROM capability_gaps
+            WHERE ts >= datetime('now', ?)
+            GROUP BY gap_type
+            HAVING COUNT(*) >= ?
+            ORDER BY count DESC
+            """,
+            (f"-{days} days", min_count),
+        ).fetchall()
     return [
         {
             "gap_type":        r[0],
@@ -332,7 +315,7 @@ def update_gap_reaction(
         db.execute(
             "UPDATE capability_gaps SET reaction=? "
             "WHERE gap_type=? AND id=("
-            "  SELECT id FROM capability_gaps WHERE gap_type=? ORDER BY ts DESC LIMIT 1"
+            "  SELECT id FROM capability_gaps WHERE gap_type=? ORDER BY id DESC LIMIT 1"
             ")",
             (reaction, gap_type, gap_type),
         )
