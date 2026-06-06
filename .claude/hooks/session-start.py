@@ -42,6 +42,53 @@ def load_slack_inbox() -> list:
         return []
 
 
+def _fetch_auto_tickets() -> list[dict]:
+    """Fetch pending [Auto] Harness tickets. Returns list of {title, phase} dicts."""
+    import urllib.request as _ur
+    notion_cfg = Path("/home/oye/.claude/hooks/.notion")
+    token = ""
+    if notion_cfg.exists():
+        for line in notion_cfg.read_text().splitlines():
+            if line.startswith("NOTION_API_KEY="):
+                token = line.split("=", 1)[1].strip()
+    if not token:
+        return []
+
+    data = json.dumps({
+        "filter": {
+            "and": [
+                {"property": "Feature", "title":  {"contains": "[Auto]"}},
+                {"property": "Phase",   "select": {"does_not_equal": "Done"}},
+            ]
+        },
+        "page_size": 10,
+    }).encode()
+
+    try:
+        req = _ur.Request(
+            "https://api.notion.com/v1/databases/de10157da3e34ef58a74ea240f31fe98/query",
+            data=data,
+            headers={
+                "Authorization":  f"Bearer {token}",
+                "Content-Type":   "application/json",
+                "Notion-Version": "2022-06-28",
+            },
+        )
+        with _ur.urlopen(req, timeout=8) as r:
+            result = json.loads(r.read())
+            tickets = []
+            for page in result.get("results", []):
+                title = page["properties"].get("Feature", {}).get("title", [])
+                phase = page["properties"].get("Phase",   {}).get("select") or {}
+                tickets.append({
+                    "title": title[0]["plain_text"] if title else "?",
+                    "phase": phase.get("name", "Backlog"),
+                })
+            return tickets
+    except Exception:
+        return []
+
+
 def build_system_message() -> str:
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
     inbox = load_slack_inbox()
@@ -119,6 +166,18 @@ def build_system_message() -> str:
                 lines.append("")
     except Exception:
         pass  # brain surface is best-effort, never block session start
+
+    # Surface pending [Auto] tickets from Application Agent
+    try:
+        auto_tickets = _fetch_auto_tickets()
+        if auto_tickets:
+            lines.append("## 🔧 Pending Self-Improvement Tickets (from research)")
+            lines.append("*(These were auto-created by Kamil's Application Agent — derived from NLM research)*")
+            for t in auto_tickets:
+                lines.append(f"- [{t['phase']}] {t['title']}")
+            lines.append("")
+    except Exception:
+        pass
 
     # Tell Claude what to fetch via MCP
     lines += [
