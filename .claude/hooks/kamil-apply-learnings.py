@@ -249,6 +249,25 @@ def create_harness_ticket(gap: dict, notion_token: str) -> str:
         return ""
 
 
+def _format_slack_message(created: list[dict], learning_names: list[str]) -> str:
+    topics = ", ".join(f"*{n.split(']')[-1].strip()[:30]}*" for n in learning_names)
+    lines  = [f"🧠 *Kamil learned + applied:* {topics}\n"]
+    for item in created:
+        g         = item["gap"]
+        page_id   = item.get("page_id", "")
+        notion_url = (
+            f"https://notion.so/{page_id.replace('-', '')}"
+            if page_id else ""
+        )
+        lines.append(f"• *[{g.get('priority','P1')}]* {g['title']}")
+        lines.append(f"  _{g['what_to_build'][:100]}_")
+        lines.append(f"  > {g.get('why','')[:120]}")
+        if notion_url:
+            lines.append(f"  <{notion_url}|Open in Notion>")
+    lines.append(f"\n{len(created)} ticket(s) created — Kamil will build these.\n🤖 Kamil")
+    return "\n".join(lines)
+
+
 def slack_dm(token: str, text: str):
     if not token:
         return
@@ -303,14 +322,8 @@ def run(days: int = 1, notify_slack: bool = True):
              title=gap["title"], priority=gap.get("priority"), page_id=page_id[:8] if page_id else "")
 
     if notify_slack and slack_token and created:
-        topics = ", ".join(f"*{l['name'].split(']')[-1].strip()[:30]}*" for l in learnings)
-        lines  = [f"🧠 *Kamil learned + applied:* {topics}\n"]
-        for item in created:
-            g = item["gap"]
-            lines.append(f"• *[{g.get('priority','P1')}]* {g['title']}")
-            lines.append(f"  _{g['what_to_build'][:100]}_")
-        lines.append(f"\n{len(created)} Harness ticket(s) created — Kamil will build these.\n🤖 Kamil")
-        slack_dm(slack_token, "\n".join(lines))
+        text = _format_slack_message(created, [l["name"] for l in learnings])
+        slack_dm(slack_token, text)
 
     print(f"[apply-learnings] Done — {len(created)} Harness ticket(s) created")
 

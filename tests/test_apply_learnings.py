@@ -50,3 +50,26 @@ def test_fetch_existing_titles_returns_none_on_network_error():
     with patch("urllib.request.urlopen", side_effect=OSError("network down")):
         result = kal._fetch_existing_ticket_titles("fake-token")
     assert result is None
+
+
+def test_slack_message_includes_why():
+    import importlib.util, pathlib
+    spec = importlib.util.spec_from_file_location(
+        "kamil_apply_learnings",
+        pathlib.Path(".claude/hooks/kamil-apply-learnings.py")
+    )
+    kal = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(kal)
+    item = {
+        "gap": {
+            "title": "Adversarial checker agent",
+            "what_to_build": "Add an agent that verifies Kamil outputs",
+            "why": "Lesson: silent failures are invisible without an adversary",
+            "priority": "P0",
+            "effort": "medium",
+        },
+        "page_id": "abc123def456",
+    }
+    msg = kal._format_slack_message([item], ["[tech] harness research"])
+    assert "silent failures" in msg
+    assert "abc123" in msg
