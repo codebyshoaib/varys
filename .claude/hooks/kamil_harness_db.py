@@ -284,7 +284,7 @@ def get_capability_gaps(
                 COUNT(*) as count,
                 SUM(CASE WHEN reaction='rejected' THEN 1 ELSE 0 END) as rejected_count,
                 MAX(ts) as last_seen,
-                GROUP_CONCAT(DISTINCT request_text) as samples
+                GROUP_CONCAT(request_text, '|||') as samples
             FROM capability_gaps
             WHERE ts >= datetime('now', ?)
             GROUP BY gap_type
@@ -299,7 +299,7 @@ def get_capability_gaps(
             "count":           r[1],
             "rejected_count":  r[2] or 0,
             "last_seen":       r[3],
-            "sample_requests": (r[4] or "").split(",")[:3],
+            "sample_requests": [s.strip() for s in (r[4] or "").split("|||") if s.strip()][:3],
         }
         for r in rows
     ]

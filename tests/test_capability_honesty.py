@@ -84,16 +84,16 @@ def test_honesty_gate_flags_false_claim_no_upload():
     sys.path.insert(0, str(Path(__file__).parent.parent / ".claude" / "hooks"))
     from honesty_gate import contains_delivery_claim
     assert contains_delivery_claim("Here it is! I posted the infographic.") is True
-    assert contains_delivery_claim("I've sent you the image.") is True
+    assert contains_delivery_claim("Here's the image I made for you.") is True
     assert contains_delivery_claim("Here's what I know about pullups.") is False
 
 
 def test_honesty_gate_passes_with_confirmed_upload():
     sys.path.insert(0, str(Path(__file__).parent.parent / ".claude" / "hooks"))
     from honesty_gate import check
-    result = check("Here it is — your infographic! 🤖 Kamil", uploaded=True,
+    result = check("Here's the infographic you requested! 🤖 Kamil", uploaded=True,
                    request="make infographic")
-    assert "Here it is" in result
+    assert "Here's the infographic" in result
 
 
 def test_gap_watcher_promotion_logic():
@@ -121,10 +121,10 @@ def test_honesty_gate_rewrites_false_claim():
 
     with mock.patch.object(honesty_gate, "_rewrite_honest", return_value=fake_rewrite):
         result = honesty_gate.check(
-            draft="Here it is — your infographic! 🤖 Kamil",
+            draft="Here's the infographic you requested! 🤖 Kamil",
             uploaded=False,
             request="make infographic about pullups",
         )
 
     assert result == fake_rewrite
-    assert "Here it is" not in result
+    assert "Here's the infographic" not in result
