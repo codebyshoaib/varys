@@ -86,6 +86,18 @@ CREATE TABLE IF NOT EXISTS sessions (
     updated_at  TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_ctx_status ON sessions(context_key, status);
+
+CREATE TABLE IF NOT EXISTS capability_gaps (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    gap_type      TEXT NOT NULL,
+    request_text  TEXT,
+    failed_step   TEXT,
+    fallback_used TEXT,
+    reaction      TEXT DEFAULT 'pending',
+    ts            TEXT NOT NULL DEFAULT (datetime('now')),
+    session_id    TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_gaps_type_ts ON capability_gaps(gap_type, ts);
 """
 
 _db_lock = threading.Lock()
@@ -108,6 +120,26 @@ def migrate_db(db: sqlite3.Connection) -> None:
         cols = [row[1] for row in db.execute("PRAGMA table_info(sessions)").fetchall()]
         if "phase" not in cols:
             db.execute("ALTER TABLE sessions ADD COLUMN phase TEXT DEFAULT 'manager'")
+            db.commit()
+
+        # Migration 002: capability_gaps table
+        tables = [r[0] for r in db.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()]
+        if "capability_gaps" not in tables:
+            db.executescript("""
+                CREATE TABLE IF NOT EXISTS capability_gaps (
+                    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                    gap_type      TEXT NOT NULL,
+                    request_text  TEXT,
+                    failed_step   TEXT,
+                    fallback_used TEXT,
+                    reaction      TEXT DEFAULT 'pending',
+                    ts            TEXT NOT NULL DEFAULT (datetime('now')),
+                    session_id    TEXT
+                );
+                CREATE INDEX IF NOT EXISTS idx_gaps_type_ts ON capability_gaps(gap_type, ts);
+            """)
             db.commit()
 
 
@@ -230,6 +262,81 @@ def get_linked_entities(db: sqlite3.Connection, entity_id: str) -> list[dict]:
         {"id": r[0], "source": r[1], "external_id": r[2], "type": r[3], "url": r[4]}
         for r in rows
     ]
+
+
+# ── Capability gap tracking ───────────────────────────────────────────────────
+
+def log_capability_gap(
+    db: sqlite3.Connection,
+    gap_type: str,
+    request_text: str = "",
+    failed_step: str = "",
+    fallback_used: str = "",
+    session_id: str = "",
+) -> None:
+    """Record one capability gap occurrence."""
+    with _db_lock:
+        db.execute(
+            "INSERT INTO capability_gaps "
+            "(gap_type, request_text, failed_step, fallback_used, session_id) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (gap_type, request_text[:300], failed_step, fallback_used, session_id),
+        )
+        db.commit()
+
+
+def get_capability_gaps(
+    db: sqlite3.Connection,
+    days: int = 7,
+    min_count: int = 1,
+) -> list[dict]:
+    """
+    Return aggregated gap counts for the last N days.
+    Each dict: {gap_type, count, rejected_count, sample_requests, last_seen}
+    """
+    rows = db.execute(
+        """
+        SELECT
+            gap_type,
+            COUNT(*) as count,
+            SUM(CASE WHEN reaction='rejected' THEN 1 ELSE 0 END) as rejected_count,
+            MAX(ts) as last_seen,
+            GROUP_CONCAT(DISTINCT request_text) as samples
+        FROM capability_gaps
+        WHERE ts >= datetime('now', ?)
+        GROUP BY gap_type
+        HAVING count >= ?
+        ORDER BY count DESC
+        """,
+        (f"-{days} days", min_count),
+    ).fetchall()
+    return [
+        {
+            "gap_type":        r[0],
+            "count":           r[1],
+            "rejected_count":  r[2] or 0,
+            "last_seen":       r[3],
+            "sample_requests": (r[4] or "").split(",")[:3],
+        }
+        for r in rows
+    ]
+
+
+def update_gap_reaction(
+    db: sqlite3.Connection,
+    gap_type: str,
+    reaction: str,
+) -> None:
+    """Mark the most recent gap entry for this type with a reaction."""
+    with _db_lock:
+        db.execute(
+            "UPDATE capability_gaps SET reaction=? "
+            "WHERE gap_type=? AND id=("
+            "  SELECT id FROM capability_gaps WHERE gap_type=? ORDER BY ts DESC LIMIT 1"
+            ")",
+            (reaction, gap_type, gap_type),
+        )
+        db.commit()
 
 
 if __name__ == "__main__":
