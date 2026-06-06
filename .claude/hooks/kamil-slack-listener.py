@@ -50,6 +50,18 @@ from kamil_health import log_response_quality, log_critique
 from kamil_eval_tracker import (eval_conversation, eval_proactive_dm,
                                  record_reaction, expire_pending)
 from notebooklm_handler import handle as nlm_handle, is_notebooklm_command
+try:
+    from infographic_handler import handle as infographic_handle
+    _infographic_available = True
+except ImportError:
+    _infographic_available = False
+
+try:
+    from honesty_gate import check as honesty_check
+    _honesty_gate_available = True
+except ImportError:
+    _honesty_gate_available = False
+
 from linkedin_poster import post_to_linkedin
 try:
     from kamil_harness_db import get_db as _get_harness_db
@@ -112,6 +124,20 @@ def _is_question(text: str) -> bool:
     """Return True if text looks like a genuine question."""
     clean = text.lower().strip()
     return any(sig in clean for sig in _QUESTION_SIGNALS)
+
+
+_VISUAL_TRIGGERS = (
+    "infographic", "create image", "make image", "generate image",
+    "create a visual", "make a visual", "make me a visual",
+    "create an image", "generate a picture", "make an infographic",
+    "visual for", "image for", "create me an infographic",
+    "make me an infographic", "build an infographic",
+)
+
+def is_visual_request(text: str) -> bool:
+    """Return True if the message is requesting image/infographic generation."""
+    t = text.lower()
+    return any(trigger in t for trigger in _VISUAL_TRIGGERS)
 
 
 def auto_answer_engineering_question(
@@ -541,6 +567,9 @@ def handle_message(text: str, thread_history: str, web: WebClient, channel: str,
         return
 
     # ── Normal Kamal → Kamil flow ─────────────────────────────────────────────
+    _caps_path  = KAMIL_DIR / ".claude" / "rules" / "CAPABILITIES.md"
+    _caps_block = _caps_path.read_text() if _caps_path.exists() else ""
+
     prompt = f"""You are Kamil — Kamal's personal AI agent at Taleemabad. You have two modes.
 
 ## MODE DETECTION — detect internally, NEVER mention the mode name in your reply
@@ -604,6 +633,9 @@ When Kamal says "apply [number]":
 - planning multi-step work → brainstorming → writing-plans
 If a skill plausibly applies, invoke it first.
 
+## WHAT KAMIL CANNOT DO
+{_caps_block}
+
 ## PEOPLE INTELLIGENCE
 People Intelligence DB: c976d58ea4e34b0585f245529cdc4528
 When Kamal asks about a person ("how is Fatima?", "what does Haroon need?"):
@@ -627,6 +659,9 @@ Reply now. Do NOT output any mode label, header, or internal reasoning — just 
 
     t0 = time.time()
     answer = run_claude(prompt, cwd=str(KAMIL_DIR), timeout=300, event_context=source)
+    # Honesty gate: catches false delivery claims before sending
+    if _honesty_gate_available:
+        answer = honesty_check(answer, uploaded=False, request=text)
     latency = round(time.time() - t0, 1)
 
     # Always reply with thread_ts so the reply appears directly below the original message
@@ -866,6 +901,19 @@ def dispatch(text: str, web: WebClient, channel: str, thread_ts: str, source: st
                 args=(clean, bot_token_cfg),
                 daemon=True,
             ).start()
+        return
+
+    # ── Visual request fast-path ──────────────────────────────────────────────
+    if sender_id == KAMAL_USER_ID and is_visual_request(clean) and _infographic_available:
+        cfg           = load_config()
+        bot_token_cfg = cfg.get("BOT_TOKEN")
+        if _context_available and job_id:
+            mark_job_processing(job_id)
+        threading.Thread(
+            target=infographic_handle,
+            args=(clean, channel, thread_ts, web, bot_token_cfg, sender_id),
+            daemon=True,
+        ).start()
         return
 
     if _context_available and job_id:
