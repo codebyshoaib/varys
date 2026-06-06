@@ -73,6 +73,53 @@ def build_system_message() -> str:
     else:
         lines.append("## 📬 Slack Inbox — Nothing new since last session\n")
 
+    # Surface recent learnings from brain.db
+    try:
+        import sqlite3
+        from pathlib import Path as _Path
+        brain_db = _Path.home() / ".kamil-harness" / "brain.db"
+        if brain_db.exists():
+            db = sqlite3.connect(str(brain_db))
+            # Get learnings from last 7 days with their key insights
+            recent = db.execute("""
+                SELECT e.name, f.object_val, f.predicate, e.created_at
+                FROM entities e
+                JOIN facts f ON f.subject_id = e.id
+                WHERE e.type = 'learning'
+                  AND f.predicate IN ('one_line_summary', 'key_insight', 'lesson_learned')
+                  AND e.created_at >= datetime('now', '-7 days')
+                ORDER BY e.created_at DESC
+                LIMIT 30
+            """).fetchall()
+            db.close()
+
+            if recent:
+                # Group by entity name
+                grouped = {}
+                for name, val, pred, ts in recent:
+                    if name not in grouped:
+                        grouped[name] = {"summary": "", "insights": [], "lessons": [], "ts": ts[:10]}
+                    if pred == "one_line_summary":
+                        grouped[name]["summary"] = val
+                    elif pred == "key_insight" and len(grouped[name]["insights"]) < 2:
+                        grouped[name]["insights"].append(val)
+                    elif pred == "lesson_learned" and len(grouped[name]["lessons"]) < 1:
+                        grouped[name]["lessons"].append(val)
+
+                lines.append("## 🧠 Recent Learnings — What Kamil Researched (last 7 days)")
+                lines.append("*(Use these when advising on architecture, agents, or content — Kamil already knows this)*")
+                for name, data in list(grouped.items())[:5]:
+                    lines.append(f"\n**{data['ts']} — {name}**")
+                    if data["summary"]:
+                        lines.append(f"  → {data['summary']}")
+                    for ins in data["insights"]:
+                        lines.append(f"  • {ins}")
+                    for lesson in data["lessons"]:
+                        lines.append(f"  ⚡ Lesson: {lesson}")
+                lines.append("")
+    except Exception:
+        pass  # brain surface is best-effort, never block session start
+
     # Tell Claude what to fetch via MCP
     lines += [
         "## 🔌 Notion MCP — Fetch These Now",

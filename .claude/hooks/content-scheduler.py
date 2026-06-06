@@ -1226,6 +1226,14 @@ def run_fitness_or_tech(track: str, token: str):
          topic=topic, track=track, score=score,
          linkedin=bool(li_result), nlm=bool(nb_id))
 
+    # Seed brain.db — Kamil learns from his own research, not just posts it
+    if nb_id and nlm_insights:
+        try:
+            from brain_seed_from_content import seed_from_nlm_insights
+            seed_from_nlm_insights(topic, track, nb_id, nlm_insights)
+        except Exception as e:
+            print(f"[scheduler] brain seed failed (non-fatal): {e}")
+
     return poller_threads
 
 
