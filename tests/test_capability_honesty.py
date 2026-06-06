@@ -94,3 +94,18 @@ def test_honesty_gate_passes_with_confirmed_upload():
     result = check("Here it is — your infographic! 🤖 Kamil", uploaded=True,
                    request="make infographic")
     assert "Here it is" in result
+
+
+def test_gap_watcher_promotion_logic():
+    """get_capability_gaps() with min_count=2 returns gaps at threshold."""
+    sys.path.insert(0, str(Path(__file__).parent.parent / ".claude" / "hooks"))
+    import kamil_harness_db as hdb
+    db = hdb.get_db()
+    hdb.log_capability_gap(db, gap_type="chart_rendering",
+                           request_text="show me a chart", failed_step="no_tool",
+                           fallback_used="none")
+    hdb.log_capability_gap(db, gap_type="chart_rendering",
+                           request_text="bar chart please", failed_step="no_tool",
+                           fallback_used="none")
+    gaps = hdb.get_capability_gaps(db, days=7, min_count=2)
+    assert any(g["gap_type"] == "chart_rendering" for g in gaps)
