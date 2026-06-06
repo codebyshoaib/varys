@@ -13,7 +13,7 @@ import importlib.util
 def load_injector(db_path: str):
     spec = importlib.util.spec_from_file_location(
         "injector",
-        Path(__file__).parent.parent / ".claude" / "hooks" / "openoutreach-signal-injector.py"
+        Path(__file__).parent.parent / ".claude" / "hooks" / "openoutreach_signal_injector.py"
     )
     mod = importlib.util.module_from_spec(spec)
     mod.OPENOUTREACH_DB = Path(db_path)

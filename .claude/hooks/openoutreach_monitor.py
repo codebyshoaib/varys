@@ -165,13 +165,22 @@ def get_conversation_context(lead_id: int, limit: int = 5) -> str:
         cur = conn.cursor()
         # chat_chatmessage.object_id = crm_lead.id (Django ContentType FK)
         # is_outgoing: True = we sent, False = prospect replied
+        # Must also filter by content_type_id to avoid cross-model collisions
+        cur.execute(
+            "SELECT id FROM django_content_type WHERE app_label='crm' AND model='lead'"
+        )
+        ct_row = cur.fetchone()
+        if ct_row is None:
+            conn.close()
+            return ""
+        ct_id = ct_row["id"]
         cur.execute("""
             SELECT content, creation_date, is_outgoing
             FROM chat_chatmessage
-            WHERE object_id = ?
+            WHERE object_id = ? AND content_type_id = ?
             ORDER BY creation_date DESC
             LIMIT ?
-        """, (lead_id, limit))
+        """, (lead_id, ct_id, limit))
         rows = cur.fetchall()
         conn.close()
         if not rows:
@@ -252,11 +261,23 @@ def run(token: str) -> int:
         for r in new_replies[:3]:
             content = r.get("content", "")[:120]
             lines.append(f"• \"{content}\"")
-            lead_id = r.get("profile_id") or r.get("lead_id")
-            if lead_id:
-                ctx = get_conversation_context(int(lead_id))
-                if ctx:
-                    lines.append(ctx)
+            profile_id = r.get("profile_id")
+            if profile_id:
+                try:
+                    _conn = sqlite3.connect(str(OPENOUTREACH_DB))
+                    _conn.row_factory = sqlite3.Row
+                    _row = _conn.execute(
+                        "SELECT self_lead_id FROM linkedin_linkedinprofile WHERE id=?",
+                        (profile_id,)
+                    ).fetchone()
+                    _conn.close()
+                    lead_id = _row["self_lead_id"] if _row and _row["self_lead_id"] else None
+                except Exception:
+                    lead_id = None
+                if lead_id:
+                    ctx = get_conversation_context(int(lead_id))
+                    if ctx:
+                        lines.append(ctx)
             seen_replies.add(str(r["id"]))
             new_events += 1
         lines.append("\n_Check OpenOutreach admin to respond: http://localhost:8000/admin_")
