@@ -642,15 +642,29 @@ def nlm_query_for_content(nb_id: str, topic: str) -> str:
     return ""
 
 
-def nlm_trigger_visuals(nb_id: str, topic: str):
-    """Trigger slides + infographic + mindmap. Correct syntax verified from nlm --help."""
-    # slides: nlm slides create NOTEBOOK_ID --focus TOPIC --confirm
-    run_nlm(["slides", "create", nb_id, "--focus", topic, "--confirm"], timeout=60)
-    # infographic: nlm infographic create NOTEBOOK_ID --focus TOPIC --confirm
-    run_nlm(["infographic", "create", nb_id, "--focus", topic, "--confirm"], timeout=60)
-    # mindmap: nlm mindmap create NOTEBOOK_ID --confirm (no --focus option)
-    run_nlm(["mindmap", "create", nb_id, "--confirm"], timeout=60)
-    print(f"[scheduler] NLM visuals triggered (slides+infographic+mindmap)")
+def nlm_trigger_visuals(nb_id: str, topic: str) -> dict:
+    """Trigger slides + infographic + mindmap. Returns state dict per artifact:
+    'triggered' if creation started, 'rate_limited' if code 8, 'failed' otherwise."""
+    state = {}
+    cmds = {
+        "slide_deck":  ["slides", "create", nb_id, "--focus", topic, "--confirm"],
+        "infographic": ["infographic", "create", nb_id, "--focus", topic, "--confirm"],
+        "mind_map":    ["mindmap", "create", nb_id, "--confirm"],
+    }
+    for artifact, cmd in cmds.items():
+        ok, out = run_nlm(cmd, timeout=60)
+        if ok:
+            state[artifact] = "triggered"
+        elif "error code 8" in out.lower() or "rate limited" in out.lower():
+            state[artifact] = "rate_limited"
+            print(f"[scheduler] NLM {artifact} rate-limited (code 8) — skipping poller")
+        else:
+            state[artifact] = "failed"
+            print(f"[scheduler] NLM {artifact} failed: {out[:80]}")
+    triggered = [k for k, v in state.items() if v == "triggered"]
+    skipped   = [k for k, v in state.items() if v != "triggered"]
+    print(f"[scheduler] NLM visuals: triggered={triggered} skipped={skipped}")
+    return state
 
 
 def _update_nlm_artifact_status(log_page_id: str, artifacts_state: dict):
@@ -894,10 +908,10 @@ def post_linkedin(caption: str, image_path: str | None) -> str:
     except Exception as e:
         return f"❌ LinkedIn error: {e}"
 
-def _try_nlm_research_and_visuals(topic: str, profile: str) -> tuple[str | None, str]:
+def _try_nlm_research_and_visuals(topic: str, profile: str) -> tuple[str | None, str, dict]:
     """Try to create/reuse an NLM notebook and trigger visuals using the given profile.
 
-    Returns (nb_id, insights) or (None, "") on quota/failure.
+    Returns (nb_id, insights, artifacts_state) or (None, "", {}) on quota/failure.
     Temporarily overrides NLM_PROFILE for this call via a local wrapper.
     """
     orig = os.environ.get("NLM_PROFILE")
@@ -905,18 +919,18 @@ def _try_nlm_research_and_visuals(topic: str, profile: str) -> tuple[str | None,
     try:
         nb_id, had_sources = nlm_get_or_create_notebook(topic)
         if not nb_id:
-            return None, ""
+            return None, "", {}
         if not had_sources:
             ok = nlm_research(nb_id, topic)
             if not ok:
                 run_nlm(["delete", "notebook", nb_id, "--confirm"], timeout=30)
-                return None, ""
+                return None, "", {}
         insights = nlm_query_for_content(nb_id, topic)
         if not insights:
             run_nlm(["delete", "notebook", nb_id, "--confirm"], timeout=30)
-            return None, ""
-        nlm_trigger_visuals(nb_id, topic)
-        return nb_id, insights
+            return None, "", {}
+        artifacts_state = nlm_trigger_visuals(nb_id, topic)
+        return nb_id, insights, artifacts_state
     finally:
         if orig is None:
             os.environ.pop("NLM_PROFILE", None)
@@ -932,10 +946,9 @@ def run_nlm_with_profile_fallback(token: str, topic: str, track: str) -> tuple[s
     """
     for profile, label in [(NLM_PROFILE, "work"), (NLM_PROFILE_PERSONAL, "personal")]:
         print(f"[scheduler] Trying NLM profile: {label} ({profile})")
-        nb_id, insights = _try_nlm_research_and_visuals(topic, profile)
+        nb_id, insights, artifacts_state = _try_nlm_research_and_visuals(topic, profile)
         if nb_id and insights:
             print(f"[scheduler] NLM {label} profile succeeded: notebook {nb_id[:8]}")
-            artifacts_state = {"slide_deck": "triggered", "infographic": "triggered", "mind_map": "triggered"}
             return nb_id, insights, artifacts_state
         print(f"[scheduler] NLM {label} profile exhausted or failed")
 
@@ -1008,9 +1021,8 @@ def run_fitness_or_tech(track: str, token: str):
         if count > 0:
             nlm_insights = nlm_query_for_content(existing_nb_id, topic)
             if nlm_insights:
-                nlm_trigger_visuals(existing_nb_id, topic)
+                artifacts_state = nlm_trigger_visuals(existing_nb_id, topic)
                 nb_id = existing_nb_id
-                artifacts_state = {"slide_deck": "triggered", "infographic": "triggered", "mind_map": "triggered"}
 
     if not nb_id:
         nb_id, nlm_insights, artifacts_state = run_nlm_with_profile_fallback(token, topic, track)
@@ -1086,8 +1098,11 @@ def run_fitness_or_tech(track: str, token: str):
     # NOT exit before these finish downloading + uploading to Slack. We return them
     # so run() can join() them before the process exits.
     poller_threads = []
-    if nb_id and artifacts_state and any(v == "triggered" for v in artifacts_state.values()):
-        for artifact in ["slide_deck", "infographic", "mind_map"]:
+    if nb_id and artifacts_state:
+        # Only poll for artifacts that were actually triggered — skip rate_limited/failed
+        to_poll = [a for a in ["slide_deck", "infographic", "mind_map"]
+                   if artifacts_state.get(a) == "triggered"]
+        for artifact in to_poll:
             th = threading.Thread(
                 target=nlm_poll_and_send,
                 args=(nb_id, artifact, topic, token),
@@ -1096,6 +1111,8 @@ def run_fitness_or_tech(track: str, token: str):
             )
             th.start()
             poller_threads.append(th)
+        if to_poll:
+            print(f"[scheduler] Spawned {len(to_poll)} poller(s) for: {to_poll}")
         with _POLLERS_LOCK:
             ARTIFACT_POLLERS.extend(poller_threads)
 
