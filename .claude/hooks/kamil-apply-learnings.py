@@ -169,37 +169,47 @@ Kamil's current harness (what actually exists today):
     return []
 
 
-def _fetch_existing_ticket_titles(notion_token: str) -> set[str]:
-    """Return normalised set of existing [Auto] ticket titles from Harness DB."""
-    data = json.dumps({
-        "filter": {"property": "Feature", "title": {"contains": "[Auto]"}},
-        "page_size": 100,
-    }).encode()
-    req = urllib.request.Request(
-        f"{NOTION_API}/databases/{HARNESS_DB_ID}/query", data=data,
-        headers={
-            "Authorization":  f"Bearer {notion_token}",
-            "Content-Type":   "application/json",
-            "Notion-Version": "2022-06-28",
-        },
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=10) as r:
-            result = json.loads(r.read())
-            titles = set()
-            for page in result.get("results", []):
-                raw = page["properties"].get("Feature", {}).get("title", [])
-                if raw:
-                    titles.add(raw[0]["plain_text"].lower())
-            return titles
-    except Exception as e:
-        print(f"[apply-learnings] Could not fetch existing titles: {e}")
-        return set()
+def _fetch_existing_ticket_titles(notion_token: str) -> "set[str] | None":
+    """Return normalised set of existing [Auto] ticket titles from Harness DB. None on error."""
+    titles  = set()
+    cursor  = None
+    while True:
+        payload = {
+            "filter":    {"property": "Feature", "title": {"contains": "[Auto]"}},
+            "page_size": 100,
+        }
+        if cursor:
+            payload["start_cursor"] = cursor
+        data = json.dumps(payload).encode()
+        req = urllib.request.Request(
+            f"{NOTION_API}/databases/{HARNESS_DB_ID}/query", data=data,
+            headers={
+                "Authorization":  f"Bearer {notion_token}",
+                "Content-Type":   "application/json",
+                "Notion-Version": "2022-06-28",
+            },
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=10) as r:
+                result = json.loads(r.read())
+        except Exception as e:
+            print(f"[apply-learnings] Could not fetch existing titles (aborting to avoid duplicates): {e}")
+            return None
+        for page in result.get("results", []):
+            raw = page["properties"].get("Feature", {}).get("title", [])
+            if raw:
+                titles.add(raw[0]["plain_text"].lower())
+        if not result.get("has_more"):
+            break
+        cursor = result.get("next_cursor")
+    return titles
 
 
 def _is_duplicate(gap: dict, existing_titles: set[str]) -> bool:
     """Return True if a ticket for this gap already exists."""
-    normalised = f"[auto] {gap['title'].lower()}"
+    raw_title  = gap["title"].strip()
+    clean      = raw_title[7:].strip() if raw_title.lower().startswith("[auto]") else raw_title
+    normalised = f"[auto] {clean.lower()}"
     return normalised in existing_titles
 
 
@@ -270,7 +280,13 @@ def run(days: int = 1, notify_slack: bool = True):
 
     notion_token = _notion_token()
     slack_token  = _load_slack_token()
-    existing     = _fetch_existing_ticket_titles(notion_token) if notion_token else set()
+    if notion_token:
+        existing = _fetch_existing_ticket_titles(notion_token)
+        if existing is None:
+            print("[apply-learnings] Cannot confirm existing tickets — aborting to prevent duplicates")
+            return
+    else:
+        existing = set()
     created      = []
 
     for gap in gaps:
@@ -279,7 +295,9 @@ def run(days: int = 1, notify_slack: bool = True):
             continue
         page_id = create_harness_ticket(gap, notion_token) if notion_token else ""
         if page_id:
-            existing.add(f"[auto] {gap['title'].lower()}")
+            raw_t = gap["title"].strip()
+            clean_t = raw_t[7:].strip() if raw_t.lower().startswith("[auto]") else raw_t
+            existing.add(f"[auto] {clean_t.lower()}")
         created.append({"gap": gap, "page_id": page_id})
         klog("apply_learning_ticket", component="kamil-apply-learnings",
              title=gap["title"], priority=gap.get("priority"), page_id=page_id[:8] if page_id else "")
