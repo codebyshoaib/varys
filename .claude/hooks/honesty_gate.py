@@ -81,7 +81,11 @@ def _rewrite_honest(draft: str, request: str) -> str:
             timeout=30, env=env,
         )
         if result.returncode == 0 and result.stdout.strip():
-            return result.stdout.strip()
+            return result.stdout.strip()[:500]
+    except subprocess.TimeoutExpired as e:
+        if e.process:
+            e.process.kill()
+        klog_error("honesty_gate_timeout", component="honesty_gate")
     except Exception as e:
         klog_error("honesty_gate_rewrite_fail", component="honesty_gate", error=str(e))
 

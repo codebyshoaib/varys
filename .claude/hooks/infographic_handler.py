@@ -19,6 +19,7 @@ from kamil_log import klog, klog_error
 
 KAMIL_DIR = Path(__file__).parent.parent.parent
 IMAGE_GEN = Path(__file__).parent / "image_generator.py"
+sys.path.insert(0, str(IMAGE_GEN.parent))
 
 _TOPIC_PATTERNS = [
     r"infographic\s+(?:about|on|for|of)\s+(.+)",
@@ -193,7 +194,6 @@ def handle(
     palette_dict = None
 
     try:
-        sys.path.insert(0, str(IMAGE_GEN.parent))
         from image_generator import make_info, PALETTES
         palette_dict = PALETTES.get(palette, PALETTES["tech"])
         img = make_info(
@@ -219,18 +219,19 @@ def handle(
     comment = f"🖼️ *{topic}* — sourced from NotebookLM\n🤖 Kamil"
     ok = upload_file_to_slack(bot_token, channel, outfile,
                                title=f"Infographic: {topic}", comment=comment)
-    if not ok:
-        _log_gap("inline_image_arbitrary", text, "slack_upload", "file_path_fallback")
-        _post_text(web, channel, thread_ts,
-                   f"🖼️ Generated the infographic for *{topic}* but can't upload it — "
-                   f"Kamil app needs `files:write` scope.\n"
-                   f"Fix: api.slack.com/apps → Kamil → OAuth Scopes → add `files:write` → Reinstall.\n"
-                   f"File saved at: `{outfile}`\n🤖 Kamil")
-        return
-
-    klog("infographic_posted", component="infographic_handler",
-         topic=topic, nb_id=nb_id, palette=palette, points=len(points))
     try:
-        Path(outfile).unlink(missing_ok=True)
-    except Exception:
-        pass
+        if not ok:
+            _log_gap("inline_image_arbitrary", text, "slack_upload", "file_path_fallback")
+            _post_text(web, channel, thread_ts,
+                       f"🖼️ Generated the infographic for *{topic}* but can't upload it — "
+                       f"Kamil app needs `files:write` scope.\n"
+                       f"Fix: api.slack.com/apps → Kamil → OAuth Scopes → add `files:write` → Reinstall.\n"
+                       f"File saved at: `{outfile}`\n🤖 Kamil")
+            return
+        klog("infographic_posted", component="infographic_handler",
+             topic=topic, nb_id=nb_id, palette=palette, points=len(points))
+    finally:
+        try:
+            Path(outfile).unlink(missing_ok=True)
+        except Exception:
+            pass

@@ -46,25 +46,28 @@ def _load_bot_token() -> str:
 
 
 def _dm_kamal(bot_token: str, text: str) -> None:
-    data = json.dumps({"users": KAMAL_SLACK_ID}).encode()
-    req  = urllib.request.Request(
-        "https://slack.com/api/conversations.open", data=data,
-        headers={"Authorization": f"Bearer {bot_token}",
-                 "Content-Type": "application/json"},
-    )
-    with urllib.request.urlopen(req, timeout=10) as r:
-        result = json.loads(r.read())
-    channel = result.get("channel", {}).get("id")
-    if not channel:
-        return
-    data = json.dumps({"channel": channel, "text": text}).encode()
-    req  = urllib.request.Request(
-        "https://slack.com/api/chat.postMessage", data=data,
-        headers={"Authorization": f"Bearer {bot_token}",
-                 "Content-Type": "application/json"},
-    )
-    with urllib.request.urlopen(req, timeout=10) as r:
-        pass
+    try:
+        data = json.dumps({"users": KAMAL_SLACK_ID}).encode()
+        req  = urllib.request.Request(
+            "https://slack.com/api/conversations.open", data=data,
+            headers={"Authorization": f"Bearer {bot_token}",
+                     "Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=10) as r:
+            result = json.loads(r.read())
+        channel = result.get("channel", {}).get("id")
+        if not channel:
+            return
+        data = json.dumps({"channel": channel, "text": text}).encode()
+        req  = urllib.request.Request(
+            "https://slack.com/api/chat.postMessage", data=data,
+            headers={"Authorization": f"Bearer {bot_token}",
+                     "Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=10) as r:
+            pass
+    except Exception as e:
+        klog_error("gap_watcher_dm_fail", component="gap-watcher", error=str(e))
 
 
 def _already_in_capabilities(gap_type: str) -> bool:
@@ -158,11 +161,14 @@ def run() -> None:
 
         if bot_token:
             ticket_line = " Created a Harness ticket to build it." if ticket_created else ""
-            _dm_kamal(bot_token,
-                f"📚 *Capability gap learned:* `{gap_type}`\n"
-                f"Hit {count} times this week ({rejected} rejected).\n"
-                f"Added to my limits in `CAPABILITIES.md`.{ticket_line}\n"
-                f"Want me to start building it? 🤖 Kamil")
+            try:
+                _dm_kamal(bot_token,
+                    f"📚 *Capability gap learned:* `{gap_type}`\n"
+                    f"Hit {count} times this week ({rejected} rejected).\n"
+                    f"Added to my limits in `CAPABILITIES.md`.{ticket_line}\n"
+                    f"Want me to start building it? 🤖 Kamil")
+            except Exception as e:
+                klog_error("gap_watcher_dm_outer_fail", component="gap-watcher", error=str(e))
 
     if promoted:
         klog("gap_watcher_promoted", component="gap-watcher",
