@@ -153,7 +153,7 @@ def run() -> None:
 
         priority       = rejected * 3 + count
         ticket_created = False
-        if priority >= 4 and bot_token:
+        if priority >= 4:
             ticket_created = _create_notion_ticket(gap_type, count, samples)
 
         if bot_token:

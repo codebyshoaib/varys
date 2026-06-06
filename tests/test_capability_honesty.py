@@ -109,3 +109,22 @@ def test_gap_watcher_promotion_logic():
                            fallback_used="none")
     gaps = hdb.get_capability_gaps(db, days=7, min_count=2)
     assert any(g["gap_type"] == "chart_rendering" for g in gaps)
+
+
+def test_honesty_gate_rewrites_false_claim():
+    """check() with a false claim and uploaded=False should return a different response."""
+    import unittest.mock as mock
+    sys.path.insert(0, str(Path(__file__).parent.parent / ".claude" / "hooks"))
+    import honesty_gate
+
+    fake_rewrite = "I wasn't able to upload that image. Try `nlm slides pullups` instead. 🤖 Kamil"
+
+    with mock.patch.object(honesty_gate, "_rewrite_honest", return_value=fake_rewrite):
+        result = honesty_gate.check(
+            draft="Here it is — your infographic! 🤖 Kamil",
+            uploaded=False,
+            request="make infographic about pullups",
+        )
+
+    assert result == fake_rewrite
+    assert "Here it is" not in result

@@ -10,7 +10,6 @@ Flow:
 
 import os
 import re
-import subprocess
 import sys
 import time
 from pathlib import Path
@@ -187,37 +186,32 @@ def handle(
                    f"Here's the raw research:\n```{answer_raw[:600]}```\n🤖 Kamil")
         return
 
-    # Step 3: Render PNG
-    # image_generator.py splits --points on comma: args.points.split(",")
+    # Step 3: Render PNG via direct import (avoids CLI separator issues)
     palette  = detect_palette(topic)
     ts_stamp = str(int(time.time()))
     outfile  = f"/tmp/infographic-{ts_stamp}.png"
-    POINTS_SEP = ","
-    points_arg = POINTS_SEP.join(points[:7])
+    palette_dict = None
 
     try:
-        result = subprocess.run(
-            [
-                sys.executable, str(IMAGE_GEN),
-                "--type",    "info",
-                "--title",   topic[:40],
-                "--points",  points_arg,
-                "--palette", palette,
-                "--handle",  "@oykamal",
-                "--output",  outfile,
-            ],
-            capture_output=True, text=True, timeout=30,
-            cwd=str(KAMIL_DIR),
+        sys.path.insert(0, str(IMAGE_GEN.parent))
+        from image_generator import make_info, PALETTES
+        palette_dict = PALETTES.get(palette, PALETTES["tech"])
+        img = make_info(
+            title=topic[:40],
+            points=points[:7],
+            handle="@oykamal",
+            palette=palette_dict,
         )
-        if result.returncode != 0 or not Path(outfile).exists():
-            raise RuntimeError(result.stderr.strip() or "no output file")
+        img.save(outfile, "PNG")
+        if not Path(outfile).exists():
+            raise RuntimeError("save produced no file")
     except Exception as e:
         _log_gap("inline_image_arbitrary", text, "image_render", "text_points")
         klog_error("infographic_render_fail", component="infographic_handler", error=str(e))
         lines = [f"🖼️ *{topic}* — research points (image render failed)\n"]
         for i, p in enumerate(points, 1):
             lines.append(f"{i}. {p}")
-        lines.append("\n_Install Pillow to enable image rendering: `pip install Pillow`_\n🤖 Kamil")
+        lines.append("\n_Pillow or font missing — install with `pip install Pillow`_\n🤖 Kamil")
         _post_text(web, channel, thread_ts, "\n".join(lines))
         return
 
