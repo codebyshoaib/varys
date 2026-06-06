@@ -176,9 +176,9 @@ def create_harness_ticket(gap: dict, notion_token: str) -> str:
     priority = gap.get("priority", "P1")
 
     props = {
-        "Name":   {"title":  [{"text": {"content": title}}]},
-        "Status": {"status": {"name": "Not started"}},
-        "Notes":  {"rich_text": [{"text": {"content": body[:1800]}}]},
+        "Feature":      {"title":     [{"text": {"content": title}}]},
+        "Phase":        {"select":    {"name": "Backlog"}},
+        "Plan Summary": {"rich_text": [{"text": {"content": body[:1800]}}]},
     }
 
     data = json.dumps({
