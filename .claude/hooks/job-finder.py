@@ -513,6 +513,14 @@ def main():
             log(f"OpenOutreach: {oo_events} new LinkedIn event(s)")
     except Exception as e:
         log(f"OpenOutreach monitor skipped: {e}")
+    # Scrape LinkedIn job postings for VA/admin/ops pain signals → inject leads
+    try:
+        from openoutreach_job_signal_scraper import run as scrape_job_signals
+        injected = scrape_job_signals()
+        if injected:
+            log(f"OpenOutreach signal scraper: {injected} new leads injected")
+    except Exception as e:
+        log(f"OpenOutreach signal scraper skipped: {e}")
 
     seen = load_seen()
 
