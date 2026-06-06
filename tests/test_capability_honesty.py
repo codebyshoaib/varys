@@ -1,14 +1,21 @@
-import sys, os, sqlite3, tempfile
+import sys, os, sqlite3, tempfile, pytest
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / ".claude" / "hooks"))
 
-# Patch HARNESS_DB to a temp file before importing
 import kamil_harness_db
-_tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
-kamil_harness_db.HARNESS_DB = Path(_tmp.name)
-kamil_harness_db.HARNESS_DIR = Path(_tmp.name).parent
+
+
+@pytest.fixture(autouse=True)
+def fresh_db(tmp_path, monkeypatch):
+    """Give every test its own isolated SQLite DB."""
+    db_path = tmp_path / "test_harness.db"
+    monkeypatch.setattr(kamil_harness_db, "HARNESS_DB", db_path)
+    monkeypatch.setattr(kamil_harness_db, "HARNESS_DIR", tmp_path)
+    yield
+
 
 from kamil_harness_db import get_db, log_capability_gap, get_capability_gaps, update_gap_reaction
+
 
 def test_log_and_read_gap():
     db = get_db()
@@ -20,6 +27,7 @@ def test_log_and_read_gap():
     assert len(gaps) == 1
     assert gaps[0]["gap_type"] == "inline_image"
     assert gaps[0]["count"] == 2
+
 
 def test_gap_reaction_update():
     db = get_db()
