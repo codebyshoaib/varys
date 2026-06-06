@@ -191,11 +191,76 @@ def log_session_interactions(workspace_root: Path, session_id: str) -> None:
                 print(f"[stop] record_interaction failed for {person.name}: {e}", file=sys.stderr)
 
 
+def _seed_session_to_brain(workspace_root: Path) -> None:
+    """
+    Extract what was built/decided this session and seed into brain.db.
+    Non-fatal — never blocks the stop hook.
+    """
+    import json as _json
+    today    = datetime.now().strftime("%Y-%m-%d")
+    log_path = workspace_root / "vault" / "logs" / f"{today}.md"
+    if not log_path.exists():
+        print("[stop] No session log — skipping brain seed", file=sys.stderr)
+        return
+
+    log_text = log_path.read_text(encoding="utf-8")[-3000:]
+    if len(log_text) < 100:
+        print("[stop] Session log too short — skipping brain seed", file=sys.stderr)
+        return
+
+    prompt = (
+        "From this engineering session log, extract what was built or decided.\n"
+        "Output ONLY valid JSON with these keys:\n"
+        "  key_insights: list of up to 3 concrete patterns or decisions (max 20 words each)\n"
+        "  lessons_learned: list of up to 2 lessons for future Kamil (what to do / avoid)\n"
+        "  tools_mentioned: list of tools/scripts/files that were created or significantly changed\n"
+        "  one_line_summary: single sentence, the most important outcome of this session\n\n"
+        f"Session log:\n{log_text}\n\nJSON only."
+    )
+    try:
+        r = run_cmd(
+            ["claude", "--dangerously-skip-permissions", "--print", "-p", prompt],
+            cwd=str(workspace_root),
+        )
+        # run_cmd returns (success, output)
+        raw   = r[1].strip()
+        start = raw.find("{")
+        end   = raw.rfind("}") + 1
+        if start < 0 or end <= start:
+            print("[stop] Brain seed: Claude returned no JSON", file=sys.stderr)
+            return
+        structured = _json.loads(raw[start:end])
+    except Exception as e:
+        print(f"[stop] Brain seed prompt failed (non-fatal): {e}", file=sys.stderr)
+        return
+
+    try:
+        import importlib.util as _ilu
+        seed_path = workspace_root / ".claude" / "hooks" / "brain_seed_from_content.py"
+        spec = _ilu.spec_from_file_location("brain_seed", str(seed_path))
+        mod  = _ilu.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        mod._write_to_brain(
+            topic      = f"Engineering session {today}",
+            track      = "tech",
+            nb_id      = "session-stop",
+            structured = structured,
+            session_id = "",
+            source     = "session_stop",
+        )
+        print("[stop] Session decisions seeded to brain.db", file=sys.stderr)
+    except Exception as e:
+        print(f"[stop] Brain seed write failed (non-fatal): {e}", file=sys.stderr)
+
+
 def main():
     """Hook entry point."""
     workspace_root = Path(__file__).parent.parent.parent
 
     print("[stop] Running stop hook...", file=sys.stderr)
+
+    # 0. Seed session decisions to brain.db (non-fatal)
+    _seed_session_to_brain(workspace_root)
 
     # 1. Commit changes
     if not git_commit(workspace_root):
