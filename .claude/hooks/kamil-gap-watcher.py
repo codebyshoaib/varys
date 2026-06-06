@@ -1,19 +1,20 @@
 #!/usr/bin/env python3
 """
-kamil-gap-watcher.py — Read capability-gaps.jsonl, auto-propose when a gap hits 3x.
+kamil-gap-watcher.py — Weekly capability gap promoter.
 
-Called at end of every tick (after orchestrator-dispatch).
-Reads .beads/capability-gaps.jsonl, counts occurrences per task_type,
-DMs Kamal for any gap that has hit 3 occurrences and hasn't been proposed yet.
+Reads capability_gaps from harness.db. For any gap_type with 2+ occurrences
+in the last 7 days that isn't already in CAPABILITIES.md:
+  1. Appends it to CAPABILITIES.md under CANNOT DO
+  2. DMs Kamal
+  3. If priority score >= 4, creates a Notion Harness ticket
 
-Proposed gaps are tracked in .beads/capability-gaps-proposed.json to avoid re-proposing.
+Run: weekly via cron (cron-wrap.sh)
 """
 
 import json
 import os
 import sys
 import urllib.request
-from collections import Counter
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -22,14 +23,15 @@ try:
 except Exception:
     klog = klog_error = lambda *a, **kw: None
 
-KAMIL_DIR    = Path(__file__).parent.parent.parent
-GAPS_LOG     = KAMIL_DIR / ".beads" / "capability-gaps.jsonl"
-PROPOSED_LOG = KAMIL_DIR / ".beads" / "capability-gaps-proposed.json"
-SLACK_CFG    = Path.home() / ".claude" / "hooks" / ".slack"
-KAMAL_SLACK_ID = "U0AV1DX3WSE"
+KAMIL_DIR       = Path(__file__).parent.parent.parent
+CAPABILITIES_MD = KAMIL_DIR / ".claude" / "rules" / "CAPABILITIES.md"
+SLACK_CFG       = Path.home() / ".claude" / "hooks" / ".slack"
+KAMAL_SLACK_ID  = "U0AV1DX3WSE"
+HARNESS_DB_ID   = "de10157da3e34ef58a74ea240f31fe98"
+NOTION_API      = "https://api.notion.com/v1"
 
 
-def _load_bot_token():
+def _load_bot_token() -> str:
     for key in ("SLACK_BOT_TOKEN", "BOT_TOKEN"):
         val = os.environ.get(key)
         if val:
@@ -38,18 +40,17 @@ def _load_bot_token():
         for line in SLACK_CFG.read_text().splitlines():
             if "=" in line:
                 k, v = line.split("=", 1)
-                if k.strip() in ("SLACK_BOT_TOKEN", "BOT_TOKEN"):
+                if k.strip() in ("BOT_TOKEN", "SLACK_BOT_TOKEN"):
                     return v.strip()
-    return None
+    return ""
 
 
-def _dm_kamal(bot_token, text):
-    """Open DM channel with Kamal and send a message."""
+def _dm_kamal(bot_token: str, text: str) -> None:
     data = json.dumps({"users": KAMAL_SLACK_ID}).encode()
     req  = urllib.request.Request(
-        "https://slack.com/api/conversations.open",
-        data=data,
-        headers={"Authorization": f"Bearer {bot_token}", "Content-Type": "application/json"},
+        "https://slack.com/api/conversations.open", data=data,
+        headers={"Authorization": f"Bearer {bot_token}",
+                 "Content-Type": "application/json"},
     )
     with urllib.request.urlopen(req, timeout=10) as r:
         result = json.loads(r.read())
@@ -58,107 +59,115 @@ def _dm_kamal(bot_token, text):
         return
     data = json.dumps({"channel": channel, "text": text}).encode()
     req  = urllib.request.Request(
-        "https://slack.com/api/chat.postMessage",
-        data=data,
-        headers={"Authorization": f"Bearer {bot_token}", "Content-Type": "application/json"},
+        "https://slack.com/api/chat.postMessage", data=data,
+        headers={"Authorization": f"Bearer {bot_token}",
+                 "Content-Type": "application/json"},
     )
-    urllib.request.urlopen(req, timeout=10)
+    with urllib.request.urlopen(req, timeout=10) as r:
+        pass
 
 
-SKILLS_DIR = Path(__file__).parent.parent / "skills" / "kamil"
+def _already_in_capabilities(gap_type: str) -> bool:
+    if not CAPABILITIES_MD.exists():
+        return False
+    return gap_type in CAPABILITIES_MD.read_text()
 
 
-def _search_skillhound(query):
-    """Search SkillHound for a skill matching the gap. Returns top result or None."""
+def _append_to_capabilities(gap_type: str, sample_requests: list[str]) -> None:
+    samples = "; ".join(sample_requests[:2])
+    entry = (
+        f"| {gap_type} | Not yet implemented "
+        f"(auto-detected from {len(sample_requests)} requests)"
+        f" | Tell Kamal: `@Kamil I need {gap_type}` to trigger a build ticket |"
+        f"  _(sample: {samples[:100]})_ |\n"
+    )
+    with open(CAPABILITIES_MD, "a") as f:
+        f.write(entry)
+    klog("gap_watcher_capabilities_updated", component="gap-watcher", gap_type=gap_type)
+
+
+def _create_notion_ticket(gap_type: str, count: int, samples: list[str]) -> bool:
+    token = os.environ.get("NOTION_API_KEY", "")
+    if not token:
+        return False
     try:
-        import urllib.parse
-        q = urllib.parse.quote(query.replace("_", " ").replace(".", " "))
-        # SkillHound doesn't have a public JSON API yet — use their search page
-        # and check if a known high-quality skill exists for this gap
-        # Fall back to returning None (will suggest building)
-        return None
-    except Exception:
-        return None
+        sample_text = "\n".join(f"- {s}" for s in samples[:3])
+        page = {
+            "parent": {"type": "database_id",
+                       "database_id": HARNESS_DB_ID.replace("-", "")},
+            "properties": {
+                "Name": {"title": [{"text": {"content": f"Build capability: {gap_type}"}}]},
+                "Status": {"status": {"name": "Not started"}},
+            },
+            "children": [{
+                "object": "block", "type": "paragraph",
+                "paragraph": {"rich_text": [{"type": "text", "text": {
+                    "content": (
+                        f"Auto-detected capability gap: {gap_type}\n"
+                        f"Hit {count} times in the last 7 days.\n\n"
+                        f"Sample requests:\n{sample_text}\n\n"
+                        f"Suggested: build a handler in infographic_handler.py or a new module."
+                    )
+                }}]},
+            }],
+        }
+        data = json.dumps(page).encode()
+        req  = urllib.request.Request(
+            f"{NOTION_API}/pages", data=data,
+            headers={"Authorization": f"Bearer {token}",
+                     "Content-Type": "application/json",
+                     "Notion-Version": "2022-06-28"},
+        )
+        with urllib.request.urlopen(req, timeout=10) as r:
+            result = json.loads(r.read())
+        return bool(result.get("id"))
+    except Exception as e:
+        klog_error("gap_watcher_notion_fail", component="gap-watcher", error=str(e))
+        return False
 
 
-def _skillhound_already_installed(task_type):
-    """Check if a SkillHound skill for this task_type already exists."""
-    slug = task_type.lower().replace(" ", "-").replace("_", "-").replace(".", "-")
-    for f in SKILLS_DIR.glob("*.md"):
-        if "skillhound" in f.read_text().lower()[:200]:
-            if slug in f.stem:
-                return f.stem
-    return None
+def run() -> None:
+    from kamil_harness_db import get_db, get_capability_gaps
 
-
-def main():
-    if not GAPS_LOG.exists():
-        print("[gap-watcher] No gaps log — skipping")
-        return 0
-
-    bot_token = _load_bot_token()
-    proposed  = json.loads(PROPOSED_LOG.read_text()) if PROPOSED_LOG.exists() else {}
-
-    gaps = []
-    for line in GAPS_LOG.read_text().splitlines():
-        line = line.strip()
-        if line:
-            try:
-                gaps.append(json.loads(line))
-            except Exception:
-                pass
+    db   = get_db()
+    gaps = get_capability_gaps(db, days=7, min_count=2)
 
     if not gaps:
-        return 0
+        klog("gap_watcher_no_gaps", component="gap-watcher", action="scan_complete")
+        return
 
-    counts = Counter(g["task_type"] for g in gaps)
-    proposed_this_run = 0
+    bot_token = _load_bot_token()
+    promoted  = []
 
-    for task_type, count in counts.items():
-        if count >= 3 and task_type not in proposed:
-            latest = next((g for g in reversed(gaps) if g["task_type"] == task_type), {})
+    for gap in gaps:
+        gap_type = gap["gap_type"]
+        count    = gap["count"]
+        rejected = gap["rejected_count"]
+        samples  = gap["sample_requests"]
 
-            # Check if already installed from SkillHound
-            installed = _skillhound_already_installed(task_type)
-            if installed:
-                print(f"[gap-watcher] {task_type} already has SkillHound skill: {installed}")
-                proposed[task_type] = {"count": count, "auto_closed": installed}
-                proposed_this_run += 1
-                continue
+        if _already_in_capabilities(gap_type):
+            continue
 
-            # Always suggest SkillHound search first
-            skillhound_url = f"https://www.skillhound.ai/?q={task_type.replace(' ', '+')}"
-            msg = (
-                f"⚡ *Capability Gap — {count}x detected*\n"
-                f"• Task type: `{task_type}`\n"
-                f"• What was missing: {latest.get('what_was_missing', 'unknown')[:200]}\n"
-                f"• How I handled it: {latest.get('how_handled', 'improvised')[:150]}\n\n"
-                f"*Step 1:* I searched SkillHound first: {skillhound_url}\n"
-                f"Reply:\n"
-                f"  • `install it` — I'll fetch and install from SkillHound\n"
-                f"  • `build it` — I'll create a custom skill from scratch\n"
-                f"  • `skip` — ignore this gap\n"
-                f"🤖 Kamil"
-            )
-            if bot_token:
-                try:
-                    _dm_kamal(bot_token, msg)
-                    proposed[task_type] = {
-                        "count": count,
-                        "proposed_at": str(GAPS_LOG.stat().st_mtime),
-                    }
-                    proposed_this_run += 1
-                    klog("gap-proposal-sent", component="gap-watcher",
-                         task_type=task_type, count=count)
-                except Exception as e:
-                    klog_error("gap-proposal-dm", e)
+        _append_to_capabilities(gap_type, samples)
+        promoted.append(gap_type)
 
-    if proposed_this_run > 0:
-        PROPOSED_LOG.write_text(json.dumps(proposed, indent=2))
+        priority       = rejected * 3 + count
+        ticket_created = False
+        if priority >= 4 and bot_token:
+            ticket_created = _create_notion_ticket(gap_type, count, samples)
 
-    print(f"[gap-watcher] {proposed_this_run} new gap proposals sent")
-    return 0
+        if bot_token:
+            ticket_line = " Created a Harness ticket to build it." if ticket_created else ""
+            _dm_kamal(bot_token,
+                f"📚 *Capability gap learned:* `{gap_type}`\n"
+                f"Hit {count} times this week ({rejected} rejected).\n"
+                f"Added to my limits in `CAPABILITIES.md`.{ticket_line}\n"
+                f"Want me to start building it? 🤖 Kamil")
+
+    if promoted:
+        klog("gap_watcher_promoted", component="gap-watcher",
+             promoted=promoted, count=len(promoted))
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    run()
