@@ -642,33 +642,28 @@ def nlm_query_for_content(nb_id: str, topic: str) -> str:
     return ""
 
 
-def nlm_trigger_visuals(nb_id: str, topic: str) -> dict:
-    """Trigger slides + infographic + mindmap. Returns state dict per artifact:
-    'triggered' if creation started, 'rate_limited' if code 8, 'failed' otherwise.
-    Falls back to personal profile if work profile is rate-limited per artifact."""
+def nlm_trigger_visuals(nb_id: str, topic: str, profile: str = None) -> dict:
+    """Trigger slides + infographic + mindmap on the SAME profile that owns the notebook.
+    Returns state dict per artifact: 'triggered', 'rate_limited', or 'failed'.
+    Artifacts are account-scoped — never cross profiles."""
     state = {}
+    use_profile = profile or NLM_PROFILE
     cmds = {
-        "slide_deck":  ["slides", "create", nb_id, "--focus", topic, "--confirm"],
-        "infographic": ["infographic", "create", nb_id, "--focus", topic, "--confirm"],
-        "mind_map":    ["mindmap", "create", nb_id, "--confirm"],
+        "slide_deck":  ["slides", "create", nb_id, "--focus", topic, "--confirm", "--profile", use_profile],
+        "infographic": ["infographic", "create", nb_id, "--focus", topic, "--confirm", "--profile", use_profile],
+        "mind_map":    ["mindmap", "create", nb_id, "--confirm", "--profile", use_profile],
     }
-    profiles = [NLM_PROFILE, NLM_PROFILE_PERSONAL]
     for artifact, cmd in cmds.items():
-        for profile in profiles:
-            ok, out = run_nlm(cmd + ["--profile", profile], timeout=60)
-            if ok:
-                state[artifact] = "triggered"
-                print(f"[scheduler] NLM {artifact} triggered on profile={profile}")
-                break
-            elif "error code 8" in out.lower() or "rate limited" in out.lower():
-                print(f"[scheduler] NLM {artifact} rate-limited on profile={profile} — trying next")
-                if profile == profiles[-1]:
-                    state[artifact] = "rate_limited"
-                    print(f"[scheduler] NLM {artifact} rate-limited on all profiles — skipping poller")
-            else:
-                state[artifact] = "failed"
-                print(f"[scheduler] NLM {artifact} failed on profile={profile}: {out[:80]}")
-                break
+        ok, out = run_nlm(cmd, timeout=60)
+        if ok:
+            state[artifact] = "triggered"
+            print(f"[scheduler] NLM {artifact} triggered (profile={use_profile})")
+        elif "error code 8" in out.lower() or "rate limited" in out.lower():
+            state[artifact] = "rate_limited"
+            print(f"[scheduler] NLM {artifact} rate-limited (code 8) — skipping poller")
+        else:
+            state[artifact] = "failed"
+            print(f"[scheduler] NLM {artifact} failed: {out[:80]}")
     triggered = [k for k, v in state.items() if v == "triggered"]
     skipped   = [k for k, v in state.items() if v != "triggered"]
     print(f"[scheduler] NLM visuals: triggered={triggered} skipped={skipped}")
@@ -937,7 +932,7 @@ def _try_nlm_research_and_visuals(topic: str, profile: str) -> tuple[str | None,
         if not insights:
             run_nlm(["delete", "notebook", nb_id, "--confirm"], timeout=30)
             return None, "", {}
-        artifacts_state = nlm_trigger_visuals(nb_id, topic)
+        artifacts_state = nlm_trigger_visuals(nb_id, topic, profile=profile)
         return nb_id, insights, artifacts_state
     finally:
         if orig is None:
@@ -1029,7 +1024,8 @@ def run_fitness_or_tech(track: str, token: str):
         if count > 0:
             nlm_insights = nlm_query_for_content(existing_nb_id, topic)
             if nlm_insights:
-                artifacts_state = nlm_trigger_visuals(existing_nb_id, topic)
+                # Existing notebooks were created on work profile
+                artifacts_state = nlm_trigger_visuals(existing_nb_id, topic, profile=NLM_PROFILE)
                 nb_id = existing_nb_id
 
     if not nb_id:
