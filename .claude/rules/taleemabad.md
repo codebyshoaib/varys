@@ -36,7 +36,7 @@ The agent (not {{AGENT_NAME}}) handles the entire lifecycle from here.
 When {{USER_NAME}} says **"{{AGENT_NAME}}, work on taleemabad-core — [task]"**, follow this EXACT sequence. No exceptions.
 
 1. Create Notion Harness entry (FIRST — before anything). DB `{{config:NOTION_HARNESS_DB_ID}}`. Fields: Feature, Phase (Research→Planning→In Dev→Testing→Done/Blocked), Plan Summary, Jira Ticket, PR, Confidence 0–100, Last Activity.
-2. `cd /home/oye/Documents/taleemabad-core`
+2. `cd {{config:TALEEMABAD_CORE_PATH}}`
 3. `git checkout develop && git pull origin develop`
 4. `git checkout -b kamil/<task-name>` — never work on develop.
 5. `claude --dangerously-skip-permissions -p "/feature <task-name>"` from inside taleemabad-core → creates `.claude/features/YYYY-MM-DD-<name>/research.md` + `plan.md`.

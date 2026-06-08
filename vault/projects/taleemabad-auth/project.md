@@ -7,7 +7,7 @@ description: JWT authentication middleware for Taleemabad services
 
 ## Overview
 - **GitHub**: Taleemabad organization (private)
-- **Local Path**: `/home/oye/Documents/taleemabad-auth` (actual path TBD)
+- **Local Path**: `{{config:REPO_ROOT}} (actual path TBD)
 - **Tech Stack**: Python/Django or Node.js (TBD)
 - **Purpose**: JWT token issuance and validation across [[taleemabad-core]] and [[taleemabad-cms]]
 - **Status**: Active

@@ -11,7 +11,7 @@ DUR=$((END - START))
 TAIL=$(tail -c 800 "$ERRFILE" | tr '\n' ' ' | tr -d '"')
 rm -f "$ERRFILE"
 STATUS="ok"; [ "$RC" -ne 0 ] && STATUS="error"
-cd /home/oye/Documents/free_work/personal-agent-v2 2>/dev/null
+cd "$(dirname "$0")/.."  2>/dev/null
 python3 -c "
 import sys; sys.path.insert(0,'.claude/hooks')
 import kamil_log as k

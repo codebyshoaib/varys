@@ -39,10 +39,10 @@ SLACK_BOT_TOKEN = cfg("SLACK_BOT_TOKEN", "")
 
 # Known project paths → project name
 PROJECT_PATHS = {
-    "/home/oye/Documents/taleemabad-core": "taleemabad-core",
-    "/home/oye/Documents/free_work/personal-agent-v2/repos/taleemabad-cms": "taleemabad-cms",
-    "/home/oye/Documents/free_work/personal-agent-v2/repos/taleemabad-auth": "taleemabad-auth",
-    "/home/oye/Documents/free_work/personal-agent-v2/repos/portfolio-website": "portfolio-website",
+    cfg("TALEEMABAD_CORE_PATH", "/home/oye/Documents/taleemabad-core"): "taleemabad-core",
+    str(Path.home() / "personal-agent" / "repos" / "taleemabad-cms"): "taleemabad-cms",
+    str(Path.home() / "personal-agent" / "repos" / "taleemabad-auth"): "taleemabad-auth",
+    str(Path.home() / "personal-agent" / "repos" / "portfolio-website"): "portfolio-website",
 }
 
 

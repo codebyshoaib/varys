@@ -34,8 +34,8 @@ def detect_project(cwd: str) -> str | None:
     Handles both direct paths and symlinks via resolve().
 
     Known projects:
-    - /home/oye/Documents/taleemabad-core → "taleemabad-core"
-    - /home/oye/Documents/free_work/personal-agent-v2/repos/taleemabad-cms → "taleemabad-cms"
+    - {{TALEEMABAD_CORE_PATH}} → "taleemabad-core"
+    - ~/repos/taleemabad-cms → "taleemabad-cms"
     - etc.
     """
     cwd_path = Path(cwd).resolve()

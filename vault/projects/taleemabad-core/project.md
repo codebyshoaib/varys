@@ -7,7 +7,7 @@ updated: 2026-06-02
 # taleemabad-core — Project Reference
 
 ## Overview
-- **Local Path**: `/home/oye/Documents/taleemabad-core`
+- **Local Path**: `{{config:REPO_ROOT}}
 - **GitHub**: Taleemabad organization (private)
 - **Purpose**: Multi-tenant educational platform REST API — coaching, teacher training, school management, offline sync
 - **Primary Consumer**: taleemabad-cms (React / Nx monorepo frontend using Dexie.js offline-first)

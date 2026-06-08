@@ -8,7 +8,7 @@
 
 set -euo pipefail
 
-KAMIL_DIR="/home/oye/Documents/free_work/personal-agent-v2"
+KAMIL_DIR="$(cd "$(dirname "$0")" && pwd)"
 LOG_FILE="/tmp/kamil-weekly.log"
 DATE=$(date +%Y-%m-%d)
 TIMESTAMP=$(date +"%Y-%m-%d %H:%M:%S")
@@ -97,5 +97,5 @@ echo "[$TIMESTAMP] Humor review complete." >> "$LOG_FILE"
 
 # ── Portfolio CV intelligence update ──────────────────────────────────────────
 echo "[$TIMESTAMP] Running portfolio CV intelligence..." >> "$LOG_FILE"
-python3 /home/oye/Documents/free_work/personal-agent-v2/.claude/hooks/portfolio-updater.py >> "$LOG_FILE" 2>&1 || true
+python3 "$KAMIL_DIR"/.claude/hooks/portfolio-updater.py >> "$LOG_FILE" 2>&1 || true
 echo "[$TIMESTAMP] Portfolio update complete." >> "$LOG_FILE"

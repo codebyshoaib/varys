@@ -8,7 +8,7 @@ matching Kamal's stack. Deduplicates, scores, surfaces only new
 high-quality matches. Saves to Notion Job Tracker. DMs Kamal.
 
 Cron:
-  */30 * * * * python3 /home/oye/Documents/free_work/personal-agent-v2/.claude/hooks/job-finder.py >> /tmp/kamil-jobs.log 2>&1
+  */30 * * * * python3 .claude/hooks/job-finder.py >> /tmp/kamil-jobs.log 2>&1
 
 Goal: Kamal buys a house. Kamil finds the clients.
 """

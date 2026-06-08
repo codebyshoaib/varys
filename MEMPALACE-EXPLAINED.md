@@ -176,7 +176,7 @@ MemPalace palace/chroma.sqlite3:
 
 ### Step 4: project-detect.py Loads on Session Start
 ```python
-# Session starts in /home/oye/Documents/taleemabad-core
+# Session starts in /your/project/path
 [project-detect] Detected project: taleemabad-core
 [project-detect] Loading context from MemPalace
 
@@ -365,7 +365,7 @@ Claude: "Fixed Celery timeout in apps/feedback/tasks.py"
 
 ### Test 1: Index the Vault
 ```bash
-cd /home/oye/Documents/free_work/personal-agent-v2
+cd /your/project/path
 
 # Mine (index) the vault
 mempalace --palace mempalace mine vault --yes

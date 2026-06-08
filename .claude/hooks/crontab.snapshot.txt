@@ -1,31 +1,35 @@
+# Crontab template for the personal agent
+# After running /setup, replace REPO_PATH with your actual repo path
+# Run: crontab -e  then paste these lines
 
+REPO_PATH=/path/to/your/personal-agent
 
-# Kamil — Slack poller every 30 min
-*/30 * * * * nice -n 15 /home/oye/Documents/free_work/personal-agent-v2/.claude/hooks/cron-wrap.sh poller python3 /home/oye/Documents/free_work/personal-agent-v2/.claude/hooks/slack-poller.py
+# Slack poller — every 30 minutes
+*/30 * * * * nice -n 15 $REPO_PATH/.claude/hooks/cron-wrap.sh poller python3 $REPO_PATH/.claude/hooks/slack-poller.py
 
-# Kamil — Daily learning loop at 8am
-0 8 * * * /home/oye/Documents/free_work/personal-agent-v2/.claude/hooks/cron-wrap.sh daily /home/oye/Documents/free_work/personal-agent-v2/kamil-daily.sh
+# Daily tasks — 8am
+0 8 * * * $REPO_PATH/.claude/hooks/cron-wrap.sh daily $REPO_PATH/kamil-daily.sh
 
-# Kamil — Weekly Slack report every Monday 9am
-0 9 * * 1 /home/oye/Documents/free_work/personal-agent-v2/.claude/hooks/cron-wrap.sh weekly /home/oye/Documents/free_work/personal-agent-v2/kamil-weekly-report.sh
+# Weekly report — Monday 9am
+0 9 * * 1 $REPO_PATH/.claude/hooks/cron-wrap.sh weekly $REPO_PATH/kamil-weekly-report.sh
 
-# Kamil — Slack listener (long-running daemon; keep raw log, not a discrete run)
-@reboot python3 /home/oye/Documents/free_work/personal-agent-v2/.claude/hooks/kamil-slack-listener.py >> /tmp/kamil-slack-listener.log 2>&1
+# Slack listener — on reboot
+@reboot python3 $REPO_PATH/.claude/hooks/kamil-slack-listener.py >> /tmp/agent-slack-listener.log 2>&1
 
-# Kamil — Learn loop 2am
-0 2 * * * /home/oye/Documents/free_work/personal-agent-v2/.claude/hooks/cron-wrap.sh learn /home/oye/Documents/free_work/personal-agent-v2/kamil-learn.sh
+# Learning loop — 2am daily
+0 2 * * * $REPO_PATH/.claude/hooks/cron-wrap.sh learn $REPO_PATH/kamil-learn.sh
 
-# Kamil — Self-healer every 10 min
-*/10 * * * * nice -n 15 /home/oye/Documents/free_work/personal-agent-v2/.claude/hooks/cron-wrap.sh self-healer python3 /home/oye/Documents/free_work/personal-agent-v2/.claude/hooks/kamil-self-healer.py
+# Self-healer — every 10 minutes
+*/10 * * * * nice -n 15 $REPO_PATH/.claude/hooks/cron-wrap.sh self-healer python3 $REPO_PATH/.claude/hooks/kamil-self-healer.py
 
-# Kamil — Job finder every 30 min
-5,35 * * * * nice -n 15 /home/oye/Documents/free_work/personal-agent-v2/.claude/hooks/cron-wrap.sh job-finder python3 /home/oye/Documents/free_work/personal-agent-v2/.claude/hooks/job-finder.py
+# Job finder — every 35 minutes
+5,35 * * * * nice -n 15 $REPO_PATH/.claude/hooks/cron-wrap.sh job-finder python3 $REPO_PATH/.claude/hooks/job-finder.py
 
-# Kamil — Content scheduler daily 11am PKT (6am UTC)
-0 6 * * * /home/oye/Documents/free_work/personal-agent-v2/.claude/hooks/cron-wrap.sh content python3 /home/oye/Documents/free_work/personal-agent-v2/.claude/hooks/content-scheduler.py
+# Content scheduler — 6am daily
+0 6 * * * $REPO_PATH/.claude/hooks/cron-wrap.sh content python3 $REPO_PATH/.claude/hooks/content-scheduler.py
 
-# Kamil — Notion map daily scan at 2:30am
-30 2 * * * /home/oye/Documents/free_work/personal-agent-v2/.claude/hooks/cron-wrap.sh notion-map python3 /home/oye/Documents/free_work/personal-agent-v2/.claude/hooks/notion-map-updater.py --mode daily
+# Notion map updater — 2:30am daily
+30 2 * * * $REPO_PATH/.claude/hooks/cron-wrap.sh notion-map python3 $REPO_PATH/.claude/hooks/notion-map-updater.py --mode daily
 
-# Kamil — Self-healing observer, hourly at :15
-15 * * * * /home/oye/Documents/free_work/personal-agent-v2/.claude/hooks/cron-wrap.sh observer python3 /home/oye/Documents/free_work/personal-agent-v2/.claude/hooks/kamil-observer.py
+# Observer — hourly at :15
+15 * * * * $REPO_PATH/.claude/hooks/cron-wrap.sh observer python3 $REPO_PATH/.claude/hooks/kamil-observer.py

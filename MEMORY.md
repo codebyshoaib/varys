@@ -11,7 +11,7 @@
 
 ## Work Context
 - [[vault/memory/taleemabad_workplace]] — Your employer; main project domain
-- [[vault/memory/taleemabad_core_path]] — Django backend at `/home/oye/Documents/taleemabad-core`; migrations, unit tests, Celery
+- [[vault/memory/taleemabad_core_path]] — Django backend at `{{config:TALEEMABAD_CORE_PATH}}`; migrations, unit tests, Celery
 - [[vault/memory/taleemabad_cms_project]] — React SPA at `repos/taleemabad-cms`; S3 upload, asset management
 - [[vault/memory/taleemabad_training_project]] — Training LMS backend: levels, quizzes, AI feedback, sync endpoints, NIETE integration
 

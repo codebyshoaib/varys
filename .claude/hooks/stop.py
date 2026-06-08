@@ -14,7 +14,7 @@ import re
 from pathlib import Path
 from datetime import datetime
 import sys as _sys, time as _time
-_sys.path.insert(0, "/home/oye/Documents/free_work/personal-agent-v2/.claude/hooks")
+_sys.path.insert(0, str(__import__("pathlib").Path(__file__).parent))
 try:
     import kamil_log as _k
 except Exception:

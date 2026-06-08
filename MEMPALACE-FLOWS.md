@@ -51,12 +51,12 @@ You edit a file in vault/
 New session starts
         ↓
         │
-User working in: /home/oye/Documents/taleemabad-core
+User working in: /your/project/path
         ↓
 project-detect.py HOOK fires
         ↓
 Resolves working directory:
-    /home/oye/Documents/taleemabad-core
+    /your/project/path
     ↓
 Matches to known project:
     Project name: "taleemabad-core"

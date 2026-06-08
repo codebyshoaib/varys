@@ -8,7 +8,7 @@
 
 set -euo pipefail
 
-KAMIL_DIR="/home/oye/Documents/free_work/personal-agent-v2"
+KAMIL_DIR="$(cd "$(dirname "$0")" && pwd)"
 LOG_FILE="/tmp/kamil-daily.log"
 DATE=$(date +%Y-%m-%d)
 TIMESTAMP=$(date +"%Y-%m-%d %H:%M:%S")

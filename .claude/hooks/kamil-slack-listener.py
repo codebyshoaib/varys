@@ -669,7 +669,7 @@ When Kamal asks about a person ("how is Fatima?", "what does Haroon need?"):
 
 ## KAMAL'S CONTEXT
 - Taleemabad, Pakistan — EdTech, Django + React, multi-tenant LMS
-- Slack workspace: taleemabad-talk.slack.com | Kamal's Slack ID: {KAMAL_USER_ID}
+- Slack workspace: {WORKSPACE} | User Slack ID: {KAMAL_USER_ID}
 - Harness DB: {DB_PAGE_HARNESS}
 
 ## THREAD HISTORY

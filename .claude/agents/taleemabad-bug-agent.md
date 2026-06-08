@@ -25,7 +25,7 @@ merged PR.
 ## Workspace
 
 Always operate in `~/.kamil-harness/workspace/` — the isolated taleemabad-core
-checkout. Never touch `/home/oye/Documents/taleemabad-core` ({{USER_NAME}}'s live repo).
+checkout. Never touch the live repo at `{{config:TALEEMABAD_CORE_PATH}}` ({{USER_NAME}}'s live repo).
 
 ```bash
 cd ~/.kamil-harness/workspace

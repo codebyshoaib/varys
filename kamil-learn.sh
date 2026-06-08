@@ -8,7 +8,7 @@ set -e
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"
 
-KAMIL_DIR="/home/oye/Documents/free_work/personal-agent-v2"
+KAMIL_DIR="$(cd "$(dirname "$0")" && pwd)"
 AXIOM_TOKEN=$(grep AXIOM_TOKEN ~/.claude/hooks/.axiom | cut -d= -f2)
 AXIOM_DATASET="kamil-logs"
 
