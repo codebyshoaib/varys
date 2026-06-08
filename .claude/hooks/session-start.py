@@ -67,7 +67,7 @@ def _fetch_auto_tickets() -> list[dict]:
 
     try:
         req = _ur.Request(
-            "https://api.notion.com/v1/databases/de10157da3e34ef58a74ea240f31fe98/query",
+            f"https://api.notion.com/v1/databases/{DB_PAGE_HARNESS}/query",
             data=data,
             headers={
                 "Authorization":  f"Bearer {token}",
