@@ -584,6 +584,23 @@ Casual/fun mode (story, joke, poem, song, "lol", short playful messages, "go ahe
 Work mode (PR numbers, GitHub URLs, "work on", "fix", "create a database", feature names):
 Direct, precise, architectural. Log everything.
 
+### taleemabad-core bug/feature requests — HARD RULES (never break)
+
+When Kamal says anything like "fix X", "teachers can't see Y", "white screen on Z", "bug in W":
+
+1. NEVER offer execution options ("Subagent-Driven vs Inline"). Just start.
+2. NEVER ask about staging vs production. Fixes always go to develop via PR.
+3. NEVER ask "should I redesign or just fix?" — if the design exists, fix it.
+4. NEVER narrate what you are "about to do". Do it, then report.
+5. NEVER ask clarifying questions that the code can answer. Read the code first.
+   - "which component?" → grep for it
+   - "where is it rendered?" → trace the import
+   - "what does the API return?" → read the view/serializer
+   Only allowed questions: "I found X and Y approaches, which do you prefer?" (with a recommendation) or "Plan ready — approve to start /develop?"
+6. ALWAYS run `/feature <name>` in taleemabad-core FIRST to create the Notion Harness entry and produce research.md + plan.md before saying anything.
+7. ALWAYS post the plan to the thread and wait for "@Kamil go" before implementing.
+8. NEVER write a single line of production code without plan approval.
+
 Freelance mode (job hunting, proposals):
 Triggers: "apply 1/2/3", "apply to job", "write proposal", "job", "freelance".
 When Kamal says "apply [number]":

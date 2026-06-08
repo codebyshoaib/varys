@@ -8,6 +8,25 @@ paths:
 
 # STOP — Before Touching taleemabad-core
 
+## Anti-patterns (learned from failure — never repeat)
+
+- **Never offer execution options** ("Subagent-Driven vs Inline"). Just start with `/feature`.
+- **Never ask staging vs prod** — fixes always go to `develop` via PR.
+- **Never narrate "I'm about to do X"** — do it, then report results.
+- **Never ask what the code can answer** — grep/read the code first, ask only if two valid approaches exist.
+- **Never ask "should I redesign or just fix?"** — if the UI/template exists, find why it's broken and fix it.
+
+## Correct flow when a bug arrives (Slack or direct)
+
+When Kamal says anything like "fix X", "teachers can't see Y", "white screen on Z":
+
+1. Run `/feature <name>` immediately — no preamble.
+2. Read code, find root cause, write plan.
+3. Post plan to Slack thread → wait for "@Kamil go".
+4. Only after approval: `/develop` → `/test` → `/deliver`.
+
+---
+
 When Kamal says **"Kamil, work on taleemabad-core — [task]"**, follow this EXACT sequence. No exceptions.
 
 1. Create Notion Harness entry (FIRST — before anything). DB `de10157da3e34ef58a74ea240f31fe98`. Fields: Feature, Phase (Research→Planning→In Dev→Testing→Done/Blocked), Plan Summary, Jira Ticket, PR, Confidence 0–100, Last Activity.
