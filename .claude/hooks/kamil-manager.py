@@ -154,12 +154,14 @@ MY SELF-GAPS (avoid repeating these mistakes):
 YOUR OUTPUT MUST BE A JSON OBJECT:
 {{
   "real_intent": "one sentence: what is Kamal/team actually trying to achieve?",
-  "chosen_agent": "agent-name from the available list",
+  "chosen_agent": "agent-name from the available list (or null if gap)",
   "delegation_brief": "full brief for the worker: task, context, definition of done, constraints",
   "slack_plan_message": "message to post in the Slack thread — plan + who is handling it",
-  "capability_gap": null or "description if no agent fits well"
+  "confidence": 85,
+  "capability_gap": null
 }}
 
+confidence: 0-100. Your honest estimate of routing quality. If < 40, escalation-broker will be notified.
 If no agent fits: set chosen_agent to null, explain in capability_gap.
 Return ONLY the JSON object. No prose before or after."""
 
@@ -178,6 +180,17 @@ Return ONLY the JSON object. No prose before or after."""
         start = raw.find("{")
         end   = raw.rfind("}") + 1
         decision = json.loads(raw[start:end])
+        # Schema validation (handoff-schemas.md)
+        required = {"real_intent", "delegation_brief", "slack_plan_message", "confidence"}
+        missing = required - set(decision.keys())
+        if missing:
+            raise ValueError(f"Manager Phase 1 output missing required fields: {missing}")
+        if not decision.get("chosen_agent") and not decision.get("capability_gap"):
+            raise ValueError("Manager Phase 1: both chosen_agent and capability_gap are null")
+        agent_names = [f.stem for f in AGENTS_DIR.glob("*.md")]
+        if decision.get("chosen_agent") and decision["chosen_agent"] not in agent_names:
+            decision["capability_gap"] = f"Agent '{decision['chosen_agent']}' not found in agents dir"
+            decision["chosen_agent"] = None
     except Exception as e:
         klog_error("manager-phase1-parse", e)
         db.execute("UPDATE sessions SET status='cancelled', updated_at=datetime('now') WHERE id=?", (session_id,))
