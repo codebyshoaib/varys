@@ -30,16 +30,16 @@ Gate 2 — Verifier PASS (bug-fix features only)
   FAIL action: run /test <slug> (verifier will re-run), fix failures, re-run /deliver
 
 Gate 3 — Linter clean
-  Run: cd /home/oye/Documents/taleemabad-core && python -m flake8 --max-line-length=120 --statistics . 2>&1 | tail -20
-  Run: cd /home/oye/Documents/taleemabad-core && python -m black --check . 2>&1 | tail -10
+  Run: cd {{config:TALEEMABAD_CORE_PATH}} && python -m flake8 --max-line-length=120 --statistics . 2>&1 | tail -20
+  Run: cd {{config:TALEEMABAD_CORE_PATH}} && python -m black --check . 2>&1 | tail -10
   FAIL action: run black . && isort . to auto-fix, then re-check
 
 Gate 4 — Type check passes
-  Run: cd /home/oye/Documents/taleemabad-core && python -m mypy taleemabad_core --ignore-missing-imports 2>&1 | tail -20
+  Run: cd {{config:TALEEMABAD_CORE_PATH}} && python -m mypy taleemabad_core --ignore-missing-imports 2>&1 | tail -20
   FAIL action: fix type errors in affected files, re-run
 
 Gate 5 — Tests pass
-  Run: cd /home/oye/Documents/taleemabad-core && python manage.py test --verbosity=0 2>&1 | tail -20
+  Run: cd {{config:TALEEMABAD_CORE_PATH}} && python manage.py test --verbosity=0 2>&1 | tail -20
   FAIL action: if failures are in touched modules → /fix; if regressions in unrelated modules → note in PR body
 
 Gate 6 — No open CRITICAL/HIGH bugs
@@ -48,7 +48,7 @@ Gate 6 — No open CRITICAL/HIGH bugs
   FAIL action: resolve all CRITICAL + HIGH bugs, re-run /test, then re-run /deliver
 
 Gate 7 — Migrations verified
-  Run: cd /home/oye/Documents/taleemabad-core && python manage.py migrate --check 2>&1
+  Run: cd {{config:TALEEMABAD_CORE_PATH}} && python manage.py migrate --check 2>&1
   If any unapplied: run python manage.py migrate and verify no errors
 
 Gate 8 — Branch is not develop/main
@@ -77,7 +77,7 @@ All gates passed. Proceeding to delivery.
 ## Step 1: Commit everything
 
 ```bash
-cd /home/oye/Documents/taleemabad-core
+cd {{config:TALEEMABAD_CORE_PATH}}
 git add -A
 git status  # confirm what's staged
 git commit -m "feat(<slug>): <one-line summary of what was built>
@@ -210,7 +210,7 @@ Feature docs: taleemabad-core/.claude/features/<date>-<slug>/
 
 ## Step 7: Log to vault
 
-Append to `/home/oye/Documents/free_work/personal-agent-v2/vault/logs/YYYY-MM-DD.md`:
+Append to `vault/logs/YYYY-MM-DD.md`:
 
 ```
 - HH:MM — [<slug>]: PR created #<number> | Confidence: <score>% | Status: delivered

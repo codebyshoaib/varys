@@ -8,7 +8,7 @@ slack-poller: Runs every 30 min via cron.
 4. On any fatal error → DMs Kamal immediately
 
 Cron:
-  */30 * * * * python3 /home/oye/Documents/free_work/personal-agent-v2/.claude/hooks/slack-poller.py >> /tmp/kamil-slack.log 2>&1
+  */30 * * * * python3 .claude/hooks/slack-poller.py >> /tmp/kamil-slack.log 2>&1
 
 Config:
   ~/.claude/hooks/.slack  →  SLACK_TOKEN=xoxp-...
