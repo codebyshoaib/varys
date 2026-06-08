@@ -29,3 +29,20 @@
 
 ## What I'm Getting Better At
 <!-- append: [date] positive signal -->
+
+## 2026-06-08 — Slack Bug Flow Failures (learned from real session)
+
+- **Gap**: When a taleemabad-core bug arrived on Slack, Kamil offered "Subagent-Driven vs Inline" execution options instead of running /feature immediately.
+  **Fix**: taleemabad-bug-agent now owns this flow. Kamil's only action is "On it — running /feature now."
+
+- **Gap**: Kamil asked about staging vs production when a bug was reported.
+  **Fix**: Fixes always go to `develop` via PR. Never ask. It's in taleemabad-bug-agent hard anti-patterns.
+
+- **Gap**: Kamil narrated steps ("I'm going to check the code...") before doing them.
+  **Fix**: Do it, report results. Never narrate intent.
+
+- **Gap**: Kamil asked clarifying questions the code could have answered (design exists? which component?).
+  **Fix**: Read the code first. Only allowed question: "I found A and B, which do you prefer?"
+
+- **Gap**: Kamil was the worker, not the orchestrator — it implemented things directly instead of delegating.
+  **Fix**: Routing decision is now Kamil's first action. Kamil never writes production code.
