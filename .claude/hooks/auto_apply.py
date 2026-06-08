@@ -144,7 +144,7 @@ Write a SHORT, tailored proposal (max 150 words). Rules:
 - Clear CTA: "Happy to jump on a quick call or send more details"
 - Natural, human tone — not AI-sounding
 - DO NOT mention being an AI
-- Sign: "Kamal | oyekamalkhan@gmail.com | oykamal.netlify.app"
+- Sign: "Kamal | {_user_email} | oykamal.netlify.app"
 
 Output ONLY the proposal text. No explanation, no preamble."""
 

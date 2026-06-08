@@ -60,7 +60,8 @@ def _load_config() -> dict:
             from agent_config import cfg as _acfg
             cfg["NOTION_DATABASE_ID"] = _acfg("NOTION_HARNESS_DB_ID", "de10157da3e34ef58a74ea240f31fe98")
         except Exception:
-            cfg["NOTION_DATABASE_ID"] = "de10157da3e34ef58a74ea240f31fe98"
+            _DEFAULT_HARNESS_DB = "de10157da3e34ef58a74ea240f31fe98"  # cfg("NOTION_HARNESS_DB_ID") fallback
+            cfg["NOTION_DATABASE_ID"] = _DEFAULT_HARNESS_DB
     return cfg
 
 
@@ -144,7 +145,8 @@ def _page_title(page: dict) -> str:
 def main() -> int:
     cfg = _load_config()
     api_key = cfg.get("NOTION_API_KEY")
-    db_id = cfg.get("NOTION_DATABASE_ID", "de10157da3e34ef58a74ea240f31fe98")
+    _DEFAULT_HARNESS_DB = "de10157da3e34ef58a74ea240f31fe98"  # cfg("NOTION_HARNESS_DB_ID") fallback
+    db_id = cfg.get("NOTION_DATABASE_ID") or _DEFAULT_HARNESS_DB
     agent_user_id = cfg.get("NOTION_AGENT_USER_ID", "")
 
     if not api_key:

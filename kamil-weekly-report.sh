@@ -43,7 +43,7 @@ IMPORTANT rules for the message:
 - Be direct like Kamal. No fluff.
 - Sign off as 'Kamil 🤖'
 
-After composing the message, send it to Kamal via Slack DM (Kamal's Slack user ID: U0AV1DX3WSE).
+After composing the message, send it to Kamal via Slack DM (Kamal's Slack user ID: see config USER_SLACK_ID).
 Use the Slack MCP to send the message.
 
 Notion Brain page ID: 364d8747b3b1813d8ac8c248800f0a4d"

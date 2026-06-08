@@ -155,7 +155,7 @@ From GitHub:
 
 ```
 NOTION_API_KEY          — Notion integration token
-NOTION_DATABASE_ID      — Kamil Harness DB page ID (de10157da3e34ef58a74ea240f31fe98)
+NOTION_DATABASE_ID      — Kamil Harness DB page ID (see NOTION_HARNESS_DB_ID in ~/.agent-config.json)
 NOTION_AGENT_USER_ID    — Kamil's Notion user ID (for assignee filter in poll-notion)
 SLACK_BOT_TOKEN         — xoxb- token (for posting messages)
 SLACK_USER_TOKEN        — xoxp- token (for search.messages API — bot token alone fails)

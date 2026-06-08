@@ -190,7 +190,7 @@ Update:
 
 ## Step 6: DM Kamal on Slack
 
-Send to Kamal (U0AV1DX3WSE):
+Send to Kamal (USER_SLACK_ID from config):
 
 ```
 ✅ PR ready: <task description>

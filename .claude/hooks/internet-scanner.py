@@ -21,7 +21,13 @@ import urllib.request
 from datetime import datetime, timedelta
 from pathlib import Path
 
-HEADERS = {"User-Agent": "KamilJobFinder/1.0 (oyekamalkhan@gmail.com)"}
+sys.path.insert(0, str(Path(__file__).parent))
+try:
+    from agent_config import cfg as _cfg_scanner
+except Exception:
+    _cfg_scanner = lambda k, d=None: d
+
+HEADERS = {"User-Agent": f"KamilJobFinder/1.0 ({_cfg_scanner('USER_EMAIL', 'your-email@example.com')})"}
 
 # Reddit subreddits to scan
 HIRING_SUBS = [

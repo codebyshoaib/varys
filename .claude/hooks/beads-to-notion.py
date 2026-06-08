@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Best-effort: surface open beads so a Claude session can mirror them to the Notion
-Harness DB (de10157da3e34ef58a74ea240f31fe98). Pure read + print. Never blocks work."""
+Harness DB (NOTION_HARNESS_DB_ID). Pure read + print. Never blocks work."""
 import json, sys
 from pathlib import Path
 

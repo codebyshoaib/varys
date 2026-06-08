@@ -28,13 +28,13 @@
 
     "follow_up_2": "Here's a quick demo of an agent I built that auto-qualifies inbound leads and drafts replies: https://oykamal.netlify.app/ — I could adapt something similar for {{company}}'s workflow. Want me to mock one up?",
 
-    "follow_up_3": "Hi {{first_name}}, last message from me. I can build a quick proof-of-concept for {{company}}'s {{specific_task}} free of charge — if it works for you, we talk about a paid setup. 15 min to walk through it? Either way, feel free to reach out at oyekamalkhan@gmail.com."
+    "follow_up_3": "Hi {{first_name}}, last message from me. I can build a quick proof-of-concept for {{company}}'s {{specific_task}} free of charge — if it works for you, we talk about a paid setup. 15 min to walk through it? Either way, feel free to reach out at {{USER_EMAIL}}."
   },
 
   "kamal_profile": {
     "name": "Muhammad Kamal",
     "title": "Senior Backend Engineer | Python • Django • AWS • AI Agents",
-    "email": "oyekamalkhan@gmail.com",
+    "email": "{{USER_EMAIL}}",
     "portfolio": "https://oykamal.netlify.app/",
     "github": "https://github.com/oyekamal",
     "linkedin": "https://linkedin.com/in/oyekamal",
