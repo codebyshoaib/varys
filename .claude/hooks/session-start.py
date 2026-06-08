@@ -15,19 +15,20 @@ import sys
 from datetime import datetime
 from pathlib import Path
 import sys as _sys, time as _time
-_sys.path.insert(0, "/home/oye/Documents/free_work/personal-agent-v2/.claude/hooks")
+_sys.path.insert(0, str(__import__('pathlib').Path(__file__).parent))
 try:
     import kamil_log as _k
 except Exception:
     _k = None
 
-INBOX_FILE = Path("/tmp/kamil-slack-inbox.json")
+INBOX_FILE = Path("/tmp/agent-slack-inbox.json")
 
 # Notion DB page IDs — used by Claude's MCP fetch calls
-DB_PAGE_SLACK_INBOX = "6d14f1b6b8cd4ff68fd40efdfc3f304e"
-DB_PAGE_MY_PRS      = "18017a67136a4561ada9818c239b8f33"
-DB_PAGE_WORK_LOG    = "0b71db855f914d18ac6d97c0f77fc21e"
-DB_PAGE_HARNESS     = "de10157da3e34ef58a74ea240f31fe98"
+from agent_config import cfg
+DB_PAGE_SLACK_INBOX = cfg("NOTION_INBOX_DB_ID",    "6d14f1b6b8cd4ff68fd40efdfc3f304e")
+DB_PAGE_MY_PRS      = cfg("NOTION_MY_PRS_DB_ID",   "18017a67136a4561ada9818c239b8f33")
+DB_PAGE_WORK_LOG    = cfg("NOTION_WORK_LOG_DB_ID",  "0b71db855f914d18ac6d97c0f77fc21e")
+DB_PAGE_HARNESS     = cfg("NOTION_HARNESS_DB_ID",   "de10157da3e34ef58a74ea240f31fe98")
 
 
 def load_slack_inbox() -> list:
@@ -45,7 +46,7 @@ def load_slack_inbox() -> list:
 def _fetch_auto_tickets() -> list[dict]:
     """Fetch pending [Auto] Harness tickets. Returns list of {title, phase} dicts."""
     import urllib.request as _ur
-    notion_cfg = Path("/home/oye/.claude/hooks/.notion")
+    notion_cfg = Path.home() / ".claude" / "hooks" / ".notion"
     token = ""
     if notion_cfg.exists():
         for line in notion_cfg.read_text().splitlines():

@@ -19,7 +19,7 @@ import urllib.error
 from datetime import datetime
 from pathlib import Path
 import sys as _sys, time as _time
-_sys.path.insert(0, "/home/oye/Documents/free_work/personal-agent-v2/.claude/hooks")
+_sys.path.insert(0, str(__import__('pathlib').Path(__file__).parent))
 try:
     import kamil_log as _k
 except Exception:
@@ -30,7 +30,8 @@ except Exception:
     _notion_request = None
 
 NOTION_CONFIG   = Path.home() / ".claude" / "hooks" / ".notion"
-DB_PAGE_WORK_LOG = "0b71db855f914d18ac6d97c0f77fc21e"
+from agent_config import cfg
+DB_PAGE_WORK_LOG = cfg("NOTION_WORK_LOG_DB_ID", "0b71db855f914d18ac6d97c0f77fc21e")
 
 
 def load_api_key() -> str | None:
