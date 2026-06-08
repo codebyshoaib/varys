@@ -10,7 +10,6 @@ import json
 import urllib.request
 import urllib.error
 from datetime import datetime
-from pathlib import Path
 
 
 def _headers(api_key: str) -> dict:
@@ -69,7 +68,7 @@ def create_parent_page(api_key: str, agent_name: str) -> str:
             payload["parent"] = {"type": "page_id", "page_id": _find_any_page(api_key)}
             result = _post("https://api.notion.com/v1/pages", api_key, payload)
             return result["id"]
-        raise
+        raise RuntimeError(f"Notion API error {e.code}: {body}") from e
 
 
 def _find_any_page(api_key: str) -> str:
@@ -203,4 +202,5 @@ def delete_test_entry(api_key: str, page_id: str) -> None:
         headers=_headers(api_key),
         method="PATCH",
     )
-    urllib.request.urlopen(req, timeout=10)
+    with urllib.request.urlopen(req, timeout=10) as r:
+        r.read()  # consume response; raises on non-2xx
