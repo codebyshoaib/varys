@@ -18,7 +18,11 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 import sys as _sys, time as _time
-_sys.path.insert(0, "/home/oye/Documents/free_work/personal-agent-v2/.claude/hooks")
+_sys.path.insert(0, str(__import__("pathlib").Path(__file__).parent))
+try:
+    from agent_config import cfg as _cfg_map
+except Exception:
+    _cfg_map = lambda k, d=None: d
 try:
     import kamil_log as _k
 except Exception:
@@ -33,7 +37,7 @@ KNOWN_DBS = {
     "18017a67136a4561ada9818c239b8f33": "My PRs",
     "0b71db855f914d18ac6d97c0f77fc21e": "Work Log",
     "6d14f1b6b8cd4ff68fd40efdfc3f304e": "Slack Inbox",
-    "de10157da3e34ef58a74ea240f31fe98": "Harness",
+    _cfg_map("NOTION_HARNESS_DB_ID", "de10157da3e34ef58a74ea240f31fe98"): "Harness",
     "0d69c6ff83d844c794c2d341c4ded8d7": "Job Tracker",
     "c976d58ea4e34b0585f245529cdc4528": "People Intelligence",
     "94017dd157b44f3ca96423ad2ad989da": "Eval Log",

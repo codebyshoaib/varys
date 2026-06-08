@@ -14,6 +14,12 @@ import json
 import subprocess
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).parent))
+try:
+    from agent_config import cfg as _cfg_pd
+except Exception:
+    _cfg_pd = lambda k, d=None: d
+
 def run_cmd(cmd: list[str], cwd: str = None) -> tuple[bool, str]:
     """Execute shell command; return (success, output)."""
     try:
@@ -34,14 +40,16 @@ def detect_project(cwd: str) -> str | None:
     """
     cwd_path = Path(cwd).resolve()
 
+    _home = Path.home()
+    _repo_root = Path(_cfg_pd("REPO_ROOT", str(_home / "Documents" / "free_work" / "personal-agent-v2")))
     projects = {
-        Path("/home/oye/Documents/taleemabad-core").resolve(): "taleemabad-core",
-        Path("/home/oye/Documents/free_work/personal-agent/repos/taleemabad-cms").resolve(): "taleemabad-cms",
-        Path("/home/oye/Documents/free_work/personal-agent-v2/repos/taleemabad-cms").resolve(): "taleemabad-cms",
-        Path("/home/oye/Documents/taleemabad-auth").resolve(): "taleemabad-auth",
-        Path("/home/oye/Documents/free_work/portfolio-website").resolve(): "portfolio-website",
-        Path("/home/oye/Documents/free_work/portfolio-data").resolve(): "portfolio-data",
-        Path("/home/oye/Documents/free_work/personal-agent-v2").resolve(): "personal-agent-v2",
+        Path(_cfg_pd("TALEEMABAD_CORE_PATH", str(_home / "Documents" / "taleemabad-core"))).resolve(): "taleemabad-core",
+        (_repo_root.parent / "personal-agent" / "repos" / "taleemabad-cms").resolve(): "taleemabad-cms",
+        (_repo_root / "repos" / "taleemabad-cms").resolve(): "taleemabad-cms",
+        Path(_cfg_pd("TALEEMABAD_AUTH_PATH", str(_home / "Documents" / "taleemabad-auth"))).resolve(): "taleemabad-auth",
+        Path(_cfg_pd("PORTFOLIO_WEBSITE_PATH", str(_home / "Documents" / "free_work" / "portfolio-website"))).resolve(): "portfolio-website",
+        Path(_cfg_pd("PORTFOLIO_DATA_PATH", str(_home / "Documents" / "free_work" / "portfolio-data"))).resolve(): "portfolio-data",
+        _repo_root.resolve(): "personal-agent-v2",
     }
 
     # Check if cwd is within a known project

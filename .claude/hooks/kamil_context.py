@@ -6,9 +6,14 @@ import hashlib
 import json
 import os
 import sqlite3
+import sys as _sys_ctx
 import time
 from dataclasses import dataclass, field
+from pathlib import Path as _Path_ctx
 from typing import List, Optional
+
+_sys_ctx.path.insert(0, str(_Path_ctx(__file__).parent))
+from agent_config import cfg as _cfg_ctx
 
 HARNESS_DB = os.path.expanduser("~/.kamil-harness/harness.db")
 
@@ -412,7 +417,7 @@ class ContextResult:
 _NOTION_DB_MAP = {
     "people":   "c976d58ea4e34b0585f245529cdc4528",
     "pr":       "18017a67136a4561ada9818c239b8f33",
-    "harness":  "de10157da3e34ef58a74ea240f31fe98",
+    "harness":  _cfg_ctx("NOTION_HARNESS_DB_ID", "de10157da3e34ef58a74ea240f31fe98"),
     "slack":    "6d14f1b6b8cd4ff68fd40efdfc3f304e",
     "content":  "68792d2dfff84691a4f646f5a8126149",
     "jobs":     "0d69c6ff83d844c794c2d341c4ded8d7",

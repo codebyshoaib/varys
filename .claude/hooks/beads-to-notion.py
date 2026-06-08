@@ -4,8 +4,11 @@ Harness DB (de10157da3e34ef58a74ea240f31fe98). Pure read + print. Never blocks w
 import json, sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).parent))
+from agent_config import cfg
+
 STATUS = Path(__file__).resolve().parents[1] / ".." / ".beads" / "status.jsonl"
-HARNESS_DB = "de10157da3e34ef58a74ea240f31fe98"
+HARNESS_DB = cfg("NOTION_HARNESS_DB_ID", "de10157da3e34ef58a74ea240f31fe98")
 
 def main():
     try:

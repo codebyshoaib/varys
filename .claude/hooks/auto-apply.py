@@ -30,6 +30,7 @@ from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
+from agent_config import cfg
 from kamil_log import klog, klog_error
 from kamil_eval_tracker import log_action
 
@@ -43,14 +44,15 @@ APPLIED_FILE = Path("/tmp/kamil-applied.jsonl")  # dedup — never apply twice
 AUTO_APPLY_SCORE   = 75
 APPROVAL_NEEDED    = 60   # 60-74: ask Kamal first
 
-KAMAL_BIO = """Muhammad Kamal — Senior Backend Engineer
+_user_email = cfg("USER_EMAIL", "your-email@example.com")
+KAMAL_BIO = f"""Muhammad Kamal — Senior Backend Engineer
 - 4+ years Python/Django, AWS (ECS, RDS, Terraform), React/TypeScript
 - Built production LMS at Taleemabad serving 10,000+ daily active users
 - 40% API latency reduction, zero-downtime migrations on millions of rows
 - AI agent developer: Claude API, MCP, autonomous systems
 - Portfolio: https://oykamal.netlify.app
 - GitHub: https://github.com/oyekamal
-- Email: oyekamalkhan@gmail.com"""
+- Email: {_user_email}"""
 
 
 def load_token() -> str:
@@ -142,7 +144,7 @@ Write a SHORT, tailored proposal (max 150 words). Rules:
 - Clear CTA: "Happy to jump on a quick call or send more details"
 - Natural, human tone — not AI-sounding
 - DO NOT mention being an AI
-- Sign: "Kamal | oyekamalkhan@gmail.com | oykamal.netlify.app"
+- Sign: "Kamal | {_user_email} | oykamal.netlify.app"
 
 Output ONLY the proposal text. No explanation, no preamble."""
 

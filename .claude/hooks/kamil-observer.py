@@ -5,7 +5,11 @@ Kill switch: ~/.claude/hooks/.observer-paused disables auto-fix."""
 import json, os, subprocess, sys, time, urllib.request
 from pathlib import Path
 
-ROOT = Path("/home/oye/Documents/free_work/personal-agent-v2")
+import sys as _sys_obs
+from pathlib import Path as _Path_obs
+_sys_obs.path.insert(0, str(_Path_obs(__file__).parent))
+from agent_config import cfg as _cfg_obs
+ROOT = _Path_obs(_cfg_obs("REPO_ROOT", str(_Path_obs(__file__).parent.parent.parent)))
 sys.path.insert(0, str(ROOT / ".claude" / "hooks"))
 import kamil_log as k
 import importlib.util

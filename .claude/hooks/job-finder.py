@@ -26,6 +26,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
+from agent_config import cfg
 from kamil_log import klog, klog_error
 from kamil_eval_tracker import log_action
 
@@ -36,7 +37,7 @@ STATE_FILE    = Path("/tmp/kamil-jobs-state.json")
 LOG_FILE      = Path("/tmp/kamil-jobs.log")
 KAMIL_DIR     = Path(__file__).parent.parent.parent
 
-KAMAL_USER_ID = "U0AV1DX3WSE"
+KAMAL_USER_ID = cfg("USER_SLACK_ID", "U0AV1DX3WSE")
 KAMAL_DM      = "D0B415M06SK"
 JOBS_DB       = "0d69c6ff-83d8-44c7-94c2-d341c4ded8d7"
 

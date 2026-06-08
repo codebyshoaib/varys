@@ -27,11 +27,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
+from agent_config import cfg
 from kamil_log import klog, klog_error
 from kamil_notion import notion_request
 
 BRAIN_DB        = Path.home() / ".kamil-harness" / "brain.db"
-HARNESS_DB_ID   = "de10157da3e34ef58a74ea240f31fe98"
+HARNESS_DB_ID   = cfg("NOTION_HARNESS_DB_ID", "de10157da3e34ef58a74ea240f31fe98")
 NOTION_API      = "https://api.notion.com/v1"
 KAMAL_DM        = "D0B415M06SK"
 SLACK_CFG       = Path.home() / ".claude" / "hooks" / ".slack"

@@ -25,6 +25,10 @@ import threading
 from datetime import datetime
 from pathlib import Path
 
+import sys as _sys_people
+_sys_people.path.insert(0, str(Path(__file__).parent))
+from agent_config import cfg as _cfg_people
+
 KAMIL_DIR      = Path(__file__).parent.parent.parent
 PEOPLE_DB_ID   = "c976d58ea4e34b0585f245529cdc4528"
 PEOPLE_DS_ID   = "c00daef1-c072-4263-b23d-e1b5e2ba596c"
@@ -84,7 +88,7 @@ def update_profile_after_conversation(
     Run after every conversation. Updates Notion People Intelligence profile.
     Runs in a background thread — never blocks the reply.
     """
-    if not is_third_party and sender_id == "U0AV1DX3WSE":
+    if not is_third_party and sender_id == _cfg_people("USER_SLACK_ID", "U0AV1DX3WSE"):
         # Kamal himself — skip (he has his own memory system)
         return
 

@@ -18,6 +18,7 @@ import urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
+from agent_config import cfg
 try:
     from kamil_log import klog, klog_error
 except Exception:
@@ -26,8 +27,8 @@ except Exception:
 KAMIL_DIR       = Path(__file__).parent.parent.parent
 CAPABILITIES_MD = KAMIL_DIR / ".claude" / "rules" / "CAPABILITIES.md"
 SLACK_CFG       = Path.home() / ".claude" / "hooks" / ".slack"
-KAMAL_SLACK_ID  = "U0AV1DX3WSE"
-HARNESS_DB_ID   = "de10157da3e34ef58a74ea240f31fe98"
+KAMAL_SLACK_ID  = cfg("USER_SLACK_ID",        "U0AV1DX3WSE")
+HARNESS_DB_ID   = cfg("NOTION_HARNESS_DB_ID", "de10157da3e34ef58a74ea240f31fe98")
 NOTION_API      = "https://api.notion.com/v1"
 
 

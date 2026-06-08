@@ -22,7 +22,8 @@ import sys
 from datetime import datetime
 from pathlib import Path
 import sys as _sys, time as _time
-_sys.path.insert(0, "/home/oye/Documents/free_work/personal-agent-v2/.claude/hooks")
+_sys.path.insert(0, str(Path(__file__).parent))
+from agent_config import cfg
 try:
     import kamil_log as _k
 except Exception:
@@ -33,8 +34,8 @@ KAMIL_DIR = Path(__file__).parent.parent.parent  # personal-agent-v2/
 LOG_FILE = Path("/tmp/kamil-inbox-processor.log")
 
 NOTION_BRAIN_PAGE_ID = "364d8747b3b1813d8ac8c248800f0a4d"
-KAMAL_SLACK_ID = "U0AV1DX3WSE"
-SLACK_BOT_TOKEN = "xoxb-10555248928483-11156263996292-JhPN5mVADDwp4iyqce19rj6Q"
+KAMAL_SLACK_ID = cfg("USER_SLACK_ID", "U0AV1DX3WSE")
+SLACK_BOT_TOKEN = cfg("SLACK_BOT_TOKEN", "")
 
 # Known project paths → project name
 PROJECT_PATHS = {

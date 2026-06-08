@@ -41,6 +41,7 @@ from slack_sdk.socket_mode.response import SocketModeResponse
 from slack_sdk.web import WebClient
 
 sys.path.insert(0, str(Path(__file__).parent))
+from agent_config import cfg
 from kamil_log import (klog, klog_error, klog_conversation, klog_claude_call,
                         klog_socket, klog_catchup, klog_humor, klog_privacy,
                         klog_system_start)
@@ -87,9 +88,9 @@ KAMIL_DIR    = Path(__file__).parent.parent.parent
 LOG_FILE     = Path("/tmp/kamil-slack-listener.log")
 STATE_FILE   = Path("/tmp/kamil-listener-state.json")
 
-KAMAL_USER_ID   = "U0AV1DX3WSE"
+KAMAL_USER_ID   = cfg("USER_SLACK_ID",        "U0AV1DX3WSE")
 KAMIL_BOT_USER  = "U0B4L7RVA8L"  # Kamil's own bot user — skip in catchup
-DB_PAGE_HARNESS = "de10157da3e34ef58a74ea240f31fe98"
+DB_PAGE_HARNESS = cfg("NOTION_HARNESS_DB_ID", "de10157da3e34ef58a74ea240f31fe98")
 
 # Channels where Kamil auto-answers engineering questions
 ENGINEERING_CHANNELS = {
@@ -668,7 +669,7 @@ When Kamal asks about a person ("how is Fatima?", "what does Haroon need?"):
 
 ## KAMAL'S CONTEXT
 - Taleemabad, Pakistan — EdTech, Django + React, multi-tenant LMS
-- Slack workspace: taleemabad-talk.slack.com | Kamal's Slack ID: U0AV1DX3WSE
+- Slack workspace: taleemabad-talk.slack.com | Kamal's Slack ID: {KAMAL_USER_ID}
 - Harness DB: {DB_PAGE_HARNESS}
 
 ## THREAD HISTORY
@@ -1114,12 +1115,12 @@ def proactive_loop(web: WebClient, dm_channel: str):
         if idle_min >= 35 and since_idle >= 60:  # Increased cooldown to 60min to prevent duplicates
             last_idle_work = time.time()
             log("Idle 35min — doing proactive work")
-            answer = run_claude("""You are Kamil — Kamal's autonomous AI agent. You have idle time.
+            answer = run_claude(f"""You are Kamil — Kamal's autonomous AI agent. You have idle time.
 
 Pick ONE valuable action:
 1. Check Notion My PRs DB (18017a67136a4561ada9818c239b8f33) — any CI failing or stale PRs?
 2. Check /tmp/kamil-slack-inbox.json — any unsynced learning links worth summarising?
-3. Check Harness DB (de10157da3e34ef58a74ea240f31fe98) — any tasks stuck >2 days?
+3. Check Harness DB ({DB_PAGE_HARNESS}) — any tasks stuck >2 days?
 4. Web search one topic: Django performance, React offline sync, or taleemabad tech stack news.
 
 Do the work, then reply in 2-3 lines for Slack:

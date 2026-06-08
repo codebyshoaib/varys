@@ -21,6 +21,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
+from agent_config import cfg as _cfg
 from kamil_harness_db import get_db, HARNESS_DIR, HARNESS_DB
 
 WORKSPACE = HARNESS_DIR / "workspace"
@@ -66,7 +67,7 @@ def _load_all_config() -> dict:
     if not cfg.get("SLACK_BOT_TOKEN") and cfg.get("BOT_TOKEN"):
         cfg["SLACK_BOT_TOKEN"] = cfg["BOT_TOKEN"]
     if not cfg.get("NOTION_DATABASE_ID"):
-        cfg["NOTION_DATABASE_ID"] = "de10157da3e34ef58a74ea240f31fe98"
+        cfg["NOTION_DATABASE_ID"] = _cfg("NOTION_HARNESS_DB_ID", "de10157da3e34ef58a74ea240f31fe98")
     return cfg
 
 
@@ -112,7 +113,7 @@ def main():
     for var, location in REQUIRED_VARS:
         val = cfg.get(var, "")
         if var == "NOTION_DATABASE_ID":
-            val = val or "de10157da3e34ef58a74ea240f31fe98"  # default
+            val = val or _cfg("NOTION_HARNESS_DB_ID", "de10157da3e34ef58a74ea240f31fe98")  # default
         ok = bool(val)
         results.append(check(f"{var}", ok, f"Set in: {location}" if not ok else ""))
 

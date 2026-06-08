@@ -23,6 +23,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
+from agent_config import cfg
 from kamil_harness_db import get_db, get_last_sync_at, set_last_sync_at
 try:
     from kamil_log import klog, klog_error
@@ -33,7 +34,7 @@ KAMIL_DIR    = Path(__file__).parent.parent.parent
 RULES_DIR    = KAMIL_DIR / ".claude" / "rules"
 CHANNELS_CFG = RULES_DIR / "proactive-channels.md"
 SLACK_CFG    = Path.home() / ".claude" / "hooks" / ".slack"
-KAMAL_SLACK_ID = "U0AV1DX3WSE"
+KAMAL_SLACK_ID = cfg("USER_SLACK_ID", "U0AV1DX3WSE")
 
 
 def _load_token():
