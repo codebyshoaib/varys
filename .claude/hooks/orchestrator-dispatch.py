@@ -448,6 +448,28 @@ def main() -> int:
             )
             db.commit()
 
+    # ── Escalation broker: fire for stuck tickets ──
+    try:
+        broker_script = Path(__file__).parent / "escalation-broker.py"
+        if broker_script.exists():
+            subprocess.run(
+                ["python3", str(broker_script)],
+                cwd=str(KAMIL_DIR), capture_output=True, text=True, timeout=60,
+            )
+    except Exception as e:
+        print(f"[dispatch] escalation-broker check failed: {e}", file=sys.stderr)
+
+    # ── Evolution agent: fire if 3+ new failures ──
+    try:
+        evo_script = Path(__file__).parent / "kamil-evolution-agent.py"
+        if evo_script.exists():
+            subprocess.run(
+                ["python3", str(evo_script)],
+                cwd=str(KAMIL_DIR), capture_output=True, text=True, timeout=60,
+            )
+    except Exception as e:
+        print(f"[dispatch] evolution-agent check failed: {e}", file=sys.stderr)
+
     print(f"[dispatch] Done. {spawned}/{len(context_keys)} subagents spawned.")
     klog("dispatch-complete", component="orchestrator",
          spawned=spawned, total=len(context_keys))
