@@ -43,7 +43,8 @@ def _count_new_failures() -> int:
             entry = json.loads(line)
             ts_str = entry.get("ts", "")
             if ts_str:
-                ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00").split("+")[0])
+                # Normalize to naive UTC — all timestamps in this system are UTC
+                ts = datetime.fromisoformat(ts_str.replace("Z", "").split("+")[0].split("-00")[0])
                 if ts > last_run and entry.get("type") != "evolution-applied":
                     count += 1
         except (json.JSONDecodeError, ValueError):

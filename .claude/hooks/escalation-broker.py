@@ -5,7 +5,6 @@ escalation-broker.py — Scan harness.db for stuck tickets and fire the escalati
 Runs as part of the /loop tick AFTER orchestrator-dispatch.py.
 A ticket is "stuck" if its session status is 'cancelled' or 'blocked' for 2+ consecutive ticks.
 """
-import json
 import subprocess
 import sys
 import tempfile
@@ -76,19 +75,21 @@ def _spawn_broker(context_key: str) -> bool:
         f"Follow your protocol: partial delivery first, try different angle, then DM Kamal. "
         f"Harness DB: {Path.home() / '.kamil-harness' / 'harness.db'}"
     )
-    tmp = Path(tempfile.mktemp(suffix=".txt"))
+    import shutil
+    tmpdir = Path(tempfile.mkdtemp(prefix="kamil-broker-"))
+    tmp = tmpdir / "prompt.txt"
     tmp.write_text(prompt)
     try:
         result = subprocess.run(
             ["bash", "-c",
-             f'{nvm} && claude --dangerously-skip-permissions --print -p "$(cat {tmp})"'],
+             f'{nvm} && claude --dangerously-skip-permissions --print -p "$(cat \'{tmp}\')"'],
             cwd=str(KAMIL_DIR), capture_output=True, text=True, timeout=300,
         )
         klog("escalation-broker-spawn", component="escalation-broker",
              context_key=context_key, returncode=result.returncode)
         return result.returncode == 0
     finally:
-        tmp.unlink(missing_ok=True)
+        shutil.rmtree(tmpdir, ignore_errors=True)
 
 
 def main() -> int:
@@ -101,7 +102,12 @@ def main() -> int:
     print(f"[escalation-broker] {len(stuck)} stuck ticket(s).")
     for ticket in stuck:
         try:
-            _spawn_broker(ticket["context_key"])
+            success = _spawn_broker(ticket["context_key"])
+            if not success:
+                klog_error("escalation-broker-spawn-fail",
+                           Exception("broker spawn returned non-zero"),
+                           component="escalation-broker",
+                           context_key=ticket["context_key"])
         except Exception as e:
             klog_error("escalation-broker-error", e, component="escalation-broker",
                        context_key=ticket["context_key"])
