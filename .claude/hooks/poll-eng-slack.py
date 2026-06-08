@@ -28,6 +28,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
+from agent_config import cfg
 from kamil_harness_db import get_db, register_entity, link_entities, get_linked_entities
 from kamil_notion import notion_request
 try:
@@ -44,9 +45,9 @@ ENGINEERING_CHANNELS = [
     "C0AUM8DQ2KA",  # #engineering-learning
 ]
 KAMIL_BOT_USER  = "U0B4L7RVA8L"
-KAMIL_SLACK_ID  = "U0AV1DX3WSE"   # Kamal's personal Slack user ID (for @Kamil go detection)
+KAMIL_SLACK_ID  = cfg("USER_SLACK_ID", "U0AV1DX3WSE")   # Kamal's personal Slack user ID (for @Kamil go detection)
 
-NOTION_HARNESS_DB = "de10157da3e34ef58a74ea240f31fe98"
+NOTION_HARNESS_DB = cfg("NOTION_HARNESS_DB_ID", "de10157da3e34ef58a74ea240f31fe98")
 
 
 def _load_config() -> dict:

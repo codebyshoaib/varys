@@ -26,6 +26,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
+from agent_config import cfg
 from kamil_log import klog, klog_error, klog_poller
 from kamil_eval_tracker import eval_poller_summary, eval_self_question
 try:
@@ -36,12 +37,12 @@ except Exception:
 
 # ── Config ────────────────────────────────────────────────────────────────────
 SLACK_CONFIG    = Path.home() / ".claude" / "hooks" / ".slack"
-INBOX_FILE      = Path("/tmp/kamil-slack-inbox.json")
+INBOX_FILE      = Path("/tmp/agent-slack-inbox.json")
 STATE_FILE      = Path("/tmp/kamil-poller-state.json")
 KAMIL_INBOX_DIR = Path.home() / "kamil-inbox"
-WORKSPACE       = "taleemabad-talk.slack.com"
+WORKSPACE       = cfg("SLACK_WORKSPACE", "taleemabad-talk.slack.com")
 
-KAMAL_USER_ID = "U0AV1DX3WSE"
+KAMAL_USER_ID = cfg("USER_SLACK_ID", "U0AV1DX3WSE")
 KAMIL_TRIGGER_KEYWORDS = ["@kamil", "kamil,", "hey kamil", "kamil:"]
 
 LEARNING_CHANNELS = {

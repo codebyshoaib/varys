@@ -51,6 +51,16 @@ def _load_config() -> dict:
     for key in ("NOTION_API_KEY", "NOTION_DATABASE_ID", "NOTION_AGENT_USER_ID"):
         if os.environ.get(key):
             cfg[key] = os.environ[key]
+    # Fall back to agent_config for DB ID if not found in existing config files
+    if not cfg.get("NOTION_DATABASE_ID"):
+        try:
+            import sys as _s2
+            from pathlib import Path as _P2
+            _s2.path.insert(0, str(_P2(__file__).parent))
+            from agent_config import cfg as _acfg
+            cfg["NOTION_DATABASE_ID"] = _acfg("NOTION_HARNESS_DB_ID", "de10157da3e34ef58a74ea240f31fe98")
+        except Exception:
+            cfg["NOTION_DATABASE_ID"] = "de10157da3e34ef58a74ea240f31fe98"
     return cfg
 
 
