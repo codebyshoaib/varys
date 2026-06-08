@@ -1,6 +1,6 @@
-# Personal Agent v2 — Kamil's Operating Manual
+# Personal Agent v2 — {{AGENT_NAME}}'s Operating Manual
 
-**Owner:** Kamal  **Purpose:** Kamal's personal AI agent. Notion is the brain; Slack is the feed; this repo is Kamil's body.
+**Owner:** {{USER_NAME}}  **Purpose:** {{USER_NAME}}'s personal AI agent. Notion is the brain; Slack is the feed; this repo is {{AGENT_NAME}}'s body.
 
 > L1 ROUTER ONLY. Detail lives in `.claude/rules/`, `vault/memory/`, and `.claude/standards/`. Keep this file ≤150 lines — a PreToolUse hook blocks it past 150.
 
@@ -10,7 +10,7 @@
 
 | Looking for… | Go to… |
 |---|---|
-| Who Kamil is / personality / humor | `vault/memory/kamil_personality.md` |
+| Who {{AGENT_NAME}} is / personality / humor | `vault/memory/kamil_personality.md` |
 | Notion DB IDs + MCP queries | `.claude/rules/notion.md` |
 | Slack send/lookup patterns | `.claude/rules/slack.md` |
 | Working on taleemabad-core (STOP protocol) | `.claude/rules/taleemabad.md` |
@@ -36,8 +36,8 @@
 ```
 Notion (brain)   → 8 DBs (see .claude/rules/notion.md)
 Slack (feed)     → slack-poller.py every 30min → /tmp/kamil-slack-inbox.json → summary DM
-kamil-listener   → Socket Mode daemon (@reboot); DMs + @Kamil mentions; runs `claude -p` IN THIS REPO
-                   → so this harness upgrades every Slack/cron Kamil response
+kamil-listener   → Socket Mode daemon (@reboot); DMs + @{{AGENT_NAME}} mentions; runs `claude -p` IN THIS REPO
+                   → so this harness upgrades every Slack/cron {{AGENT_NAME}} response
 SessionStart hook→ surfaces unsynced Slack items + tells Claude to fetch Notion via MCP
 Stop hook        → writes Work Log to Notion + commits vault/logs
 Job Hunter       → job-finder.py cron; internet-scanner; auto-apply (score≥75); OpenOutreach monitor
@@ -45,13 +45,13 @@ NotebookLM       → nlm CLI; trigger with "nlm ..." on Slack (list/ask/research
 Team Orchestrator→ /loop 270s — see .claude/rules/orchestrator.md for full rules
 ```
 
-## Team Orchestrator (/loop — 270s tick, never change interval without asking Kamal)
+## Team Orchestrator (/loop — 270s tick, never change interval without asking {{USER_NAME}})
 
 ```
 1. kamil_harness_db: acquire tick lock → read last_sync_at
    (if lock held: exit immediately — another tick is running)
-2. poll-harness-notion.py  → Notion Harness DB: new/updated tickets assigned to Kamil
-3. poll-eng-slack.py       → #engineering-* channels: @Kamil mentions (SLACK_USER_TOKEN)
+2. poll-harness-notion.py  → Notion Harness DB: new/updated tickets assigned to {{AGENT_NAME}}
+3. poll-eng-slack.py       → #engineering-* channels: @{{AGENT_NAME}} mentions (SLACK_USER_TOKEN)
 4. poll-taleemabad-github.py → taleemabad-core: PRs on agent branches (entity-filtered)
    (if ANY poller fails: release lock, abort — do NOT update last_sync_at)
 5. orchestrator-dispatch.py → group pending events by context_key → spawn subagents

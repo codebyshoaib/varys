@@ -13,7 +13,7 @@ The dispatcher validates before routing. Malformed output → escalation-broker 
 
 ```json
 {
-  "real_intent": "string — one sentence: what is Kamal/team actually trying to achieve?",
+  "real_intent": "string — one sentence: what is {{USER_NAME}}/team actually trying to achieve?",
   "chosen_agent": "string — must match a filename in .claude/agents/ (without .md)",
   "delegation_brief": "string — full brief: task, context, definition of done, constraints",
   "slack_plan_message": "string — message to post in Slack thread: plan + who handles it",

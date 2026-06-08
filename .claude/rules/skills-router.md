@@ -31,7 +31,7 @@ owner: kamil
 | Claude API / Anthropic SDK work | `claude-api` |
 | taleemabad-core bug/feature/white-screen/crash | `taleemabad-bug-agent` |
 | stuck/blocked 2+ ticks / confidence < 40 | `escalation-broker` |
-| Kamil keeps getting X wrong / "fix your behavior" / "kamil evolve" | `kamil-evolution-agent` |
+| {{AGENT_NAME}} keeps getting X wrong / "fix your behavior" / "kamil evolve" | `kamil-evolution-agent` |
 | job / freelance / "apply 1/2/3" / proposal / "what jobs came in" | `job-agent` |
 
 If unsure which applies, prefer invoking the closest match over guessing — an invoked skill that turns out wrong can be dropped; a skipped skill is lost capability.

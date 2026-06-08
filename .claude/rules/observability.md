@@ -13,7 +13,7 @@ Every event carries: schema_version, severity, component, event, trace_id, host,
 
 ## Sinks
 - Axiom: ALL events. Query with APL.
-- Notion "Kamil Observability" DB (8b0f5754470540dfb832a61380a2a9b9): signal only (ERROR/FATAL, self-heal, daily digest) with Status (🔴 Needs Kamal / 🟡 Pending / 🟢 Solved / ⚪ Monitoring).
+- Notion "{{AGENT_NAME}} Observability" DB ({{config:NOTION_OBSERVABILITY_DB_ID}}): signal only (ERROR/FATAL, self-heal, daily digest) with Status (🔴 Needs {{USER_NAME}} / 🟡 Pending / 🟢 Solved / ⚪ Monitoring).
 - /tmp/kamil-axiom-fallback.jsonl: fallback; /tmp/kamil-notion-queue.jsonl: MCP-flush queue.
 
 ## Self-healing

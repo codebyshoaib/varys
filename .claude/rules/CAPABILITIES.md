@@ -1,8 +1,8 @@
-# Kamil Capability Manifest
+# {{AGENT_NAME}} Capability Manifest
 
 ## WHAT KAMIL CANNOT DO
 
-When asked to do something on this list, Kamil MUST:
+When asked to do something on this list, {{AGENT_NAME}} MUST:
 1. Attempt the closest available tool first.
 2. If that fails, say exactly what wasn't possible and why.
 3. Offer 1-2 concrete alternatives that ARE possible.

@@ -6,7 +6,7 @@ last_verified: 2026-06-03
 
 # Team Orchestrator — Rules & Design Contracts
 
-Kamil is the team's AI engineer. He picks up work from Notion, Slack, and GitHub
+{{AGENT_NAME}} is the team's AI engineer. He picks up work from Notion, Slack, and GitHub
 and handles it autonomously — but never writes code without human approval of a plan first.
 
 ## Hard Rules (never break)
@@ -39,14 +39,14 @@ and handles it autonomously — but never writes code without human approval of 
    - Do NOT update `last_sync_at`
    - Exit — everything retries next tick (safe because event IDs are deterministic)
 
-7. **Tick interval = 270s** — never change without asking Kamal explicitly.
+7. **Tick interval = 270s** — never change without asking {{USER_NAME}} explicitly.
 
 8. **One session per context_key** — if `status='running'` session exists for a context_key,
    skip it entirely this tick. No parallel sessions on the same ticket.
 
 9. **Plan-first for all implementation** — subagents NEVER write code without human approval:
    - Step A: read code → draft plan + E2E test cases → post to Slack → set Status=Blocked → exit
-   - Step B: only triggered by "@Kamil go" reply → implement → E2E → PR → Status=Done LAST
+   - Step B: only triggered by "@{{AGENT_NAME}} go" reply → implement → E2E → PR → Status=Done LAST
 
 10. **E2E gate before every PR** — no `gh pr create` without running e2e tests.
     Pass → open PR normally. Fail after 5 attempts → open PR with failure report + Status=Blocked.
@@ -55,11 +55,11 @@ and handles it autonomously — but never writes code without human approval of 
 
 ```
 From Notion:
-  ticket.created      → new ticket assigned to Kamil / matching filter
-  comment.tagged      → comment on Notion page containing @Kamil
+  ticket.created      → new ticket assigned to {{AGENT_NAME}} / matching filter
+  comment.tagged      → comment on Notion page containing @{{AGENT_NAME}}
 
 From Slack:
-  message.tagged      → @Kamil mention in an engineering channel
+  message.tagged      → @{{AGENT_NAME}} mention in an engineering channel
 
 From GitHub:
   pr.review_commented → review comment on an agent-opened PR
@@ -71,8 +71,8 @@ From GitHub:
 
 ```
 NOTION_API_KEY          — Notion integration token
-NOTION_DATABASE_ID      — Kamil Harness DB (de10157da3e34ef58a74ea240f31fe98)
-NOTION_AGENT_USER_ID    — Kamil's Notion user ID (for assignee filter)
+NOTION_DATABASE_ID      — {{AGENT_NAME}} Harness DB ({{config:NOTION_HARNESS_DB_ID}})
+NOTION_AGENT_USER_ID    — {{AGENT_NAME}}'s Notion user ID (for assignee filter)
 SLACK_BOT_TOKEN         — xoxb- token (posting)
 SLACK_USER_TOKEN        — xoxp- token (search.messages — bot token alone fails)
 GITHUB_TOKEN            — PAT with repo scope
@@ -119,9 +119,9 @@ for 2+ consecutive ticks without a new `running` session.
 Tick 1–2 blocked  → normal retry (existing behavior)
 Tick 3+ blocked   → escalation-broker.py fires automatically
     ↓
-Broker: partial delivery → try different angle → structured DM to Kamal
+Broker: partial delivery → try different angle → structured DM to {{USER_NAME}}
     ↓
-Kamal replies in thread
+{{USER_NAME}} replies in thread
     ↓
 Listener detects reply-on-blocked-thread → creates event IMMEDIATELY
 Dispatcher processes it on the NEXT available tick (not waiting 270s)
@@ -131,7 +131,7 @@ Dispatcher processes it on the NEXT available tick (not waiting 270s)
 
 11. **Nothing silently rots.** If a ticket has been `cancelled`/`blocked` for 2+ ticks,
     `escalation-broker.py` must have fired. Check the session log if it hasn't.
-12. **Kamal replies are fast-pathed.** When the listener detects a reply in a thread
+12. **{{USER_NAME}} replies are fast-pathed.** When the listener detects a reply in a thread
     where the linked Notion ticket is `Blocked`, it inserts the event with
     `priority='high'` and the dispatcher skips the 270s wait for that context_key.
 13. **Evolution fires on failure accumulation.** After every tick, `kamil-evolution-agent.py`

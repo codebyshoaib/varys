@@ -4,9 +4,9 @@ owner: kamil
 last_verified: 2026-06-03
 ---
 
-# NotebookLM — Kamil's Research Intelligence Layer
+# NotebookLM — {{AGENT_NAME}}'s Research Intelligence Layer
 
-Every notebook Kamil creates is registered in **Notion NLM Registry** (`1de6a08dc4784ab69a672ffcf890758a`).
+Every notebook {{AGENT_NAME}} creates is registered in **Notion NLM Registry** (`{{config:NOTION_NLM_REGISTRY_DB_ID}}`).
 This registry is the single source of truth. **Always check it before answering any research question.**
 
 ## When to Use NotebookLM
@@ -60,7 +60,7 @@ nlm ask django-tenancy "how to scope queries by tenant in Django?"
 | `cycling-zones` | fitness | Cycling training zones, FTP, structured training |
 | `calisthenics-vs-gym` | fitness | Bodyweight vs weights, home vs gym |
 
-Full registry with tags + summaries: https://app.notion.com/p/1de6a08dc4784ab69a672ffcf890758a
+Full registry with tags + summaries: https://app.notion.com/p/{{config:NOTION_NLM_REGISTRY_DB_ID}}
 
 ## Auto-Registration
 
