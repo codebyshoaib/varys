@@ -109,3 +109,30 @@ Subagents operate here. Always on `develop` branch at tick start.
 ~/.kamil-harness/harness.db             — SQLite state (tick_lock, events, entities, links, sessions)
 ~/.kamil-harness/workspace/             — taleemabad-core checkout
 ```
+
+## Escalation Protocol
+
+A ticket is "stuck" when its session status has been `cancelled` or `blocked`
+for 2+ consecutive ticks without a new `running` session.
+
+```
+Tick 1–2 blocked  → normal retry (existing behavior)
+Tick 3+ blocked   → escalation-broker.py fires automatically
+    ↓
+Broker: partial delivery → try different angle → structured DM to Kamal
+    ↓
+Kamal replies in thread
+    ↓
+Listener detects reply-on-blocked-thread → creates event IMMEDIATELY
+Dispatcher processes it on the NEXT available tick (not waiting 270s)
+```
+
+**Hard rules (additions to existing list):**
+
+11. **Nothing silently rots.** If a ticket has been `cancelled`/`blocked` for 2+ ticks,
+    `escalation-broker.py` must have fired. Check the session log if it hasn't.
+12. **Kamal replies are fast-pathed.** When the listener detects a reply in a thread
+    where the linked Notion ticket is `Blocked`, it inserts the event with
+    `priority='high'` and the dispatcher skips the 270s wait for that context_key.
+13. **Evolution fires on failure accumulation.** After every tick, `kamil-evolution-agent.py`
+    checks failures.jsonl. If 3+ new entries since last run → fires the evolution agent.
