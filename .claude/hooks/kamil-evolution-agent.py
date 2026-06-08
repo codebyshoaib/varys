@@ -13,6 +13,7 @@ from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
+from agent_config import cfg
 try:
     from kamil_log import klog, klog_error
 except Exception:
@@ -59,11 +60,13 @@ def _spawn_evolution_agent() -> bool:
                    component="evolution-agent")
         return False
     nvm = 'export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"'
+    _user_slack_id = cfg("USER_SLACK_ID", "")
+    _agent_name    = cfg("AGENT_NAME", "the agent")
     prompt = (
-        "You are Kamil's kamil-evolution-agent. "
+        f"You are {_agent_name}'s kamil-evolution-agent. "
         f"Failures file: {FAILURES_FILE}. "
         "Read the recent failures, identify patterns, apply fixes within the fence. "
-        "DM Kamal (U0AV1DX3WSE) with each change made. "
+        f"DM the user{(' (' + _user_slack_id + ')') if _user_slack_id else ''} with each change made. "
         f"Harness DB: {Path.home() / '.kamil-harness' / 'harness.db'}"
     )
     tmp = Path(tempfile.mktemp(suffix=".txt"))

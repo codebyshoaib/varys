@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
+from agent_config import cfg
 from kamil_harness_db import get_db
 try:
     from kamil_log import klog, klog_error
@@ -69,10 +70,13 @@ def _spawn_broker(context_key: str) -> bool:
                    component="escalation-broker")
         return False
     nvm = 'export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"'
+    _user_slack_id = cfg("USER_SLACK_ID", "")
+    _agent_name    = cfg("AGENT_NAME", "the agent")
     prompt = (
-        f"You are Kamil's escalation-broker. "
+        f"You are {_agent_name}'s escalation-broker. "
         f"Context key (Notion ticket entity): {context_key}. "
-        f"Follow your protocol: partial delivery first, try different angle, then DM Kamal. "
+        f"Follow your protocol: partial delivery first, try different angle, "
+        f"then DM the user{(' (' + _user_slack_id + ')') if _user_slack_id else ''}. "
         f"Harness DB: {Path.home() / '.kamil-harness' / 'harness.db'}"
     )
     import shutil
