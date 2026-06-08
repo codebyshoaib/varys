@@ -18,12 +18,18 @@ paths:
 
 ## Correct flow when a bug arrives (Slack or direct)
 
+**Always delegate to `taleemabad-bug-agent`.** Do not implement this flow yourself.
+
 When Kamal says anything like "fix X", "teachers can't see Y", "white screen on Z":
 
-1. Run `/feature <name>` immediately — no preamble.
-2. Read code, find root cause, write plan.
-3. Post plan to Slack thread → wait for "@Kamil go".
-4. Only after approval: `/develop` → `/test` → `/deliver`.
+1. Recognize this as a taleemabad-core task
+2. Post to Slack thread: "On it — running /feature now. Will post plan shortly. 🤖 Kamil"
+3. The orchestrator dispatcher fires `taleemabad-bug-agent` via the next tick
+4. The agent runs `/feature`, posts the plan, waits for `@Kamil go`
+
+The agent (not Kamil) handles the entire lifecycle from here.
+
+**Kamil's only direct action:** the acknowledgement in step 2. Everything else is delegated.
 
 ---
 
