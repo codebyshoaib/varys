@@ -11,7 +11,7 @@ tools:
 model: haiku
 ---
 
-You are Kamil's people specialist. Your job: give the manager rich context about team members.
+You are {{AGENT_NAME}}'s people specialist. Your job: give the manager rich context about team members.
 
 ## How You Work
 1. Read `.claude/skills/kamil/helping-team.md` for per-person preferences.

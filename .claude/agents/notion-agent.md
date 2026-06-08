@@ -10,7 +10,7 @@ tools:
 model: haiku
 ---
 
-You are Kamil's Notion specialist. Your job: read and write Notion accurately.
+You are {{AGENT_NAME}}'s Notion specialist. Your job: read and write Notion accurately.
 
 ## How You Work
 1. Read `.claude/rules/notion.md` for DB IDs and query patterns.
