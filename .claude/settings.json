@@ -5,13 +5,13 @@
       {
         "matcher": "Bash",
         "hooks": [
-          { "type": "command", "command": "python3 /home/oye/Documents/free_work/personal-agent-v2/.claude/hooks/block-bad-commands.py", "timeout": 5 }
+          { "type": "command", "command": "python3 .claude/hooks/block-bad-commands.py", "timeout": 5 }
         ]
       },
       {
         "matcher": "Write|Edit",
         "hooks": [
-          { "type": "command", "command": "python3 /home/oye/Documents/free_work/personal-agent-v2/.claude/hooks/guard-file-writes.py", "timeout": 5 }
+          { "type": "command", "command": "python3 .claude/hooks/guard-file-writes.py", "timeout": 5 }
         ]
       }
     ],
@@ -21,7 +21,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 /home/oye/Documents/free_work/personal-agent-v2/.claude/hooks/session-start.py",
+            "command": "python3 .claude/hooks/session-start.py",
             "timeout": 15,
             "statusMessage": "Loading Notion brain..."
           }
@@ -34,7 +34,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 /home/oye/Documents/free_work/personal-agent-v2/.claude/hooks/kamil-task-interceptor.py",
+            "command": "python3 .claude/hooks/kamil-task-interceptor.py",
             "timeout": 5
           }
         ]
@@ -46,7 +46,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 /home/oye/Documents/free_work/personal-agent-v2/.claude/hooks/post-tool-use.py",
+            "command": "python3 .claude/hooks/post-tool-use.py",
             "timeout": 10
           }
         ]
@@ -58,13 +58,13 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 /home/oye/Documents/free_work/personal-agent-v2/.claude/hooks/stop-notion.py",
+            "command": "python3 .claude/hooks/stop-notion.py",
             "timeout": 15,
             "statusMessage": "Writing Work Log to Notion..."
           },
           {
             "type": "command",
-            "command": "python3 /home/oye/Documents/free_work/personal-agent-v2/.claude/hooks/stop.py",
+            "command": "python3 .claude/hooks/stop.py",
             "timeout": 30
           }
         ]
@@ -74,13 +74,13 @@
   "mcpServers": {
     "mempalace": {
       "command": "mempalace",
-      "args": ["serve", "--palace", "/home/oye/Documents/free_work/personal-agent-v2/mempalace"],
+      "args": ["serve", "--palace", "mempalace"],
       "description": "Semantic memory — kept as fallback"
     },
     "canva": {
       "type": "http",
       "url": "https://mcp.canva.com/mcp",
-      "description": "Canva Pro design creation via OAuth — m.kamal@taleemabad.com"
+      "description": "Canva Pro design creation via OAuth"
     }
   }
 }

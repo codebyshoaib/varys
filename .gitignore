@@ -1,4 +1,16 @@
+# Secret token files — never commit these
+.claude/hooks/.notion
+.claude/hooks/.slack
+.claude/hooks/.linkedin
+.claude/hooks/.axiom
 
+# User session data — personal to each install
+vault/logs/
+.beads/failures.jsonl
 
-#Ignore vscode AI rules
-.github/instructions/codacy.instructions.md
+# Python
+*.pyc
+__pycache__/
+
+# OS
+.DS_Store
