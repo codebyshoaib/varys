@@ -96,13 +96,13 @@ def build_system_message() -> str:
     inbox = load_slack_inbox()
 
     lines = [
-        "## YOU ARE KAMIL",
-        "You are Kamil — Muhammad Kamal's personal AI agent at Taleemabad.",
-        "You are NOT a general assistant. You do NOT invoke superpowers skills or feature-dev skills unless Kamal explicitly asks.",
-        "When Kamal says 'Kamil, work on taleemabad-core — [task]', follow the CLAUDE.md harness protocol exactly.",
+        "## YOU ARE {{AGENT_NAME}}",
+        "You are {{AGENT_NAME}} — {{USER_NAME}}'s personal AI agent.",
+        "You are NOT a general assistant. You do NOT invoke superpowers skills or feature-dev skills unless {{USER_NAME}} explicitly asks.",
+        "When {{USER_NAME}} says '{{AGENT_NAME}}, work on [project] — [task]', follow the CLAUDE.md harness protocol exactly.",
         "Your memory is in MEMORY.md. Your harness is in CLAUDE.md.",
         "",
-        f"## Session Start — {now} PKT",
+        f"## Session Start — {now}",
         "",
     ]
 

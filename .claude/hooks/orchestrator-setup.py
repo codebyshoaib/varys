@@ -41,7 +41,7 @@ REQUIRED_NOTION_PROPS = [
     "Status", "Agent Session ID", "Last Agent Update", "GitHub PR", "Slack Thread"
 ]
 
-GITHUB_REPO = "Orenda-Project/taleemabad-core"
+GITHUB_REPO = os.environ.get("GITHUB_REPO", "{{YOUR_GITHUB_ORG}}/{{YOUR_REPO}}")
 
 
 def check(label: str, ok: bool, detail: str = "") -> bool:
@@ -91,10 +91,10 @@ def main():
         results.append(check("harness.db", False, str(e)))
 
     # 2. Workspace
-    print("\n2. Workspace (taleemabad-core checkout)")
+    print("\n2. Workspace (project checkout)")
     ws_exists = WORKSPACE.exists()
     results.append(check("workspace directory exists", ws_exists,
-                         f"Run: git clone git@github.com:Orenda-Project/taleemabad-core.git {WORKSPACE}"))
+                         f"Run: git clone git@github.com:{GITHUB_REPO}.git {WORKSPACE}"))
     if ws_exists:
         try:
             branch = subprocess.check_output(

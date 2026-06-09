@@ -34,7 +34,7 @@ KAMIL_DIR    = Path(__file__).parent.parent.parent
 RULES_DIR    = KAMIL_DIR / ".claude" / "rules"
 CHANNELS_CFG = RULES_DIR / "proactive-channels.md"
 SLACK_CFG    = Path.home() / ".claude" / "hooks" / ".slack"
-KAMAL_SLACK_ID = cfg("USER_SLACK_ID", "U0AV1DX3WSE")
+KAMAL_SLACK_ID = cfg("USER_SLACK_ID", "")
 
 
 def _load_token():

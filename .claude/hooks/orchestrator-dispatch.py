@@ -173,7 +173,7 @@ def _build_subagent_prompt(
     skills = _available_skills()
     skills_section = "\n".join(f"  /{s}" for s in skills) if skills else "  (none)"
 
-    github_repo = cfg.get("GITHUB_REPO", "Orenda-Project/taleemabad-core")
+    github_repo = cfg.get("GITHUB_REPO", "{{YOUR_GITHUB_ORG}}/{{YOUR_REPO}}")
 
     return f"""You are Kamil, Taleemabad's AI engineer. You have been spawned to handle work.
 
@@ -293,7 +293,7 @@ def main() -> int:
     api_key   = cfg.get("NOTION_API_KEY")
     bot_token = cfg.get("SLACK_BOT_TOKEN") or cfg.get("BOT_TOKEN")
     gh_token  = cfg.get("GITHUB_TOKEN")
-    gh_repo   = cfg.get("GITHUB_REPO", "Orenda-Project/taleemabad-core")
+    gh_repo   = cfg.get("GITHUB_REPO", "{{YOUR_GITHUB_ORG}}/{{YOUR_REPO}}")
 
     db = get_db()
 

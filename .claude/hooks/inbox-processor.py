@@ -34,7 +34,7 @@ KAMIL_DIR = Path(__file__).parent.parent.parent  # personal-agent-v2/
 LOG_FILE = Path("/tmp/kamil-inbox-processor.log")
 
 NOTION_BRAIN_PAGE_ID = "364d8747b3b1813d8ac8c248800f0a4d"
-KAMAL_SLACK_ID = cfg("USER_SLACK_ID", "U0AV1DX3WSE")
+KAMAL_SLACK_ID = cfg("USER_SLACK_ID", "")
 SLACK_BOT_TOKEN = cfg("SLACK_BOT_TOKEN", "")
 
 # Known project paths → project name

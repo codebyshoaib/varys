@@ -42,7 +42,7 @@ STATE_FILE      = Path("/tmp/kamil-poller-state.json")
 KAMIL_INBOX_DIR = Path.home() / "kamil-inbox"
 WORKSPACE       = cfg("SLACK_WORKSPACE", "taleemabad-talk.slack.com")
 
-KAMAL_USER_ID = cfg("USER_SLACK_ID", "U0AV1DX3WSE")
+KAMAL_USER_ID = cfg("USER_SLACK_ID", "")
 KAMIL_TRIGGER_KEYWORDS = ["@kamil", "kamil,", "hey kamil", "kamil:"]
 
 LEARNING_CHANNELS = {
@@ -59,7 +59,7 @@ MONITOR_CHANNELS = {
     "C0ATBGETMDM": "#engineering-qa",
     "C0B0X1SGQD7": "#engineering-ai",
     "C0AUM8FFRPS": "#engineering-deployments",
-    "C0AUM8DQ2KA": "#engineering-learning",
+    ""  # set your channel IDs in ~/.agent-config.json: "#engineering-learning",
     "C0AU4DPFG21": "#presence",
     "C0AU5BWCHF0": "#missioncomms",
     "C0AG25N6ST1": "#orenda-general",

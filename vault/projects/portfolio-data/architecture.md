@@ -67,7 +67,7 @@ description: JSON schema and data structure
     "slug": "string (kebab-case)",
     "title": "string",
     "description": "string (short summary)",
-    "author": "Muhammad Kamal (always)",
+    "author": "{{USER_NAME}} (always)",
     "publishDate": "YYYY-MM-DD",
     "updatedDate": "YYYY-MM-DD (optional)",
     "category": "string (Backend | Frontend | DevOps | Career | etc.)",
@@ -123,7 +123,7 @@ description: JSON schema and data structure
 4. Blog slug is unique
 5. Date formats are YYYY-MM-DD
 6. Category is from approved list
-7. Author is "Muhammad Kamal"
+7. Author is "{{USER_NAME}}"
 
 ### Example: Valid Blog Entry
 ```json
@@ -132,7 +132,7 @@ description: JSON schema and data structure
   "slug": "fixing-n-plus-one-queries",
   "title": "Fixing N+1 Query Problems in Django",
   "description": "How to identify and fix N+1 queries for better database performance",
-  "author": "Muhammad Kamal",
+  "author": "{{USER_NAME}}",
   "publishDate": "2026-05-04",
   "category": "Backend",
   "tags": ["Django", "Performance", "PostgreSQL"],

@@ -107,18 +107,18 @@ def test_log_milestone_updates_steps_done():
 def test_extract_pr_url_from_trigger():
     import kamil_context as kc
     url = kc.extract_pr_url(
-        trigger_text='please review https://github.com/Orenda-Project/taleemabad-core/pull/5151',
+        trigger_text='please review https://github.com/{{YOUR_GITHUB_ORG}}/{{YOUR_REPO}}/pull/5151',
         thread_context=''
     )
-    assert url == 'https://github.com/Orenda-Project/taleemabad-core/pull/5151'
+    assert url == 'https://github.com/{{YOUR_GITHUB_ORG}}/{{YOUR_REPO}}/pull/5151'
 
 def test_extract_pr_url_from_thread():
     import kamil_context as kc
     url = kc.extract_pr_url(
         trigger_text='@Kamil review this PR',
-        thread_context='[123.456] <U01>: https://github.com/Orenda-Project/taleemabad-core/pull/5151\n@channel Please review.'
+        thread_context='[123.456] <U01>: https://github.com/{{YOUR_GITHUB_ORG}}/{{YOUR_REPO}}/pull/5151\n@channel Please review.'
     )
-    assert url == 'https://github.com/Orenda-Project/taleemabad-core/pull/5151'
+    assert url == 'https://github.com/{{YOUR_GITHUB_ORG}}/{{YOUR_REPO}}/pull/5151'
 
 def test_extract_pr_url_returns_none_when_missing():
     import kamil_context as kc

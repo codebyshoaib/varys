@@ -83,7 +83,7 @@ Open curiosity gap early, close it only in final 10 seconds.
 ```
 
 **5. The core story**
-> Muhammad Kamal — developer in Islamabad, building 4 brands alone, real struggles, real wins. Every post is one chapter.
+> {{USER_NAME}} — building your brand, real struggles, real wins. Every post is one chapter.
 
 ---
 

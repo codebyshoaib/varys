@@ -27,7 +27,7 @@ except Exception:
 KAMIL_DIR       = Path(__file__).parent.parent.parent
 CAPABILITIES_MD = KAMIL_DIR / ".claude" / "rules" / "CAPABILITIES.md"
 SLACK_CFG       = Path.home() / ".claude" / "hooks" / ".slack"
-KAMAL_SLACK_ID  = cfg("USER_SLACK_ID",        "U0AV1DX3WSE")
+KAMAL_SLACK_ID  = cfg("USER_SLACK_ID",        "")
 HARNESS_DB_ID   = cfg("NOTION_HARNESS_DB_ID", "de10157da3e34ef58a74ea240f31fe98")
 NOTION_API      = "https://api.notion.com/v1"
 

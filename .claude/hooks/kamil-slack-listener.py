@@ -88,14 +88,14 @@ KAMIL_DIR    = Path(__file__).parent.parent.parent
 LOG_FILE     = Path("/tmp/kamil-slack-listener.log")
 STATE_FILE   = Path("/tmp/kamil-listener-state.json")
 
-KAMAL_USER_ID   = cfg("USER_SLACK_ID",        "U0AV1DX3WSE")
-KAMIL_BOT_USER  = "U0B4L7RVA8L"  # Kamil's own bot user — skip in catchup
-DB_PAGE_HARNESS = cfg("NOTION_HARNESS_DB_ID", "de10157da3e34ef58a74ea240f31fe98")
+KAMAL_USER_ID   = cfg("USER_SLACK_ID",        "")  # set USER_SLACK_ID in ~/.agent-config.json
+KAMIL_BOT_USER  = cfg("BOT_SLACK_USER_ID",   "")  # set BOT_SLACK_USER_ID in ~/.agent-config.json
+DB_PAGE_HARNESS = cfg("NOTION_HARNESS_DB_ID", "")  # set NOTION_HARNESS_DB_ID in ~/.agent-config.json
 
-# Channels where Kamil auto-answers engineering questions
+# Channels where {{AGENT_NAME}} auto-answers engineering questions
+# Replace with your own channel IDs (get from Slack URL or API)
 ENGINEERING_CHANNELS = {
-    "C0AUM8DQ2KA",  # #engineering-learning
-    "C0AUM8DQ2KB",  # #engineering-ai (if exists)
+    # "CABC1234DEF",  # #engineering-channel-name
 }
 
 # Tracks thread_ts of posts Kamil originated — auto-answer replies in these
@@ -582,18 +582,18 @@ Casual/instant (banter, joke, poem, quick question answerable in < 60s, no code,
 
 Work with scope (code, bug, feature, content, research, jobs, memory, analysis):
 → Pick the right agent. Post a 1-line plan. Dispatch. You coordinate — you don't implement.
-→ Agent fleet: taleemabad-bug-agent, content-agent, research-agent, brain-agent,
+→ Agent fleet: bug-agent, content-agent, research-agent, brain-agent,
   slack-agent, notion-agent, people-agent, character-agent, job-agent,
-  kamil-evolution-agent, escalation-broker.
+  evolution-agent, escalation-broker.
 → Routing table: .claude/rules/skills-router.md
 
 THE ONE GOVERNING RULE:
-Kamil never writes production code, never posts content to the world, never commits.
+{{AGENT_NAME}} never writes production code, never posts content to the world, never commits.
 Those always go through a named agent with an approval gate.
 
-### taleemabad-core bug/feature requests — HARD RULES (never break)
+### Bug/feature requests — HARD RULES (never break)
 
-When Kamal says anything like "fix X", "teachers can't see Y", "white screen on Z", "bug in W":
+When {{USER_NAME}} says anything like "fix X", "users can't see Y", "white screen on Z", "bug in W":
 
 1. NEVER offer execution options ("Subagent-Driven vs Inline"). Just start.
 2. NEVER ask about staging vs production. Fixes always go to develop via PR.
@@ -604,22 +604,19 @@ When Kamal says anything like "fix X", "teachers can't see Y", "white screen on 
    - "where is it rendered?" → trace the import
    - "what does the API return?" → read the view/serializer
    Only allowed questions: "I found X and Y approaches, which do you prefer?" (with a recommendation) or "Plan ready — approve to start /develop?"
-6. ALWAYS run `/feature <name>` in taleemabad-core FIRST to create the Notion Harness entry and produce research.md + plan.md before saying anything.
-7. ALWAYS post the plan to the thread and wait for "@Kamil go" before implementing.
+6. ALWAYS run `/feature <name>` in the relevant project FIRST to create the Notion Harness entry and produce research.md + plan.md before saying anything.
+7. ALWAYS post the plan to the thread and wait for "@{{AGENT_NAME}} go" before implementing.
 8. NEVER write a single line of production code without plan approval.
 
 Freelance mode (job hunting, proposals):
 Triggers: "apply 1/2/3", "apply to job", "write proposal", "job", "freelance".
-When Kamal says "apply [number]":
+When {{USER_NAME}} says "apply [number]":
 → Read the thread to find the job listing (title, URL, description)
-→ Write a complete, tailored Upwork/freelance proposal using Kamal's real experience:
-  - Taleemabad: Django backend, multi-tenant LMS, REST APIs, React TypeScript
-  - AI: Claude API, MCP, autonomous agents, Slack/Notion integrations
-  - Senior level, 5+ years, EdTech domain expertise
+→ Write a complete, tailored Upwork/freelance proposal using {{USER_NAME}}'s real experience from vault/memory/user_profile.md
 → Proposal format: hook (1 line), relevant experience (3 bullets), what you'll deliver, CTA
 → Keep it under 200 words — short proposals win on Upwork
-→ Update the job status in Notion Job Tracker DB (0d69c6ff-83d8-44c7-94c2-d341c4ded8d7) to "applied"
-→ DM the proposal text back so Kamal can copy-paste it
+→ Update the job status in Notion Job Tracker DB to "applied"
+→ DM the proposal text back so {{USER_NAME}} can copy-paste it
 
 ## CORE RULES (both modes)
 
@@ -629,7 +626,7 @@ When Kamal says "apply [number]":
    - PR diff → `gh pr diff <number>`
    - Notion → mcp__claude_ai_Notion__notion-fetch
    - Web → WebSearch / WebFetch
-   - GitHub repo exists? → `gh repo list <org> --limit 50` FIRST. The org is always Orenda-Project.
+   - GitHub repo exists? → `gh repo list <org> --limit 50` FIRST. The org is set in ~/.agent-config.json.
      Never say "I can't find the repo" without running gh repo list first.
 
 2. Never ask what the thread already shows. Read thread history. Act on it.
@@ -1034,7 +1031,7 @@ Do this for EACH topic:
 4. Wait for slides (poll `nlm status artifacts [ID]` until completed)
 5. `nlm download slide-deck [ID] --output /tmp/[fitness|tech]-today-slides.pdf`
 6. Convert PDF to PNGs: `pdftoppm -r 150 -png /tmp/[...].pdf /tmp/[fitness|tech]-slide-today`
-7. Upload each slide PNG to Slack channel D0B415M06SK using BOT_TOKEN from ~/.claude/hooks/.slack
+7. Upload each slide PNG to Slack channel {{USER_SLACK_DM}} using BOT_TOKEN from ~/.claude/hooks/.slack
    Format: "🏃 Slide N/total — [topic]" or "💻 Slide N/total — [topic]"
 8. Post caption message with title, description, hashtags for Instagram + TikTok (fitness) and Instagram + TikTok + LinkedIn + YouTube (tech)
 
@@ -1121,11 +1118,11 @@ Pick ONE valuable action:
 1. Check Notion My PRs DB (18017a67136a4561ada9818c239b8f33) — any CI failing or stale PRs?
 2. Check /tmp/kamil-slack-inbox.json — any unsynced learning links worth summarising?
 3. Check Harness DB ({DB_PAGE_HARNESS}) — any tasks stuck >2 days?
-4. Web search one topic: Django performance, React offline sync, or taleemabad tech stack news.
+4. Web search one topic relevant to your projects (add your topics to the listener config).
 
 Do the work, then reply in 2-3 lines for Slack:
 "📚 While you were away: [what I found/learned]. [action taken]"
-Sign off: 🤖 Kamil""", timeout=180, event_context="proactive_idle")
+Sign off: 🤖 {{AGENT_NAME}}""", timeout=180, event_context="proactive_idle")
 
             if answer and len(answer) > 20:
                 answer_normalized = " ".join(answer.strip().split())

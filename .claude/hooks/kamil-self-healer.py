@@ -39,7 +39,7 @@ SLACK_CFG   = Path.home() / ".claude" / "hooks" / ".slack"
 HEAL_LOG    = Path("/tmp/kamil-self-healer.log")
 HEAL_STATE  = Path("/tmp/kamil-healer-state.json")
 HANDLED_LEDGER = Path("/tmp/kamil-healer-handled.txt")  # dedup: errors already escalated
-KAMAL_DM    = "D0B415M06SK"
+KAMAL_DM    = os.environ.get("USER_SLACK_DM", "")  # set USER_SLACK_DM in ~/.agent-config.json
 
 SERVICES = [
     {

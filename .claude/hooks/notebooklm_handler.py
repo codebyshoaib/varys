@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-notebooklm_handler.py — Kamil's NotebookLM integration.
+notebooklm_handler.py — {{AGENT_NAME}}'s NotebookLM integration.
 
-Triggered when Kamal says:
+Triggered when {{USER_NAME}} says:
   "nlm research [topic]"      → deep research + sources added to notebook
   "nlm podcast [topic]"       → audio overview (podcast) created
   "nlm slides [topic]"        → slide deck created
@@ -12,7 +12,7 @@ Triggered when Kamal says:
   "nlm create [topic]"        → create new notebook on topic
   "nlm list"                  → list all notebooks
 
-All results DMed back to Kamal on Slack.
+All results DMed back to {{USER_NAME}} on Slack.
 Everything logged to Axiom.
 """
 
@@ -29,34 +29,24 @@ sys.path.insert(0, str(Path(__file__).parent))
 from kamil_log import klog, klog_error
 
 KAMIL_DIR  = Path(__file__).parent.parent.parent
-KAMAL_DM   = "D0B415M06SK"
+KAMAL_DM   = os.environ.get("USER_SLACK_DM", "")  # set USER_SLACK_DM in ~/.agent-config.json
 SLACK_CFG  = Path.home() / ".claude" / "hooks" / ".slack"
 
 # Default notebook fallback
-DEFAULT_NOTEBOOK = "76624bf5-82ce-4f11-b379-e07f308c6c4a"
+DEFAULT_NOTEBOOK = os.environ.get("NLM_DEFAULT_NOTEBOOK", "")  # set in ~/.agent-config.json
 
 # Notion NLM Registry — single source of truth for all notebooks
-NLM_REGISTRY_DS = "5731242d-3352-4a39-847d-6785e99d6bb1"
+# Replace with your own Notion NLM Registry database ID (created by /setup)
+NLM_REGISTRY_DS = "{{YOUR_NLM_REGISTRY_DB_ID}}"
 NOTION_API       = "https://api.notion.com/v1"
 
 # Hardcoded fallback aliases (used only if Notion registry unreachable)
+# After running /setup and creating notebooks, add your aliases here.
+# Format: "alias": "notebooklm-notebook-uuid"
 ALIASES = {
-    "instagram":           "76624bf5-82ce-4f11-b379-e07f308c6c4a",
-    "harness-research":    "e0c78776-a95c-4d4e-b920-b54af3b8099f",
-    "django-tenancy":      "6fe331f1-9953-4543-90d3-190b0c6af758",
-    "api-latency":         "f36838f2-27ca-4ca4-9623-d496a013ce31",
-    "supabase-vs-pocketbase": "24675472-a7fa-4030-9866-3bafda2f68d3",
-    "reddit-jobs":         "1a76701b-9e16-411f-9c2e-ea73223a8695",
-    "claude-prompts":      "710ce9eb-b58e-4f9f-afb6-6830f1c49ca4",
-    "pullups":             "a94855fc-fee9-4f36-8802-be547ceca909",
-    "swimming":            "803330c8-7947-48fc-baaa-4181c4f579d9",
-    "cycling-zones":       "58df4604-16c1-444b-a511-5aebeeb12ef5",
-    "calisthenics-vs-gym": "d5e0ffa1-0f81-4eee-a059-7abab7201c45",
-    # legacy aliases
-    "work":       "a2e6473a-bc3c-4737-b1b9-3c67e1fb94ae",
-    "taleemabad": "a03e5a92-d706-4ffb-9bd7-a3498dc7779d",
-    "harness":    "a03e5a92-d706-4ffb-9bd7-a3498dc7779d",
-    "reddit":     "1a76701b-9e16-411f-9c2e-ea73223a8695",
+    # Example entries — replace with your own:
+    # "my-research":   "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+    # "my-project":    "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
 }
 
 
@@ -218,7 +208,7 @@ ARTIFACT_EXTS = {
 TEXT_ARTIFACTS = {"flashcards", "quiz", "report", "mind_map", "data_table"}
 
 
-NLM_PROFILE = os.environ.get("NLM_PROFILE", "work")  # work email m.kamal@taleemabad.com
+NLM_PROFILE = os.environ.get("NLM_PROFILE", "work")  # set NLM_PROFILE env var to your NotebookLM profile name
 
 
 # Commands that reject --profile; they use the global default profile.
@@ -317,7 +307,7 @@ def poll_and_post_artifact(nb_id: str, artifact_type: str,
                             label: str, max_wait: int = 600):
     """
     Background thread: polls until artifact is complete, downloads it,
-    posts to Slack. This is how Kamil knows when it's done.
+    posts to Slack. This is how {{AGENT_NAME}} knows when it's done.
     """
     import time
     icon    = ARTIFACT_ICONS.get(artifact_type, "✅")
@@ -351,11 +341,11 @@ def poll_and_post_artifact(nb_id: str, artifact_type: str,
                                 # Download failed — post link instead
                                 slack_dm(token,
                                     f"{icon} *{label}* ✅ ready in NotebookLM\n"
-                                    f"_Open notebook to view/download_\n🤖 Kamil")
+                                    f"_Open notebook to view/download_\n🤖 {{AGENT_NAME}}")
                             return
                         elif status == "failed":
                             slack_dm(token,
-                                f"{icon} *{label}* ⚠️ generation failed\n🤖 Kamil")
+                                f"{icon} *{label}* ⚠️ generation failed\n🤖 {{AGENT_NAME}}")
                             return
             except Exception:
                 pass
@@ -365,7 +355,7 @@ def poll_and_post_artifact(nb_id: str, artifact_type: str,
 
     slack_dm(token,
         f"{icon} *{label}* ⏱️ still generating after {max_wait//60}min — "
-        f"check NotebookLM directly\n🤖 Kamil")
+        f"check NotebookLM directly\n🤖 {{AGENT_NAME}}")
 
 
 def _post_artifact_to_slack(token: str, channel: str, artifact_type: str,
@@ -384,7 +374,7 @@ def _post_artifact_to_slack(token: str, channel: str, artifact_type: str,
                     for i, c in enumerate(cards, 1):
                         lines.append(f"*Q{i}:* {c['front']}")
                         lines.append(f"*A:* {c['back']}\n")
-                    lines.append(f"_({len(data.get('cards',[]))-10} more — full file at {filepath})_\n🤖 Kamil")
+                    lines.append(f"_({len(data.get('cards',[]))-10} more — full file at {filepath})_\n🤖 {{AGENT_NAME}}")
                     slack_dm(token, "\n".join(lines))
                     return
                 # Format quiz
@@ -397,7 +387,7 @@ def _post_artifact_to_slack(token: str, channel: str, artifact_type: str,
                         for opt in opts:
                             lines.append(f"  • {opt}")
                         lines.append("")
-                    lines.append("🤖 Kamil")
+                    lines.append("🤖 {{AGENT_NAME}}")
                     slack_dm(token, "\n".join(lines))
                     return
                 else:
@@ -405,17 +395,17 @@ def _post_artifact_to_slack(token: str, channel: str, artifact_type: str,
             except Exception:
                 content = raw[:1000]
 
-            slack_dm(token, f"{icon} *{label}* ✅\n```{content}```\n🤖 Kamil")
+            slack_dm(token, f"{icon} *{label}* ✅\n```{content}```\n🤖 {{AGENT_NAME}}")
 
         except Exception as e:
-            slack_dm(token, f"{icon} *{label}* ✅ (read error: {e})\n🤖 Kamil")
+            slack_dm(token, f"{icon} *{label}* ✅ (read error: {e})\n🤖 {{AGENT_NAME}}")
 
     else:
         # Binary file (audio, video, image, pdf) — try upload
         uploaded = upload_file_to_slack(
             token, channel, filepath,
             title=label,
-            comment=f"{icon} *{label}* — generated by NotebookLM from Taleemabad harness data\n🤖 Kamil"
+            comment=f"{icon} *{label}* — generated by NotebookLM from Taleemabad harness data\n🤖 {{AGENT_NAME}}"
         )
         if not uploaded:
             # No files:write scope — post instructions
@@ -423,7 +413,7 @@ def _post_artifact_to_slack(token: str, channel: str, artifact_type: str,
                 f"{icon} *{label}* ✅ ready!\n"
                 f"_File upload needs `files:write` scope on the Kamil Slack app._\n"
                 f"Fix: api.slack.com/apps → Kamil → OAuth Scopes → add `files:write` → Reinstall\n"
-                f"File saved at: `{filepath}`\n🤖 Kamil")
+                f"File saved at: `{filepath}`\n🤖 {{AGENT_NAME}}")
 
 
 def resolve_notebook(name: str) -> str:
@@ -464,7 +454,7 @@ def resolve_notebook(name: str) -> str:
 def list_notebooks(token: str):
     ok, out = run_nlm(["list", "notebooks", "--json"])
     if not ok:
-        slack_dm(token, f"⚠️ Could not list notebooks: {out[:200]}\n🤖 Kamil")
+        slack_dm(token, f"⚠️ Could not list notebooks: {out[:200]}\n🤖 {{AGENT_NAME}}")
         return
 
     try:
@@ -475,10 +465,10 @@ def list_notebooks(token: str):
             sources = nb.get("source_count", 0)
             nid     = nb.get("id", "")[:8]
             lines.append(f"• *{title}* — {sources} sources `[{nid}...]`")
-        lines.append("\n_Say \"nlm ask [notebook name] [question]\" to query one._\n🤖 Kamil")
+        lines.append("\n_Say \"nlm ask [notebook name] [question]\" to query one._\n🤖 {{AGENT_NAME}}")
         slack_dm(token, "\n".join(lines))
     except Exception:
-        slack_dm(token, f"Notebooks:\n{out[:500]}\n🤖 Kamil")
+        slack_dm(token, f"Notebooks:\n{out[:500]}\n🤖 {{AGENT_NAME}}")
 
     klog("notebooklm_list", component="notebooklm", action="list")
 
@@ -486,7 +476,7 @@ def list_notebooks(token: str):
 def ask_notebook(notebook_ref: str, question: str, token: str):
     """Query a notebook and get a cited answer. Updates Last Queried in registry."""
     nb_id = resolve_notebook(notebook_ref)
-    slack_dm(token, f"🔍 Querying NotebookLM: _{question[:80]}_...\n🤖 Kamil")
+    slack_dm(token, f"🔍 Querying NotebookLM: _{question[:80]}_...\n🤖 {{AGENT_NAME}}")
 
     ok, out = run_nlm(["notebook", "query", nb_id, question, "--json",
                        "--profile", "default"], timeout=120)
@@ -497,21 +487,21 @@ def ask_notebook(notebook_ref: str, question: str, token: str):
             answer = data.get("value", {}).get("answer", out)[:1500]
         except Exception:
             answer = out[:1500]
-        slack_dm(token, f"🧠 *NotebookLM answer:*\n\n{answer}\n\n🤖 Kamil")
+        slack_dm(token, f"🧠 *NotebookLM answer:*\n\n{answer}\n\n🤖 {{AGENT_NAME}}")
         registry_touch(nb_id)
         klog("notebooklm_query", component="notebooklm",
              action="ask", notebook=nb_id, question=question[:100])
     else:
-        slack_dm(token, f"⚠️ Query failed: {out[:300]}\n🤖 Kamil")
+        slack_dm(token, f"⚠️ Query failed: {out[:300]}\n🤖 {{AGENT_NAME}}")
 
 
 def create_notebook(topic: str, token: str) -> str | None:
     """Create a new notebook on a topic, do deep research, return notebook ID."""
-    slack_dm(token, f"📓 Creating NotebookLM notebook: *{topic}*...\n🤖 Kamil")
+    slack_dm(token, f"📓 Creating NotebookLM notebook: *{topic}*...\n🤖 {{AGENT_NAME}}")
 
     ok, out = run_nlm(["notebook", "create", "--json", "--title", topic], timeout=60)
     if not ok:
-        slack_dm(token, f"⚠️ Could not create notebook: {out[:200]}\n🤖 Kamil")
+        slack_dm(token, f"⚠️ Could not create notebook: {out[:200]}\n🤖 {{AGENT_NAME}}")
         return None
 
     try:
@@ -545,7 +535,7 @@ def deep_research(topic: str, token: str, notebook_id: str = None):
         if not nb_id:
             return
 
-    slack_dm(token, f"🔬 Running deep research on *{topic}*... (this takes 1-3 min)\n🤖 Kamil")
+    slack_dm(token, f"🔬 Running deep research on *{topic}*... (this takes 1-3 min)\n🤖 {{AGENT_NAME}}")
 
     ok, out = run_nlm(["research", "start", nb_id,
                         "--query", topic, "--confirm"], timeout=240)
@@ -554,11 +544,11 @@ def deep_research(topic: str, token: str, notebook_id: str = None):
         slack_dm(token,
             f"✅ *Research complete:* {topic}\n\n"
             f"{out[:800]}\n\n"
-            f"_Say \"nlm ask {nb_id[:8]} [question]\" to query the results._\n🤖 Kamil")
+            f"_Say \"nlm ask {nb_id[:8]} [question]\" to query the results._\n🤖 {{AGENT_NAME}}")
         klog("notebooklm_research", component="notebooklm",
              action="research", topic=topic, notebook=nb_id)
     else:
-        slack_dm(token, f"⚠️ Research failed: {out[:300]}\n🤖 Kamil")
+        slack_dm(token, f"⚠️ Research failed: {out[:300]}\n🤖 {{AGENT_NAME}}")
 
 
 def create_podcast(topic: str, token: str, notebook_ref: str = None,
@@ -570,7 +560,7 @@ def create_podcast(topic: str, token: str, notebook_ref: str = None,
         if new_id:
             nb_id = new_id
 
-    slack_dm(token, f"🎙️ Generating podcast for *{topic or 'notebook'}*...\n_I'll post it here when it's ready (2-5 min)_\n🤖 Kamil")
+    slack_dm(token, f"🎙️ Generating podcast for *{topic or 'notebook'}*...\n_I'll post it here when it's ready (2-5 min)_\n🤖 {{AGENT_NAME}}")
 
     ok, out = run_nlm([
         "audio", "create", nb_id, "--format", fmt,
@@ -588,7 +578,7 @@ def create_podcast(topic: str, token: str, notebook_ref: str = None,
             daemon=True,
         ).start()
     else:
-        slack_dm(token, f"⚠️ Podcast failed to start: {out[:300]}\n🤖 Kamil")
+        slack_dm(token, f"⚠️ Podcast failed to start: {out[:300]}\n🤖 {{AGENT_NAME}}")
 
 
 def _create_artifact(artifact_cmd: list, artifact_type: str, label: str,
@@ -597,7 +587,7 @@ def _create_artifact(artifact_cmd: list, artifact_type: str, label: str,
     icon = ARTIFACT_ICONS.get(artifact_type, "✅")
     slack_dm(token,
         f"{icon} Generating *{label}*...\n"
-        f"_I'll post it here when ready._\n🤖 Kamil")
+        f"_I'll post it here when ready._\n🤖 {{AGENT_NAME}}")
 
     ok, out = run_nlm(artifact_cmd, timeout=60)
     if ok or True:  # NotebookLM often returns non-zero even when triggered
@@ -701,7 +691,7 @@ def handle(text: str, token: str):
             slack_dm(token,
                 f"✅ *Notebook created:* {topic}\n"
                 f"ID: `{nb_id}`\n"
-                f"_Say \"nlm research {topic}\" to populate it with sources._\n🤖 Kamil")
+                f"_Say \"nlm research {topic}\" to populate it with sources._\n🤖 {{AGENT_NAME}}")
 
     elif body.startswith("podcast") or body.startswith("audio"):
         topic = re.sub(r'^(?:podcast|audio)\s*', '', body_orig, flags=re.IGNORECASE).strip()
@@ -741,7 +731,7 @@ def handle(text: str, token: str):
             "• `nlm slides [topic]` — create slide deck\n"
             "• `nlm mindmap [topic]` — create mindmap\n"
             "• `nlm quiz [topic]` — create quiz\n\n"
-            "🤖 Kamil")
+            "🤖 {{AGENT_NAME}}")
 
 
 def is_notebooklm_command(text: str) -> bool:

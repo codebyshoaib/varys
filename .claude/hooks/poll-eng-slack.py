@@ -42,10 +42,10 @@ NOTION_CFG = Path.home() / ".claude" / "hooks" / ".notion"
 HARNESS_CFG = Path.home() / ".kamil-harness" / "config.json"
 
 ENGINEERING_CHANNELS = [
-    "C0AUM8DQ2KA",  # #engineering-learning
+    ""  # set your channel IDs in ~/.agent-config.json,  # #engineering-learning
 ]
-KAMIL_BOT_USER  = "U0B4L7RVA8L"
-KAMIL_SLACK_ID  = cfg("USER_SLACK_ID", "U0AV1DX3WSE")   # Kamal's personal Slack user ID (for @Kamil go detection)
+KAMIL_BOT_USER  = ""  # set BOT_SLACK_USER_ID in ~/.agent-config.json
+KAMIL_SLACK_ID  = cfg("USER_SLACK_ID", "")   # {{USER_NAME}}'s personal Slack user ID — set USER_SLACK_ID in ~/.agent-config.json
 
 NOTION_HARNESS_DB = cfg("NOTION_HARNESS_DB_ID", "de10157da3e34ef58a74ea240f31fe98")
 

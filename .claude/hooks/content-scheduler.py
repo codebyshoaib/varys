@@ -59,16 +59,17 @@ CONTENT RULES (Emotional Content Playbook):
 HOOKS_DIR         = Path(__file__).parent
 KAMIL_DIR         = HOOKS_DIR.parent.parent
 SLACK_CFG         = Path.home() / ".claude" / "hooks" / ".slack"
-KAMAL_DM          = "D0B415M06SK"
-NLM                  = "/home/oye/.local/bin/nlm"
-NLM_PROFILE          = os.environ.get("NLM_PROFILE", "work")           # m.kamal@taleemabad.com
+KAMAL_DM          = os.environ.get("USER_SLACK_DM", "")  # set USER_SLACK_DM env var or ~/.agent-config.json
+NLM                  = os.environ.get("NLM_PATH", "/usr/local/bin/nlm")
+NLM_PROFILE          = os.environ.get("NLM_PROFILE", "work")           # set NLM_PROFILE env var to your NotebookLM profile
 NLM_PROFILE_PERSONAL = os.environ.get("NLM_PROFILE_PERSONAL", "default")  # set NLM_PROFILE_PERSONAL env var to your NotebookLM profile
-NOTION_CONTENT_DB = "68792d2dfff84691a4f646f5a8126149"
-NOTION_CONTENT_LOG = "630d86afb17746f9ad6f9bc78afefa02"  # Content Log DB
+NOTION_CONTENT_DB = os.environ.get("NOTION_CONTENT_DB_ID", "")  # set in ~/.agent-config.json
+NOTION_CONTENT_LOG = os.environ.get("NOTION_CONTENT_LOG_ID", "")  # Content Log DB — set in ~/.agent-config.json
 CANVA_BRAND_KIT_ID = os.environ.get("CANVA_BRAND_KIT_ID", "")
-CANVA_AGENT        = KAMIL_DIR / "agents" / "kamil_canva_agent.py"
+CANVA_AGENT        = KAMIL_DIR / "agents" / "canva_agent.py"
 
-HANDLES = {"fitness": "@oykamal", "tech": "@oykamal", "vlog": "@oykamal", "painting": "@oykamal"}
+# Set your social handles — used when posting content
+HANDLES = {"fitness": "@{{YOUR_HANDLE}}", "tech": "@{{YOUR_HANDLE}}", "vlog": "@{{YOUR_HANDLE}}"}
 
 # NLM artifact pollers run in non-daemon threads that outlive their track function.
 # They register here so run() can join() them before the process exits — otherwise

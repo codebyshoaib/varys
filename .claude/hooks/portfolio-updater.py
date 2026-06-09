@@ -12,8 +12,8 @@ Every change is logged with:
   - When
   - Outcome (did response rate improve after?)
 
-Portfolio data repo: https://github.com/oyekamal/portfolio-data
-Portfolio website: https://oykamal.netlify.app/
+Portfolio data repo: https://github.com/{{YOUR_GITHUB}}/portfolio-data
+Portfolio website: https://{{YOUR_PORTFOLIO}}/
 """
 
 import json
@@ -31,7 +31,7 @@ PORTFOLIO_REPO   = Path.home() / "Documents" / "free_work" / "portfolio-data"
 PORTFOLIO_JSON   = PORTFOLIO_REPO / "portfolio.json"
 KAMIL_DIR        = Path(__file__).parent.parent.parent
 JOBS_DB          = "0d69c6ff-83d8-44c7-94c2-d341c4ded8d7"
-BRAIN_PAGE       = "364d8747-b3b1-813d-8ac8-c248800f0a4d"  # Kamal's Agent Brain
+BRAIN_PAGE       = "364d8747-b3b1-813d-8ac8-c248800f0a4d"  # Agent Brain — replace with your Notion page ID
 PLAN_PAGE        = "369d8747-b3b1-81d5-9775-dcb4297d7dbd"  # Master Plan page
 HISTORY_FILE     = Path("/tmp/kamil-portfolio-history.jsonl")
 
@@ -56,7 +56,7 @@ def run_git(cmd: list, cwd: Path) -> tuple[bool, str]:
 
 
 def slack_dm(token: str, text: str):
-    data = json.dumps({"channel": "D0B415M06SK", "text": text}).encode()
+    data = json.dumps({"channel": os.environ.get("USER_SLACK_DM", ""), "text": text}).encode()
     req  = urllib.request.Request(
         "https://slack.com/api/chat.postMessage", data=data,
         headers={"Authorization": f"Bearer {token}",

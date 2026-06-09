@@ -18,7 +18,7 @@ description: JSON data and blog posts for portfolio website
 ### portfolio.json
 ```json
 {
-  "name": "Muhammad Kamal",
+  "name": "{{USER_NAME}}",
   "title": "Senior Backend Engineer",
   "bio": "...",
   "projects": [...],
@@ -40,7 +40,7 @@ description: JSON data and blog posts for portfolio website
     "slug": "debugging-celery-tasks",
     "title": "Debugging Celery Task Queues in Django",
     "publishDate": "2026-05-04",
-    "author": "Muhammad Kamal",
+    "author": "{{USER_NAME}}",
     "category": "Backend",
     "tags": ["Django", "Celery", "Debugging"],
     "excerpt": "...",
@@ -69,7 +69,7 @@ When Kamal:
 - `slug`: URL-friendly title (kebab-case)
 - `title`: Display title
 - `publishDate`: `YYYY-MM-DD` format
-- `author`: Always "Muhammad Kamal"
+- `author`: Always "{{USER_NAME}}"
 - `category`: Backend, Frontend, DevOps, Career, etc.
 - `tags`: Searchable keywords
 - `excerpt`: One-sentence summary

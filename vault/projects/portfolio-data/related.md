@@ -49,7 +49,7 @@ Claude should auto-publish when:
 Each requires:
 1. Valid JSON (no syntax errors)
 2. Unique blog slug (if new post)
-3. Author = "Muhammad Kamal"
+3. Author = "{{USER_NAME}}"
 4. Date = today's date (YYYY-MM-DD)
 5. All required fields filled
 

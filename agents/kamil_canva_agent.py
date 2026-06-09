@@ -34,7 +34,7 @@ from canva_designer import CanvaDesigner, ALL_FORMATS
 
 NOTION_CONFIG    = Path.home() / ".claude" / "hooks" / ".notion"
 SLACK_CONFIG     = Path.home() / ".claude" / "hooks" / ".slack"
-KAMAL_DM         = "D0B415M06SK"
+KAMAL_DM         = os.environ.get("USER_SLACK_DM", "")  # set USER_SLACK_DM in ~/.agent-config.json
 NOTION_DESIGN_DB = os.environ.get("NOTION_DESIGN_DB", "076960e8f8a84c618e23a4a74a950b48")
 EVAL_PASS        = 7
 MAX_RETRIES      = 2

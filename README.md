@@ -13,7 +13,7 @@ Your own AI agent that remembers, learns, and works — powered by Claude Code.
 
 **1. Clone this repo**
 ```bash
-git clone https://github.com/oyekamal/kamil-agent.git my-agent
+git clone https://github.com/{{YOUR_GITHUB}}/personal-agent-v2.git my-agent
 cd my-agent
 ```
 

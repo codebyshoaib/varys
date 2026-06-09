@@ -33,9 +33,9 @@ def detect_project(cwd: str) -> str | None:
     Match current working directory to known project.
     Handles both direct paths and symlinks via resolve().
 
-    Known projects:
-    - {{TALEEMABAD_CORE_PATH}} → "taleemabad-core"
-    - ~/repos/taleemabad-cms → "taleemabad-cms"
+    Known projects — configure via ~/.agent-config.json or env vars.
+    Add your own project paths under PROJECT_1_PATH, PROJECT_2_PATH, etc.
+    - {{PROJECT_1_PATH}} → "my-project"
     - etc.
     """
     cwd_path = Path(cwd).resolve()
@@ -43,10 +43,10 @@ def detect_project(cwd: str) -> str | None:
     _home = Path.home()
     _repo_root = Path(_cfg_pd("REPO_ROOT", str(_home / "Documents" / "free_work" / "personal-agent-v2")))
     projects = {
-        Path(_cfg_pd("TALEEMABAD_CORE_PATH", str(_home / "Documents" / "taleemabad-core"))).resolve(): "taleemabad-core",
-        (_repo_root.parent / "personal-agent" / "repos" / "taleemabad-cms").resolve(): "taleemabad-cms",
-        (_repo_root / "repos" / "taleemabad-cms").resolve(): "taleemabad-cms",
-        Path(_cfg_pd("TALEEMABAD_AUTH_PATH", str(_home / "Documents" / "taleemabad-auth"))).resolve(): "taleemabad-auth",
+        # Add your own project paths here — override with env vars or ~/.agent-config.json
+        # Example: Path(_cfg_pd("MY_PROJECT_PATH", str(_home / "Documents" / "my-project"))).resolve(): "my-project",
+        Path(_cfg_pd("PROJECT_1_PATH", str(_home / "Documents" / "project-1"))).resolve(): "project-1",
+        Path(_cfg_pd("PROJECT_2_PATH", str(_home / "Documents" / "project-2"))).resolve(): "project-2",
         Path(_cfg_pd("PORTFOLIO_WEBSITE_PATH", str(_home / "Documents" / "free_work" / "portfolio-website"))).resolve(): "portfolio-website",
         Path(_cfg_pd("PORTFOLIO_DATA_PATH", str(_home / "Documents" / "free_work" / "portfolio-data"))).resolve(): "portfolio-data",
         _repo_root.resolve(): "personal-agent-v2",

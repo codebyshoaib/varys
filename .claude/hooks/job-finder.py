@@ -37,8 +37,8 @@ STATE_FILE    = Path("/tmp/kamil-jobs-state.json")
 LOG_FILE      = Path("/tmp/kamil-jobs.log")
 KAMIL_DIR     = Path(__file__).parent.parent.parent
 
-KAMAL_USER_ID = cfg("USER_SLACK_ID", "U0AV1DX3WSE")
-KAMAL_DM      = "D0B415M06SK"
+KAMAL_USER_ID = cfg("USER_SLACK_ID", "")
+KAMAL_DM      = os.environ.get("USER_SLACK_DM", "")  # set USER_SLACK_DM in ~/.agent-config.json
 JOBS_DB       = "0d69c6ff-83d8-44c7-94c2-d341c4ded8d7"
 
 # Only DM jobs with score >= this

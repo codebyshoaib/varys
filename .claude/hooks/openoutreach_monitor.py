@@ -27,7 +27,7 @@ from kamil_log import klog, klog_error
 OPENOUTREACH_DB  = Path.home() / ".openoutreach" / "data" / "db.sqlite3"
 STATE_FILE       = Path("/tmp/kamil-openoutreach-state.json")
 KAMIL_DIR        = Path(__file__).parent.parent.parent
-KAMAL_DM         = "D0B415M06SK"
+KAMAL_DM         = os.environ.get("USER_SLACK_DM", "")  # set USER_SLACK_DM in ~/.agent-config.json
 JOBS_DB          = "0d69c6ff-83d8-44c7-94c2-d341c4ded8d7"
 
 SLACK_CONFIG     = Path.home() / ".claude" / "hooks" / ".slack"

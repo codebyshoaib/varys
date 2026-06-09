@@ -38,7 +38,7 @@ SLACK_CFG   = Path.home() / ".claude" / "hooks" / ".slack"
 
 
 def _load_config() -> dict:
-    cfg = {"GITHUB_REPO": "Orenda-Project/taleemabad-core"}
+    cfg = {"GITHUB_REPO": "{{YOUR_GITHUB_ORG}}/{{YOUR_REPO}}"}
     if HARNESS_CFG.exists():
         cfg.update(json.loads(HARNESS_CFG.read_text()))
     if SLACK_CFG.exists():
@@ -87,7 +87,7 @@ def _find_notion_entity_for_pr(db, repo: str, pr_num: int) -> tuple[str | None, 
 def main() -> int:
     cfg   = _load_config()
     token = cfg.get("GITHUB_TOKEN")
-    repo  = cfg.get("GITHUB_REPO", "Orenda-Project/taleemabad-core")
+    repo  = cfg.get("GITHUB_REPO", "{{YOUR_GITHUB_ORG}}/{{YOUR_REPO}}")
     agent_login = cfg.get("GITHUB_AGENT_LOGIN", "")
 
     if not token:

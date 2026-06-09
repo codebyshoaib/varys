@@ -35,23 +35,20 @@ from kamil_log import klog, klog_error
 from kamil_eval_tracker import log_action
 
 KAMIL_DIR   = Path(__file__).parent.parent.parent
-KAMAL_DM    = "D0B415M06SK"
+KAMAL_DM    = os.environ.get("USER_SLACK_DM", "")  # set USER_SLACK_DM in ~/.agent-config.json
 JOBS_DB     = "0d69c6ff-83d8-44c7-94c2-d341c4ded8d7"
 SLACK_CFG   = Path.home() / ".claude" / "hooks" / ".slack"
 APPLIED_FILE = Path("/tmp/kamil-applied.jsonl")  # dedup — never apply twice
 
 # Auto-apply threshold
 AUTO_APPLY_SCORE   = 75
-APPROVAL_NEEDED    = 60   # 60-74: ask Kamal first
+APPROVAL_NEEDED    = 60   # 60-74: ask {{USER_NAME}} first
 
 _user_email = cfg("USER_EMAIL", "your-email@example.com")
-KAMAL_BIO = f"""Muhammad Kamal — Senior Backend Engineer
-- 4+ years Python/Django, AWS (ECS, RDS, Terraform), React/TypeScript
-- Built production LMS at Taleemabad serving 10,000+ daily active users
-- 40% API latency reduction, zero-downtime migrations on millions of rows
-- AI agent developer: Claude API, MCP, autonomous systems
-- Portfolio: https://oykamal.netlify.app
-- GitHub: https://github.com/oyekamal
+USER_BIO = f"""{{USER_NAME}} — Fill in your bio
+- Set USER_BIO_TEXT env var or edit this in auto-apply.py after /setup
+- Your skills, experience, and portfolio
+- GitHub: https://github.com/{{YOUR_GITHUB}}
 - Email: {_user_email}"""
 
 
@@ -136,7 +133,7 @@ Source: {source}
 Rate mentioned: {rate}
 
 KAMAL'S BACKGROUND:
-{KAMAL_BIO}
+{USER_BIO}
 
 Write a SHORT, tailored proposal (max 150 words). Rules:
 - Open with ONE specific thing from the job description that matches Kamal's experience
@@ -144,7 +141,7 @@ Write a SHORT, tailored proposal (max 150 words). Rules:
 - Clear CTA: "Happy to jump on a quick call or send more details"
 - Natural, human tone — not AI-sounding
 - DO NOT mention being an AI
-- Sign: "Kamal | {_user_email} | oykamal.netlify.app"
+- Sign: "{{USER_NAME}} | {_user_email} | {{YOUR_PORTFOLIO}}"
 
 Output ONLY the proposal text. No explanation, no preamble."""
 

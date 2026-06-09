@@ -76,7 +76,7 @@ NOTION_AGENT_USER_ID    — {{AGENT_NAME}}'s Notion user ID (for assignee filter
 SLACK_BOT_TOKEN         — xoxb- token (posting)
 SLACK_USER_TOKEN        — xoxp- token (search.messages — bot token alone fails)
 GITHUB_TOKEN            — PAT with repo scope
-GITHUB_REPO             — Orenda-Project/taleemabad-core
+GITHUB_REPO             — {{YOUR_GITHUB_ORG}}/{{YOUR_REPO}}
 GITHUB_AGENT_LOGIN      — GitHub username of agent account
 ```
 

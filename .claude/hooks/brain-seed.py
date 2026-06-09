@@ -14,33 +14,29 @@ KAMIL_DIR = Path(__file__).parent.parent.parent
 db = get_brain_db()
 sid = "seed-" + uuid.uuid4().hex[:8]
 
-# Known team members
+# Known team members — replace with your own after /setup
 PEOPLE = [
-    ("person-kamal",    "Kamal",    ["kamal", "Kamal Usman", "Kamal"]),
-    ("person-mashood",  "Mashood",  ["mashood", "Mashood Rana"]),
-    ("person-mahnoor",  "Mahnoor",  ["mahnoor", "Mahnoor"]),
-    ("person-ahmad",    "Ahmad",    ["ahmad", "Ahmad"]),
-    ("person-haroon",   "Haroon",   ["haroon", "Haroon Yasin"]),
+    ("person-you",      "{{USER_NAME}}", ["{{USER_NAME}}"]),
+    # Add your team members here:
+    # ("person-alice",  "Alice",    ["alice", "Alice Smith"]),
 ]
 for pid, name, aliases in PEOPLE:
     upsert_entity(db, pid, "person", name, aliases)
     print(f"  person: {name}")
 
-# Known projects
+# Known projects — replace with your own after /setup
 PROJECTS = [
-    ("project-taleemabad-core",    "taleemabad-core"),
-    ("project-taleemabad-cms",     "taleemabad-cms"),
     ("project-personal-agent-v2",  "personal-agent-v2"),
-    ("project-rumi-platform",      "rumi-platform"),
-    ("project-portfolio",          "portfolio-website"),
+    # Add your projects here:
+    # ("project-my-app",           "my-app"),
 ]
 for pid, name in PROJECTS:
     upsert_entity(db, pid, "project", name)
-    write_fact(db, f"fact-{uuid.uuid4().hex[:12]}", "person-kamal",
+    write_fact(db, f"fact-{uuid.uuid4().hex[:12]}", "person-you",
                "works_on", object_id=pid, source="seed", session_id=sid)
     print(f"  project: {name}")
 
-# Known concepts Kamal cares about
+# Known concepts — add or remove to match your interests
 CONCEPTS = [
     ("concept-leadership",           "Leadership"),
     ("concept-systems-thinking",     "Systems Thinking"),
@@ -51,18 +47,18 @@ CONCEPTS = [
 ]
 for cid, name in CONCEPTS:
     upsert_entity(db, cid, "concept", name)
-    write_fact(db, f"fact-{uuid.uuid4().hex[:12]}", "person-kamal",
+    write_fact(db, f"fact-{uuid.uuid4().hex[:12]}", "person-you",
                "interested_in", object_id=cid, source="seed", session_id=sid)
     print(f"  concept: {name}")
 
 # Scan and register all existing skills
-skills_dir = KAMIL_DIR / ".claude" / "skills" / "kamil"
+skills_dir = KAMIL_DIR / ".claude" / "skills"
 if skills_dir.exists():
     for f in skills_dir.glob("*.md"):
         sid_ = f"skill-{f.stem}"
         upsert_entity(db, sid_, "skill", f.stem)
         write_fact(db, f"fact-{uuid.uuid4().hex[:12]}", sid_,
-                   "is_part_of", object_val="kamil_harness",
+                   "is_part_of", object_val="agent_harness",
                    source="seed", session_id=sid)
         print(f"  skill: {f.stem}")
 
@@ -73,7 +69,7 @@ if agents_dir.exists():
         aid = f"agent-{f.stem}"
         upsert_entity(db, aid, "agent", f.stem)
         write_fact(db, f"fact-{uuid.uuid4().hex[:12]}", aid,
-                   "is_part_of", object_val="kamil_harness",
+                   "is_part_of", object_val="agent_harness",
                    source="seed", session_id=sid)
         print(f"  agent: {f.stem}")
 

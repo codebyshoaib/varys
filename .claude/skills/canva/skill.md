@@ -67,11 +67,11 @@ With the philosophy established, generate the Canva design.
 6. **All 4 candidates** are generated — pick the most artistically resolved one (not the safest)
 7. **Save** via `mcp__claude_ai_Canva__create-design-from-candidate`
 8. **Export** PNG via `mcp__claude_ai_Canva__export-design` (format: png, quality: pro)
-9. **Download + post to Slack** DM (`D0B415M06SK`) using `files.getUploadURLExternal` flow
-10. **Share edit URL** so Kamil can refine
+9. **Download + post to Slack** DM (use `USER_SLACK_DM` from `~/.agent-config.json`) using `files.getUploadURLExternal` flow
+10. **Share edit URL** so {{USER_NAME}} can refine
 
-**Brand kit ID:** `kAHLIxSiVa8`
-**Slack DM:** `D0B415M06SK`
+**Brand kit ID:** set `CANVA_BRAND_KIT_ID` in `~/.agent-config.json`
+**Slack DM:** set `USER_SLACK_DM` in `~/.agent-config.json`
 
 ---
 
