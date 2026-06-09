@@ -29,8 +29,8 @@ description: Links to related projects and shared systems
 ### API Communication
 - **Base URL**: `VITE_API_BASE_URL` environment variable points to core API
 - **Dev**: `http://localhost:8000`
-- **Staging**: `https://staging-api.taleemabad.com`
-- **Production**: `https://api.taleemabad.com`
+- **Staging**: `https://staging-api.your-project.com`
+- **Production**: `https://api.your-project.com`
 
 ## Cross-Project Workflows
 

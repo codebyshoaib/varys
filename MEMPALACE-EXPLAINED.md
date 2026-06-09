@@ -429,7 +429,7 @@ mempalace --palace mempalace get-wing taleemabad-core
 ### Knowledge Reuse
 - "You've documented this pattern in other projects"
 - "The portfolio auto-publish workflow is..."
-- "Anam Masood usually needs..."
+- "[Team member] usually needs..."
 
 ---
 

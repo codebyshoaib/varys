@@ -123,10 +123,10 @@ VITE_API_BASE_URL=http://localhost:8000  # Dev
 VITE_S3_REGION=us-east-1
 
 .env.staging:
-VITE_API_BASE_URL=https://staging-api.taleemabad.com
+VITE_API_BASE_URL=https://staging-api.your-project.com
 
 .env.production:
-VITE_API_BASE_URL=https://api.taleemabad.com
+VITE_API_BASE_URL=https://api.your-project.com
 ```
 
 ## Build & Deployment
