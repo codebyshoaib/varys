@@ -1,33 +1,24 @@
 ---
-name: User Profile
-description: Kamal's background, preferences, knowledge, working style
 type: user
+description: Profile of the person who owns this agent — fill in after /setup
 ---
 
-# User Profile — Muhammad Kamal
+# Your Profile
 
-## Role & Background
-- Senior Backend Engineer specializing in Python/Django
-- Based in Islamabad
-- Terminal-native, prefers CLI workflows over GUI
-- Currently at Taleemabad (employer)
+> This file is populated after you run `/setup`. Edit it to help your agent understand who you are.
 
-## Knowledge & Expertise
-- **Deep expertise**: Python, Django, PostgreSQL, REST APIs, Celery
-- **Moderate expertise**: React (newer to frontend)
-- **Cloud**: AWS, S3, VPC, IAM
-- **Tools**: Git, Docker, Linux/Bash scripting
-- **DevOps concepts**: Migrations, testing, CI/CD
+## Basic Info
+- **Name**: {{USER_NAME}}
+- **Role**: (e.g. Software Engineer, Designer, Founder)
+- **Location**: (your city/timezone)
+- **Current focus**: (what you're mainly working on right now)
 
-## Working Style
-- Values simplicity and surgical precision in code changes
-- Prefers automated workflows over manual repetition
-- Believes in comprehensive logging and context retention
-- Likes to move fast without losing track of interconnected systems
-- Appreciates clear documentation of decisions and patterns
+## How You Work
+- **Preferred communication style**: (e.g. direct, detailed, brief)
+- **Work hours**: (e.g. 9am-6pm, flexible)
+- **Tools you use daily**: (e.g. GitHub, Notion, Slack, VS Code)
 
-## Communication Preferences
-- Direct, concise responses preferred
-- Wants problem diagnosis before solutions
-- Appreciates when Claude recalls prior context
-- Dislikes redoing work due to lost context
+## What Your Agent Should Know
+- (Add anything your agent should keep in mind about you)
+- (Projects you're working on)
+- (Things you care about)

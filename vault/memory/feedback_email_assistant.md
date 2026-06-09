@@ -8,13 +8,13 @@ type: feedback
 
 ## Rule: Read → Track → Draft → Approve → Send
 
-**Why:** Email is asynchronous communication with people. Drafting without approval can commit Kamal to messages he didn't intend. Tracking everyone who emails builds long-term relationship context.
+**Why:** Email is asynchronous communication with people. Drafting without approval can commit {{USER_NAME}} to messages he didn't intend. Tracking everyone who emails builds long-term relationship context.
 
 **How to apply:**
 
-1. **Read Gmail** — Every session start, fetch emails from last 24 hours for `m.kamal@taleemabad.com`
+1. **Read Gmail** — Every session start, fetch emails from last 24 hours for `{{USER_EMAIL}}`
 2. **Track contacts** — Add every sender to `vault/domains/contacts/email-tracker.md` and person files
-3. **Update work-log** — Extract action items or decisions from emails into `vault/domains/taleemabad/work-log.md`
+3. **Update work-log** — Extract action items or decisions from emails into `vault/domains/{{DOMAIN}}/work-log.md`
 4. **Flag for action** — Present emails needing responses with suggested replies
 5. **Await approval** — Do NOT send emails without explicit approval
 6. **Send only after approval** — Once approved, send and log the action
@@ -31,7 +31,7 @@ type: feedback
 
 ## When Email Is Stale
 
-If an email needs a response and Kamal hasn't approved after 48 hours:
+If an email needs a response and {{USER_NAME}} hasn't approved after 48 hours:
 - Flag it in `/morning-standup` as overdue
 - Re-suggest the reply with updated context
 - Don't send without approval, ever

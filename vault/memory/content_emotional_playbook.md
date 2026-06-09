@@ -1,6 +1,6 @@
 ---
 name: content-emotional-playbook
-description: The Emotional Content Playbook — psychology, structure, and rules for ALL content Kamil creates or scripts. Load before any content creation task.
+description: The Emotional Content Playbook — psychology, structure, and rules for ALL content {{AGENT_NAME}} creates or scripts. Load before any content creation task.
 metadata:
   type: reference
 ---
@@ -20,7 +20,7 @@ A person opens Instagram tired, restless, bored, or avoiding something. They wan
 1. If they don't feel something in the first 3 seconds, nothing else matters.
 2. The feeling must be **high-arousal**: awe, longing, wonder, amusement. A calm "that's nice" does not get shared.
 
-**Kamal's natural emotional lane:** awe, nostalgia, longing, belonging. Not anger, not fear.
+**{{USER_NAME}}'s natural emotional lane:** awe, nostalgia, longing, belonging. Not anger, not fear.
 
 ---
 
@@ -37,23 +37,23 @@ Sharing is an action — it needs an energized body. High-arousal emotions drive
 | **Sadness** | negative | LOW | ❌ Makes people withdraw |
 | **Contentment** | positive | LOW | ❌ Relaxes into inaction |
 
-### Critical implications for Kamal's content:
+### Critical implications for {{USER_NAME}}'s content:
 1. **"Beautiful and calm" is a trap if it tips into contentment.** Push beautiful footage up into **awe** — the "wow I have to send this" jolt. The difference is a genuine chill-down-the-spine, not just a nice feeling.
 2. **Never end on sadness.** Include sadness in a story but resolve it upward into awe, hope, or warmth before the video ends. The *shift* is what gets shared.
-3. **Do NOT use anger or anxiety.** They'd poison the warm, escapist, trustworthy connection that is Kamal's entire advantage. His high-arousal engines are **awe and amusement only.**
+3. **Do NOT use anger or anxiety.** They'd poison the warm, escapist, trustworthy connection that is {{USER_NAME}}'s entire advantage. His high-arousal engines are **awe and amusement only.**
 
 **The practical test:** After watching a draft — "Do I feel energized to do something (send it, save it, go there), or do I feel relaxed/finished?" If the second: emotion is too low-arousal. Push it up.
 
 ---
 
-## The Four Emotions That Are Kamal's
+## The Four Emotions That Are {{USER_NAME}}'s
 
 | Emotion | What it feels like | Topics that deliver it |
 |---|---|---|
-| **Awe** | "Whoa. The world is bigger than my day felt." | Hiking views, open water swimming, cycling at golden hour, Islamabad/northern Pakistan landscapes |
+| **Awe** | "Whoa. The world is bigger than my day felt." | Hiking views, open water swimming, cycling at golden hour, local landscapes |
 | **Longing** | "I want to be there. I want that life." | Travel reveals, slow café morning, road unfolding, freedom and motion |
 | **Nostalgia** | "This reminds me of something I loved." | Food tied to memory, family rituals, childhood places |
-| **Belonging** | "These are my people. This is home." | Insider Islamabad, local-only spots, real stories only a local knows |
+| **Belonging** | "These are my people. This is home." | Insider local spots, hidden gems, real stories only a local knows |
 
 ---
 
@@ -61,7 +61,7 @@ Sharing is an action — it needs an energized body. High-arousal emotions drive
 
 For each interest, finish these sentences — each answer is a video:
 - "Most people don't realize that [topic] is actually about ______."
-- "The thing nobody tells you about [Islamabad / hiking / this food] is ______."
+- "The thing nobody tells you about [your city / hiking / this food] is ______."
 - "This is the moment I felt ______." (a real memory)
 - "If you've never [swum in a cold lake / eaten this / seen this view], here's what it feels like: ______."
 
@@ -105,26 +105,26 @@ THE ONE EMOTION (one word):
 - Pattern interrupt in first second: hard cut, snap-zoom, unexpected visual.
 
 ### Hook formulas by type:
-- **Travel/hiking/awe:** lead with single most beautiful frame + text like "Pakistan doesn't look real" or "4am to see this"
+- **Travel/hiking/awe:** lead with single most beautiful frame + text like "This place doesn't look real" or "4am to see this"
 - **Food:** lead with sensory peak — sizzle, pour, first bite — sound ON
 - **Personal stories:** vulnerability hook — "Can I be honest about..." or "Nobody talks about..."
 - **Curiosity (any):** "Wait for it...", "This is not what I expected," "The thing nobody tells you about ______"
 
 ### The Delayed-Answer Technique:
 Don't name your subject right away. Use "this place," "here," "this spot" to open an information gap.
-- ❌ "Here's the best coffee in Islamabad."
+- ❌ "Here's the best coffee in [your city]."
 - ✅ "This place serves the best coffee in the city — but it's hidden behind a shop you'd walk straight past."
 
 ---
 
 ## Angle Types (topic → hook-able idea)
 
-- **Insider:** "Things about Islamabad only locals know."
-- **Confession:** "I almost didn't move to Islamabad. Here's what changed my mind."
+- **Insider:** "Things about [your city] only locals know."
+- **Confession:** "I almost didn't move to [your city]. Here's what changed my mind."
 - **Sensory:** lead with the sizzle, the splash, the wind. The sound *is* the hook.
 - **Transformation:** before/after, the climb vs. the summit.
 - **Contrarian:** "Everyone goes to [famous spot]. Go here instead."
-- **Time-capsule:** "A morning in my life in Islamabad."
+- **Time-capsule:** "A morning in my life in [your city]."
 
 ---
 
@@ -144,8 +144,8 @@ Don't name your subject right away. Use "this place," "here," "this spot" to ope
 Break a journey into a multi-part series. Each part ends on a cliffhanger. Series-based content outperforms one-offs because anticipation compounds.
 
 How to apply:
-- Trip → series: "Northern Pakistan, Day 1 of 5"
-- Challenge → series: "Eating at Islamabad's 7 most-loved spots — ranking every one"
+- Trip → series: "Road trip, Day 1 of 5"
+- Challenge → series: "Eating at [your city]'s 7 most-loved spots — ranking every one"
 - Skill/story → series: "How I went from scared of open water to swimming a mile — part 1"
 
 Steps:
@@ -171,8 +171,8 @@ Steps:
 
 - **Never let the hook write a cheque the video can't cash.** Misleading hooks destroy trust and collapse reach over time.
 - **No fake urgency, rage-bait, or fake drama.** May spike one video, poisons the relationship.
-- **Skip anger/anxiety shortcuts.** They corrode the warm, trustworthy, escapist bond that is Kamal's whole edge.
-- **Don't go faceless.** Kamal's face, voice, and real stories are his single biggest advantage. Lean into being seen.
+- **Skip anger/anxiety shortcuts.** They corrode the warm, trustworthy, escapist bond that is {{USER_NAME}}'s whole edge.
+- **Don't go faceless.** {{USER_NAME}}'s face, voice, and real stories are his single biggest advantage. Lean into being seen.
 - **Don't chase every trend** at the cost of voice. Consistency of *you* beats scattered format chasing.
 - **Steady beats bursty.** A calm 3x/week rhythm outperforms a daily burst then silence.
 
@@ -184,4 +184,4 @@ Steps:
 
 ---
 
-**Why:** Learned 2026-05-31 from Kamal's Emotional Content Playbook. Apply to EVERY piece of content — topic selection, NLM research prompts, caption writing, hook writing, slide deck structure, infographic angle.
+**Why:** Apply to EVERY piece of content — topic selection, NLM research prompts, caption writing, hook writing, slide deck structure, infographic angle.

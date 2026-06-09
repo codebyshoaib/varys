@@ -34,19 +34,21 @@ type: feedback
 
 ## Per-Project Overrides
 
-### taleemabad-core (Strict)
+> Add your own project-specific rules here after running `/setup`.
+
+### Example: backend project (Strict)
 - No changes without corresponding unit tests
 - Migrations are never optional — test them
 - Test database hits real schema, not mocks
-- Async tasks (Celery) must have integration tests
+- Async tasks must have integration tests
 
-### taleemabad-cms (Type-Safe)
+### Example: frontend project (Type-Safe)
 - Type-check before committing (TypeScript strict mode)
 - Component props must be fully typed
 - No `any` types without justification
 - Build must pass before PR
 
-### portfolio-website (Exploratory)
+### Example: portfolio/exploratory project
 - TDD not required; design exploration encouraged
 - Fast iteration over perfect tests
 - Visual verification is acceptable

@@ -1,12 +1,25 @@
 # Memory Index
 
-## Kamil Identity
+This folder contains your agent's persistent memory files.
+They are loaded at session start and help your agent understand who you are and how you work.
 
-- [Kamil Face](kamil_face.md) — Canonical face image prompt, key attributes, variation prompts for Slack/avatar/desk. Reference before any visual generation.
+## Files in This Folder
 
-## taleemabad-core
+| File | What it stores |
+|------|---------------|
+| `user_profile.md` | Your name, role, preferences — edit after /setup |
+| `agent_personality.md` | How your agent talks and acts — customise freely |
+| `kamil_humor_profile.md` | Humor style — edit to your preference |
+| `kamil_face.md` | Visual identity — optional |
 
-- [taleemabad-core Brain](../projects/taleemabad-core/project.md) — What the project is, stack, 18 apps, constraints
-- [taleemabad-core Architecture](../projects/taleemabad-core/architecture.md) — App list, key models, sync patterns, harness commands
-- [taleemabad-core Patterns](../projects/taleemabad-core/patterns.md) — DO/NEVER DO, 5 recurring gotchas (Dexie race, timestamp, soft-delete+sync, multi-tenant leak, GFK)
-- [taleemabad-core Issues Log](../projects/taleemabad-core/issues-log.md) — Log of past issues, root causes, lessons
+## How to Add Your Own Memory
+
+Create a new `.md` file here with this header:
+```
+---
+type: user
+description: one-line description of what this file stores
+---
+```
+
+Your agent will pick it up automatically at the next session start.

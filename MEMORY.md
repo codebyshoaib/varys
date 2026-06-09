@@ -1,38 +1,24 @@
-# Memory Index — personal-agent-v2
+# {{AGENT_NAME}} Memory Index
 
-**Note**: Every entry below must have a corresponding file in `vault/memory/`. No broken links.
+> This file is your agent's memory index. It is loaded at every session start.
+> After running `/setup`, your agent's name will replace `{{AGENT_NAME}}` here.
 
-## User Profile & Preferences
-- [[vault/memory/user_profile]] — Senior Backend Engineer, Python/Django, terminal-native, Islamabad
+## Quick Reference
 
-## Validated Approaches (Feedback)
-- [[vault/memory/feedback_coding]] — Karpathy-skills disciplines: surgical changes, simplicity-first, goal-driven
-- [[vault/memory/feedback_email_assistant]] — Read Gmail every session, track all contacts, draft for approval before sending
+| Memory | File | What it stores |
+|--------|------|---------------|
+| Your profile | `vault/memory/user_profile.md` | Who you are, your role, how you work |
+| Agent personality | `vault/memory/agent_personality.md` | How your agent communicates |
+| Notion Brain | `~/.agent-config.json` | Your Notion DB IDs (created by /setup) |
 
-## Work Context
-- [[vault/memory/taleemabad_workplace]] — Your employer; main project domain
-- [[vault/memory/taleemabad_core_path]] — Django backend at `{{config:TALEEMABAD_CORE_PATH}}`; migrations, unit tests, Celery
-- [[vault/memory/taleemabad_cms_project]] — React SPA at `repos/taleemabad-cms`; S3 upload, asset management
-- [[vault/memory/taleemabad_training_project]] — Training LMS backend: levels, quizzes, AI feedback, sync endpoints, NIETE integration
+## How Memory Works
 
-## People & Relationships
-- [[vault/memory/collaborator_anam_masood]] — anam.masood@niete.pk; Taleemabad/NIETE; sends implementation tasks
-- [[vault/memory/omer_rana_direct_report]] — Team Lead, Compliance Tech; Strike 2/Active PDP; coaching ongoing
+1. You run `/setup` once — this creates your Notion databases and writes `~/.agent-config.json`
+2. Every Claude session reads these memory files at start
+3. Session logs are written to `vault/logs/YYYY-MM-DD.md` automatically
+4. Your agent learns from its mistakes via the evolution agent
 
-## Projects & Ownership
-- [[vault/memory/portfolio_ownership]] — You maintain portfolio-website + portfolio-data repos; SSH push, amber design system
-- [[vault/memory/project_workspace]] — This workspace: morning standup OS, domain tracking, GitHub blueprint
+## Customising Your Agent
 
-## Content Creation
-- [Emotional Content Playbook](vault/memory/content_emotional_playbook.md) — READ BEFORE ANY CONTENT: arousal>valence, 4-beat structure, hook rules, Kamal's 4 emotions (awe/longing/nostalgia/belonging), voice rules, warnings
-
-## Integrations & Tools
-- [[vault/memory/jira_hook]] — auto-jira.py creates MC20 tickets via API; token at `~/.claude/hooks/.jira`
-- [[vault/memory/graphify_integration]] — Knowledge graph for context; npm run standup auto-indexes workspace relationships
-- [[vault/memory/multitenant_setup]] — Multi-tenant architecture setup notes
-- [[vault/memory/posthog_credentials]] — PostHog analytics credentials
-- [[vault/memory/repo_personal_agent_workspace]] — github.com/Orenda-Project/personal-agent-workspace public blueprint
-
-## Project-Specific Context
-- [[vault/memory/taleemabad_cms_quiz_system]] — Generic bash script + JSON templates for uploading training quizzes (Sessions 1-6: trainings 920-925)
-- [[vault/memory/taleemabad_oxbridge_feature]] — Oxbridge certificate training feature context
+Edit any file in `vault/memory/` to change how your agent understands you.
+Add new files with `type: user` frontmatter and they'll be picked up automatically.
