@@ -43,7 +43,7 @@ KAMIL_INBOX_DIR = Path.home() / "kamil-inbox"
 WORKSPACE       = cfg("SLACK_WORKSPACE", "taleemabad-talk.slack.com")
 
 KAMAL_USER_ID = cfg("USER_SLACK_ID", "")
-KAMIL_TRIGGER_KEYWORDS = ["@kamil", "kamil,", "hey kamil", "kamil:"]
+KAMIL_TRIGGER_KEYWORDS = ["@shoaib_s_pr_beacon", "<@u0b0cq34bst>", "pr beacon", "@shoaib's pr beacon"]
 
 LEARNING_CHANNELS = {
     "#engineering-learning", "#engineering-ai", "#growth-team",

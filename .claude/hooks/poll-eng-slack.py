@@ -97,9 +97,9 @@ def _slack_search(user_token: str, oldest_ts: str) -> list[dict]:
         ts = m.get("ts", "0")
         text = m.get("text", "").lower()
         mentions_kamil = (
-            "u0b4l7rva8l" in text or   # bot user ID mention
-            "@kamil" in text or
-            "kamil" in text
+            "u0b0cq34bst" in text or   # bot user ID mention
+            "@shoaib_s_pr_beacon" in text or
+            "pr beacon" in text
         )
         if ch in ENGINEERING_CHANNELS and float(ts) > float(oldest_ts) and mentions_kamil:
             filtered.append(m)

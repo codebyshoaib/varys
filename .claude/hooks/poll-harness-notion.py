@@ -127,7 +127,7 @@ def poll_comments(api_key: str, page_id: str, last_sync_at: str) -> list[dict]:
             texts = []
             for rt in c.get("rich_text", []):
                 texts.append(rt.get("plain_text", ""))
-            if any("kamil" in t.lower() or "@kamil" in t.lower() for t in texts):
+            if any("aria" in t.lower() or "@aria" in t.lower() or "pr beacon" in t.lower() for t in texts):
                 filtered.append(c)
     return filtered
 

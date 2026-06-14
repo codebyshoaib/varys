@@ -36,7 +36,7 @@
 ```
 Notion (brain)   → 8 DBs (see .claude/rules/notion.md)
 Slack (feed)     → slack-poller.py every 30min → /tmp/kamil-slack-inbox.json → summary DM
-kamil-listener   → Socket Mode daemon (@reboot); DMs + @Aria mentions; runs `claude -p` IN THIS REPO
+kamil-listener   → Socket Mode daemon (@reboot); DMs + @Shoaib's PR Beacon mentions; runs `claude -p` IN THIS REPO
                    → so this harness upgrades every Slack/cron Aria response
 SessionStart hook→ surfaces unsynced Slack items + tells Claude to fetch Notion via MCP
 Stop hook        → writes Work Log to Notion + commits vault/logs
@@ -51,7 +51,7 @@ Team Orchestrator→ /loop 270s — see .claude/rules/orchestrator.md for full r
 1. kamil_harness_db: acquire tick lock → read last_sync_at
    (if lock held: exit immediately — another tick is running)
 2. poll-harness-notion.py  → Notion Harness DB: new/updated tickets assigned to Aria
-3. poll-eng-slack.py       → #engineering-* channels: @Aria mentions (SLACK_USER_TOKEN)
+3. poll-eng-slack.py       → #engineering-* channels: @Shoaib's PR Beacon mentions (SLACK_USER_TOKEN)
 4. poll-taleemabad-github.py → taleemabad-core: PRs on agent branches (entity-filtered)
    (if ANY poller fails: release lock, abort — do NOT update last_sync_at)
 5. orchestrator-dispatch.py → group pending events by context_key → spawn subagents
