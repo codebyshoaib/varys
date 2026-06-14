@@ -18,6 +18,7 @@ Cron: 0 6 * * * python3 .claude/hooks/content-scheduler.py >> /tmp/varys-content
 import copy
 import json
 import os
+import shutil
 import subprocess
 import sys
 import threading
@@ -60,7 +61,15 @@ HOOKS_DIR         = Path(__file__).parent
 VARYS_DIR         = HOOKS_DIR.parent.parent
 SLACK_CFG         = Path.home() / ".claude" / "hooks" / ".slack"
 KAMAL_DM          = os.environ.get("USER_SLACK_DM", "")  # set USER_SLACK_DM env var or ~/.agent-config.json
-NLM                  = os.environ.get("NLM_PATH", "/usr/local/bin/nlm")
+# Resolve the nlm binary robustly: explicit env var → PATH lookup → common install
+# locations. notebooklm-mcp-cli installs to ~/.local/bin/nlm (uv/pip --user); the old
+# hardcoded /usr/local/bin/nlm only existed on the original author's box. cron PATH is
+# often minimal, so we fall back to absolute candidates rather than trusting which().
+NLM                  = (os.environ.get("NLM_PATH")
+                        or shutil.which("nlm")
+                        or next((p for p in (str(Path.home() / ".local/bin/nlm"),
+                                             "/usr/local/bin/nlm")
+                                 if Path(p).exists()), "/usr/local/bin/nlm"))
 NLM_PROFILE          = os.environ.get("NLM_PROFILE", "work")           # set NLM_PROFILE env var to your NotebookLM profile
 NLM_PROFILE_PERSONAL = os.environ.get("NLM_PROFILE_PERSONAL", "default")  # set NLM_PROFILE_PERSONAL env var to your NotebookLM profile
 NOTION_CONTENT_DB = os.environ.get("NOTION_CONTENT_DB_ID", "")  # set in ~/.agent-config.json
