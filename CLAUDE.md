@@ -1,6 +1,6 @@
-# Personal Agent v2 — Aria's Operating Manual
+# Personal Agent v2 — Varys's Operating Manual
 
-**Owner:** Shoaib Ud Din  **Purpose:** Shoaib Ud Din's personal AI agent. Notion is the brain; Slack is the feed; this repo is Aria's body.
+**Owner:** Shoaib Ud Din  **Purpose:** Shoaib Ud Din's personal AI agent. Notion is the brain; Slack is the feed; this repo is Varys's body.
 
 > L1 ROUTER ONLY. Detail lives in `.claude/rules/`, `vault/memory/`, and `.claude/standards/`. Keep this file ≤150 lines — a PreToolUse hook blocks it past 150.
 

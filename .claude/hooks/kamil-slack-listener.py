@@ -92,7 +92,7 @@ KAMAL_USER_ID   = cfg("USER_SLACK_ID",        "")  # set USER_SLACK_ID in ~/.age
 KAMIL_BOT_USER  = cfg("BOT_SLACK_USER_ID",   "")  # set BOT_SLACK_USER_ID in ~/.agent-config.json
 DB_PAGE_HARNESS = cfg("NOTION_HARNESS_DB_ID", "")  # set NOTION_HARNESS_DB_ID in ~/.agent-config.json
 WORKSPACE       = cfg("SLACK_WORKSPACE",      "")  # set SLACK_WORKSPACE in ~/.agent-config.json
-AGENT_NAME      = cfg("AGENT_NAME",           "Aria")
+AGENT_NAME      = cfg("AGENT_NAME",           "Varys")
 USER_NAME       = cfg("USER_NAME",            "Shoaib Ud Din")
 
 # Channels where {{AGENT_NAME}} auto-answers engineering questions
