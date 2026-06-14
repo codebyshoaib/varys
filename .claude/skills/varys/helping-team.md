@@ -11,6 +11,10 @@
 ## What to Avoid
 <!-- append mistakes -->
 
+## Team Directory (roles / ownership)
+<!-- name — role/area · Slack -->
+- **Zeeshan Usaid** — Team Lead, Region-Punjab team · Slack DM: https://taleemabad-talk.slack.com/archives/D0ATM8N14VB
+
 ## Person Preferences
 <!-- append as you learn, e.g.: -->
 <!-- - Kamal: wants the answer first, then reasoning if asked -->
