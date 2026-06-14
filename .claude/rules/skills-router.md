@@ -28,6 +28,8 @@ owner: varys
 | Supabase / Postgres work | `supabase` |
 | recurring / scheduled task | `loop` / `schedule` |
 | delivering a taleemabad PR | `deliver` |
+| reviewing a ComplianceTracker PR (url has `compliancetracker`) | `compliancetracker-pr-reviewer <pr_url>` |
+| reviewing a taleemabad-core PR (url has `taleemabad-core`) | `taleemabad-pr-review-lite <pr_url>` (add `--opus` only for high-stakes) |
 | Claude API / Anthropic SDK work | `claude-api` |
 | taleemabad-core bug/feature/white-screen/crash | `taleemabad-bug-agent` |
 | stuck/blocked 2+ ticks / confidence < 40 | `escalation-broker` |

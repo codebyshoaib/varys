@@ -516,6 +516,35 @@ def handle_message(text: str, thread_history: str, web: WebClient, channel: str,
             if job_id:
                 mark_job_failed(job_id, "no_url_in_context")
             return
+        else:
+            # Route to the purpose-built reviewer skill by repo instead of a
+            # generic free-solo review. These user-level skills (~/.claude/skills)
+            # run the full six-axis review + exact-position inline GitHub comments
+            # + auto-approve. Falls through to generic handling for unknown repos.
+            # (wired 2026-06-15)
+            _u = pr_url.lower()
+            if "compliancetracker" in _u:
+                _skill_cmd = f"/compliancetracker-pr-reviewer {pr_url}"
+            elif "taleemabad-core" in _u:
+                _skill_cmd = f"/taleemabad-pr-review-lite {pr_url}"
+            else:
+                _skill_cmd = None  # unknown repo → generic handling below
+            if _skill_cmd:
+                web.chat_postMessage(
+                    channel=channel, thread_ts=thread_ts,
+                    text=f"On it — reviewing {pr_url} with `{_skill_cmd.split()[0]}` 🔍",
+                )
+                _review = run_claude(_skill_cmd, cwd=str(VARYS_DIR),
+                                     timeout=900, event_context="pr_review")
+                web.chat_postMessage(
+                    channel=channel, thread_ts=thread_ts,
+                    text=(_review[:3500] if _review
+                          else "Review finished — see the PR for inline comments."),
+                )
+                if _context_available and job_id:
+                    mark_job_delivered(job_id)
+                log(f"[pr-review {_skill_cmd.split()[0]}] {pr_url}")
+                return
 
     if is_third_party:
         person_context = build_person_context(sender_name or "Unknown", sender_id or "")
