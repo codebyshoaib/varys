@@ -909,8 +909,13 @@ def dispatch(text: str, web: WebClient, channel: str, thread_ts: str, source: st
     expire_pending(max_age_minutes=35)
 
     # ── First message of the day — run content pipeline if not done yet ──────
-    if sender_id == KAMAL_USER_ID and not is_third_party:
-        _maybe_run_daily_content()
+    # DISABLED 2026-06-15: this auto-posted hardcoded TECH_CAPTIONS to LinkedIn
+    # (previous owner Kamal's content) with no human approval, triggered by the
+    # first Slack message each day. LinkedIn posting is manual-only for this user
+    # to avoid spam/ban risk. Re-enable only with an explicit opt-in + per-post
+    # approval. See memory: content-linkedin-pipeline-setup / user-linkedin-identity.
+    # if sender_id == KAMAL_USER_ID and not is_third_party:
+    #     _maybe_run_daily_content()
 
     # ── NotebookLM fast-path — bypass Claude for nlm commands ────────────────
     if sender_id == KAMAL_USER_ID and is_notebooklm_command(clean):
