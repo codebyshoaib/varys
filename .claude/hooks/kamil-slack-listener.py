@@ -12,7 +12,7 @@ Intent routing:
   research   → searches web + Notion + GitHub, answers with context
   chat       → direct answer with Kamil personality
 
-Idle 35min → proactive: reads engineering links, writes to Notion Learning Log, DMs Kamal.
+Idle 35min → proactive: reads engineering links, writes to Notion Learning Log, DMs {USER_NAME}.
 
 Run:
   python3 .claude/hooks/kamil-slack-listener.py
@@ -92,6 +92,8 @@ KAMAL_USER_ID   = cfg("USER_SLACK_ID",        "")  # set USER_SLACK_ID in ~/.age
 KAMIL_BOT_USER  = cfg("BOT_SLACK_USER_ID",   "")  # set BOT_SLACK_USER_ID in ~/.agent-config.json
 DB_PAGE_HARNESS = cfg("NOTION_HARNESS_DB_ID", "")  # set NOTION_HARNESS_DB_ID in ~/.agent-config.json
 WORKSPACE       = cfg("SLACK_WORKSPACE",      "")  # set SLACK_WORKSPACE in ~/.agent-config.json
+AGENT_NAME      = cfg("AGENT_NAME",           "Aria")
+USER_NAME       = cfg("USER_NAME",            "Shoaib Ud Din")
 
 # Channels where {{AGENT_NAME}} auto-answers engineering questions
 # Replace with your own channel IDs (get from Slack URL or API)
@@ -178,7 +180,7 @@ def auto_answer_engineering_question(
             mention = f"<@{sender_id}>"
             nudge = (
                 f"{mention} — no research notebook on this topic yet. "
-                f"Say `nlm research {keywords[0]}` to build one. 🤖 Kamil"
+                f"Say `nlm research {keywords[0]}` to build one. 🤖 {AGENT_NAME}"
             )
             web.chat_postMessage(channel=channel, thread_ts=thread_ts, text=nudge)
         except Exception:
@@ -212,7 +214,7 @@ def auto_answer_engineering_question(
             f"{mention} — queried the research on this.\n\n"
             f"{answer}\n\n"
             f"_Source: NotebookLM `{alias}` — ask more with_ `nlm ask {alias} \"[question]\"`\n"
-            f"🤖 Kamil"
+            f"🤖 {AGENT_NAME}"
         )
         web.chat_postMessage(channel=channel, thread_ts=thread_ts, text=reply)
 
@@ -338,11 +340,11 @@ HUMOR_LOG = Path("/tmp/kamil-humor-log.jsonl")
 
 # Privacy: what Kamil must NEVER share with non-Kamal people
 PRIVACY_RULES = """
-PRIVACY EVAL — before sending to a non-Kamal person, strip or rewrite anything that:
+PRIVACY EVAL — before sending to a non-{USER_NAME} person, strip or rewrite anything that:
 1. Reveals another person's work issues, failures, or personal situation
-2. Contains Kamal's private info (salary, personal logistics, health, finance)
+2. Contains {USER_NAME}'s private info (salary, personal logistics, health, finance)
 3. Mentions internal system details (DB IDs, API tokens, server errors, infra)
-4. Could embarrass Kamal if the recipient forwarded it to the team
+4. Could embarrass {USER_NAME} if the recipient forwarded it to the team
 5. Contains info about a third party who is NOT the recipient
 
 Safe to share: public team wins, fun/creative content, general Taleemabad mission stuff,
@@ -373,9 +375,9 @@ def fetch_thread_history(web: WebClient, channel: str, thread_ts: str,
             uid    = m.get("user", "")
             bot_id = m.get("bot_id", "")
             if bot_id:
-                who = "Kamil"
+                who = AGENT_NAME
             elif uid == KAMAL_USER_ID:
-                who = "Kamal"
+                who = USER_NAME
             else:
                 who = f"<@{uid}>"
             text = re.sub(r"<@[A-Z0-9]+>", "", m.get("text", "")).strip()
@@ -407,7 +409,7 @@ def save_conversation_to_notion(sender_name: str, channel_id: str,
     Runs as a best-effort background write via Claude MCP.
     """
     notion_db = "6d14f1b6b8cd4ff68fd40efdfc3f304e"
-    prompt = f"""You are Kamil. Save this conversation to Notion.
+    prompt = f"""You are {AGENT_NAME}. Save this conversation to Notion.
 
 Use mcp__claude_ai_Notion__notion-create-pages to add ONE page to the Slack Inbox DB:
   data_source_id: 8749992f-6140-4e72-8b48-7362533cb792
@@ -438,9 +440,9 @@ def privacy_eval(draft: str, recipient_name: str) -> tuple[str, bool]:
     Run Claude to check the draft for privacy violations before sending.
     Returns (safe_text, was_modified).
     """
-    prompt = f"""You are Kamil's privacy filter.
+    prompt = f"""You are {AGENT_NAME}'s privacy filter.
 
-A message is about to be sent to *{recipient_name}* (not Kamal).
+A message is about to be sent to *{recipient_name}* (not {USER_NAME}).
 
 {PRIVACY_RULES}
 
@@ -478,7 +480,7 @@ def handle_message(text: str, thread_history: str, web: WebClient, channel: str,
                    is_dm: bool = False, job_id: str = ""):
     """
     One Claude call with full context.
-    is_third_party=True when Fatima (or anyone not Kamal) is the sender — Kamil
+    is_third_party=True when Fatima (or anyone not {USER_NAME}) is the sender — {AGENT_NAME}
     can reply to them but must pass the privacy eval first.
     """
     is_fun = any(w in text.lower() for w in [
@@ -487,7 +489,7 @@ def handle_message(text: str, thread_history: str, web: WebClient, channel: str,
     ])
     mode = "human" if is_fun else ("third_party" if is_third_party else "work")
 
-    # For PR review requests from Kamal: extract URL from trigger or thread.
+    # For PR review requests from {USER_NAME}: extract URL from trigger or thread.
     # If no URL is found, ask instead of silently passing an empty context to Claude.
     _is_pr_review = (
         not is_third_party
@@ -507,7 +509,7 @@ def handle_message(text: str, thread_history: str, web: WebClient, channel: str,
             )
             reply_kwargs = {
                 "channel": channel,
-                "text": "I couldn't find a PR URL in this thread — can you share the link? 🤖 Kamil",
+                "text": "I couldn't find a PR URL in this thread — can you share the link? 🤖 {AGENT_NAME}",
                 "thread_ts": thread_ts,
             }
             web.chat_postMessage(**reply_kwargs)
@@ -518,7 +520,7 @@ def handle_message(text: str, thread_history: str, web: WebClient, channel: str,
     if is_third_party:
         person_context = build_person_context(sender_name or "Unknown", sender_id or "")
 
-        prompt = f"""You are Kamil — Kamal's AI agent at Taleemabad, replying on behalf of the conversation.
+        prompt = f"""You are {AGENT_NAME} — {USER_NAME}'s AI agent at Taleemabad, replying on behalf of the conversation.
 
 ## WHO YOU'RE TALKING TO
 {person_context}
@@ -537,8 +539,8 @@ def handle_message(text: str, thread_history: str, web: WebClient, channel: str,
 - If they're stressed or have an active need — acknowledge it briefly
 - If humor works for them — use it; if not — stay warm but direct
 - Keep it short (1-3 lines)
-- Do NOT sign off as "Kamil" — reply naturally
-- Do NOT reveal private info about Kamal, the team, or internal systems"""
+- Do NOT sign off as "{AGENT_NAME}" — reply naturally
+- Do NOT reveal private info about {USER_NAME}, the team, or internal systems"""
 
         draft    = run_claude(prompt, timeout=120)
         safe_reply, was_modified = privacy_eval(draft, sender_name or "this person")
@@ -568,11 +570,11 @@ def handle_message(text: str, thread_history: str, web: WebClient, channel: str,
         )
         return
 
-    # ── Normal Kamal → Kamil flow ─────────────────────────────────────────────
+    # ── Normal {USER_NAME} → {AGENT_NAME} flow ─────────────────────────────────────────────
     _caps_path  = KAMIL_DIR / ".claude" / "rules" / "CAPABILITIES.md"
     _caps_block = _caps_path.read_text() if _caps_path.exists() else ""
 
-    prompt = f"""You are Kamil — a senior team member at Taleemabad who commands a fleet of specialist agents.
+    prompt = f"""You are {AGENT_NAME} — a senior team member at Taleemabad who commands a fleet of specialist agents.
 
 ## ROUTING DECISION — make this before anything else
 
@@ -660,9 +662,9 @@ If a skill plausibly applies, invoke it first.
 
 ## PEOPLE INTELLIGENCE
 People Intelligence DB: c976d58ea4e34b0585f245529cdc4528
-When Kamal asks about a person ("how is Fatima?", "what does Haroon need?"):
+When {USER_NAME} asks about a person ("how is Fatima?", "what does Haroon need?"):
 → Search People Intelligence DB for their profile
-→ Read their Current Mood, Active Needs, Recurring Topics, What Works, Kamil Notes
+→ Read their Current Mood, Active Needs, Recurring Topics, What Works, {AGENT_NAME} Notes
 → Answer from the profile + check Notion Slack Inbox for recent messages from them
 
 ## KAMAL'S CONTEXT
@@ -675,9 +677,9 @@ When Kamal asks about a person ("how is Fatima?", "what does Haroon need?"):
 
 ## CURRENT MESSAGE
 Source: {source}
-Kamal says: "{text}"
+{USER_NAME} says: "{text}"
 
-Reply now. Do NOT output any mode label, header, or internal reasoning — just the response itself. Sign off: 🤖 Kamil"""
+Reply now. Do NOT output any mode label, header, or internal reasoning — just the response itself. Sign off: 🤖 {AGENT_NAME}"""
 
     t0 = time.time()
     answer = run_claude(prompt, cwd=str(KAMIL_DIR), timeout=300, event_context=source)
@@ -723,7 +725,7 @@ Reply now. Do NOT output any mode label, header, or internal reasoning — just 
     # mode was already determined at line ~248
     klog_conversation(
         conv_id        = conv_id,
-        sender_name    = sender_name or "Kamal",
+        sender_name    = sender_name or USER_NAME,
         sender_id      = sender_id or KAMAL_USER_ID,
         is_third_party = is_third_party,
         channel        = channel,
@@ -738,7 +740,7 @@ Reply now. Do NOT output any mode label, header, or internal reasoning — just 
     # Write to Eval Log for Kamal to review and rate
     log_to_eval(
         conv_id     = conv_id,
-        sender_name = sender_name or "Kamal",
+        sender_name = sender_name or USER_NAME,
         request     = text,
         reply       = answer,
         mode        = mode,
@@ -768,7 +770,7 @@ Reply now. Do NOT output any mode label, header, or internal reasoning — just 
     if asked_clarification and not is_third_party:
         log_critique(
             score   = 30,
-            reason  = "Kamil asked a clarifying question — should have used tools to find the answer",
+            reason  = f"{AGENT_NAME} asked a clarifying question — should have used tools to find the answer",
             request = text,
         )
 
@@ -784,7 +786,7 @@ Reply now. Do NOT output any mode label, header, or internal reasoning — just 
 
     if is_fun:
         log_humor(text, answer)
-        klog_humor(sender_name=sender_name or "Kamal", request=text, reply=answer)
+        klog_humor(sender_name=sender_name or USER_NAME, request=text, reply=answer)
 
 
 def process_missed_messages(web: WebClient, dm_channel: str, retry_count: int = 0, bot_token: str = None) -> int:
@@ -952,7 +954,7 @@ _content_ran_today = Path("/tmp/kamil-content-ran.txt")
 def _maybe_run_daily_content():
     """
     Run the social media content pipeline once per day — triggered on
-    Kamal's first Slack message of the day, regardless of time.
+    {USER_NAME}'s first Slack message of the day, regardless of time.
     Skips if already ran today.
     """
     from datetime import date
@@ -1020,7 +1022,7 @@ def _maybe_run_daily_content():
             env = os.environ.copy()
             kamil_dir = str(KAMIL_DIR)
 
-            prompt = f"""You are Kamil. Run today's social media content pipeline.
+            prompt = f"""You are {AGENT_NAME}. Run today's social media content pipeline.
 
 FITNESS TOPIC: {fit_topic}
 TECH TOPIC: {tech_topic}
@@ -1083,7 +1085,7 @@ BOT_TOKEN is in ~/.claude/hooks/.slack"""
 
 def _check_pending_reactions(channel: str, ts: str):
     """
-    When Kamal sends a message, check if any pending eval actions in this
+    When {USER_NAME} sends a message, check if any pending eval actions in this
     channel are waiting for a reaction. Mark the most recent one as reacted=yes.
     """
     from kamil_eval_tracker import PENDING_FILE, record_reaction
@@ -1113,7 +1115,7 @@ def proactive_loop(web: WebClient, dm_channel: str):
         if idle_min >= 35 and since_idle >= 60:  # Increased cooldown to 60min to prevent duplicates
             last_idle_work = time.time()
             log("Idle 35min — doing proactive work")
-            answer = run_claude(f"""You are Kamil — Kamal's autonomous AI agent. You have idle time.
+            answer = run_claude(f"""You are {AGENT_NAME} — {USER_NAME}'s autonomous AI agent. You have idle time.
 
 Pick ONE valuable action:
 1. Check Notion My PRs DB (18017a67136a4561ada9818c239b8f33) — any CI failing or stale PRs?
@@ -1222,7 +1224,7 @@ def main():
     try:
         dm_resp    = web.conversations_open(users=KAMAL_USER_ID)
         dm_channel = dm_resp["channel"]["id"]
-        log(f"DM channel with Kamal: {dm_channel}")
+        log(f"DM channel with {USER_NAME}: {dm_channel}")
     except Exception as e:
         log(f"Could not open DM: {e}")
         dm_channel = None
@@ -1243,7 +1245,7 @@ def main():
         pass
 
     klog_system_start("listener")
-    log("Kamil listener starting (Socket Mode)...")
+    log(f"{AGENT_NAME} listener starting (Socket Mode)...")
 
     # Retry initial connect on network errors (IncompleteRead, timeout, DNS, etc)
     connect_retries = 0
