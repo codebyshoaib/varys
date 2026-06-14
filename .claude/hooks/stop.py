@@ -16,11 +16,11 @@ from datetime import datetime
 import sys as _sys, time as _time
 _sys.path.insert(0, str(__import__("pathlib").Path(__file__).parent))
 try:
-    import kamil_log as _k
+    import varys_log as _k
 except Exception:
     _k = None
 try:
-    from kamil_context import resolve_person, record_interaction, PersonNotFound, PersonAmbiguous
+    from varys_context import resolve_person, record_interaction, PersonNotFound, PersonAmbiguous
     _context_available = True
 except Exception:
     _context_available = False
@@ -212,7 +212,7 @@ def _seed_session_to_brain(workspace_root: Path) -> None:
         "From this engineering session log, extract what was built or decided.\n"
         "Output ONLY valid JSON with these keys:\n"
         "  key_insights: list of up to 3 concrete patterns or decisions (max 20 words each)\n"
-        "  lessons_learned: list of up to 2 lessons for future Kamil (what to do / avoid)\n"
+        "  lessons_learned: list of up to 2 lessons for future Varys (what to do / avoid)\n"
         "  tools_mentioned: list of tools/scripts/files that were created or significantly changed\n"
         "  one_line_summary: single sentence, the most important outcome of this session\n\n"
         f"Session log:\n{log_text}\n\nJSON only."
@@ -304,7 +304,7 @@ def main():
 
     # 5. Brain watcher — wire session knowledge into brain.db
     try:
-        brain_watcher = workspace_root / ".claude" / "hooks" / "kamil-brain-watcher.py"
+        brain_watcher = workspace_root / ".claude" / "hooks" / "varys-brain-watcher.py"
         if brain_watcher.exists():
             success, output = run_cmd(
                 ["python3", str(brain_watcher)],

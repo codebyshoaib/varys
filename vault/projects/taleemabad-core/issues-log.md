@@ -14,7 +14,7 @@ Log every non-trivial bug here after resolution. Link to the feature folder for 
 ### YYYY-MM-DD — <short title>
 - **Severity**: P0 / P1 / P2
 - **App**: <django app affected>
-- **Symptom**: What Kamil or the team observed
+- **Symptom**: What Varys or the team observed
 - **Root Cause**: What actually caused it
 - **Fix**: What was changed (file + line if applicable)
 - **Feature folder**: .claude/features/YYYY-MM-DD-<name>/ (if applicable)

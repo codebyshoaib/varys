@@ -1,6 +1,6 @@
 ---
 type: rule
-owner: kamil
+owner: varys
 last_verified: 2026-06-03
 ---
 
@@ -17,7 +17,7 @@ and handles it autonomously — but never writes code without human approval of 
 2. **Status=Done is written LAST** — it is the commit signal. If anything fails after
    implementation but before Status update, the ticket stays In progress and retries next tick.
 
-3. **350ms between Notion API calls** — use `kamil_notion.notion_request()` everywhere.
+3. **350ms between Notion API calls** — use `varys_notion.notion_request()` everywhere.
    Never call `urllib.request.urlopen()` directly against Notion.
 
 4. **Deterministic event IDs** — always derived from source + external_id:
@@ -94,20 +94,20 @@ Must exist in Harness DB before first tick:
 
 ## Workspace
 
-`~/.kamil-harness/workspace/` = local checkout of taleemabad-core (not committed).
+`~/.varys-harness/workspace/` = local checkout of taleemabad-core (not committed).
 Subagents operate here. Always on `develop` branch at tick start.
 
 ## Files
 
 ```
-.claude/hooks/kamil_harness_db.py        — DB + tick lock + entity registry
-.claude/hooks/kamil_notion.py            — shared Notion rate-limit utility
+.claude/hooks/varys_harness_db.py        — DB + tick lock + entity registry
+.claude/hooks/varys_notion.py            — shared Notion rate-limit utility
 .claude/hooks/poll-harness-notion.py     — Notion Harness DB poller
 .claude/hooks/poll-eng-slack.py          — engineering Slack channel poller
 .claude/hooks/poll-taleemabad-github.py  — GitHub PR poller (entity-filtered)
 .claude/hooks/orchestrator-dispatch.py  — dispatcher + subagent spawner
-~/.kamil-harness/harness.db             — SQLite state (tick_lock, events, entities, links, sessions)
-~/.kamil-harness/workspace/             — taleemabad-core checkout
+~/.varys-harness/harness.db             — SQLite state (tick_lock, events, entities, links, sessions)
+~/.varys-harness/workspace/             — taleemabad-core checkout
 ```
 
 ## Escalation Protocol
@@ -134,5 +134,5 @@ Dispatcher processes it on the NEXT available tick (not waiting 270s)
 12. **{{USER_NAME}} replies are fast-pathed.** When the listener detects a reply in a thread
     where the linked Notion ticket is `Blocked`, it inserts the event with
     `priority='high'` and the dispatcher skips the 270s wait for that context_key.
-13. **Evolution fires on failure accumulation.** After every tick, `kamil-evolution-agent.py`
+13. **Evolution fires on failure accumulation.** After every tick, `varys-evolution-agent.py`
     checks failures.jsonl. If 3+ new entries since last run → fires the evolution agent.

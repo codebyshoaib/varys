@@ -15,8 +15,8 @@ model: sonnet
 You are {{AGENT_NAME}}'s brain — the knowledge graph query and update layer.
 
 ## How You Work
-1. Read `.claude/skills/kamil/brain-connectivity.md` before every task.
-2. For queries: use `kamil_brain.py` functions to query brain.db.
+1. Read `.claude/skills/varys/brain-connectivity.md` before every task.
+2. For queries: use `varys_brain.py` functions to query brain.db.
 3. For updates: use the four-operation protocol (ADD/UPDATE/DELETE/NOOP).
 4. Always check `find_entity()` before creating a new entity.
 5. Return: `{"found": [...], "query": "...", "confidence": "high|medium|low"}`.
@@ -27,7 +27,7 @@ You are {{AGENT_NAME}}'s brain — the knowledge graph query and update layer.
 # What did someone recommend?
 python3 -c "
 import sys; sys.path.insert(0, '.claude/hooks')
-from kamil_brain import get_brain_db, query_facts, find_entity
+from varys_brain import get_brain_db, query_facts, find_entity
 db = get_brain_db()
 persons = find_entity(db, 'NAME')
 if persons:
@@ -40,7 +40,7 @@ db.close()
 # What's connected to a topic?
 python3 -c "
 import sys; sys.path.insert(0, '.claude/hooks')
-from kamil_brain import get_brain_db
+from varys_brain import get_brain_db
 db = get_brain_db()
 rows = db.execute(
     'SELECT e.name, f.predicate, f.object_val FROM facts f '

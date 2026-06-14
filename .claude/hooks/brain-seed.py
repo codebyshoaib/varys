@@ -8,9 +8,9 @@ Safe to re-run — upsert_entity is idempotent.
 import sys, uuid
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
-from kamil_brain import get_brain_db, upsert_entity, write_fact, write_link
+from varys_brain import get_brain_db, upsert_entity, write_fact, write_link
 
-KAMIL_DIR = Path(__file__).parent.parent.parent
+VARYS_DIR = Path(__file__).parent.parent.parent
 db = get_brain_db()
 sid = "seed-" + uuid.uuid4().hex[:8]
 
@@ -52,7 +52,7 @@ for cid, name in CONCEPTS:
     print(f"  concept: {name}")
 
 # Scan and register all existing skills
-skills_dir = KAMIL_DIR / ".claude" / "skills"
+skills_dir = VARYS_DIR / ".claude" / "skills"
 if skills_dir.exists():
     for f in skills_dir.glob("*.md"):
         sid_ = f"skill-{f.stem}"
@@ -63,7 +63,7 @@ if skills_dir.exists():
         print(f"  skill: {f.stem}")
 
 # Scan and register all existing agents
-agents_dir = KAMIL_DIR / ".claude" / "agents"
+agents_dir = VARYS_DIR / ".claude" / "agents"
 if agents_dir.exists():
     for f in agents_dir.glob("*.md"):
         aid = f"agent-{f.stem}"

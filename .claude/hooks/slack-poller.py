@@ -3,12 +3,12 @@
 slack-poller: Runs every 30 min via cron.
 
 1. Reads Slack channels → captures relevant messages
-2. Writes new items to /tmp/kamil-slack-inbox.json (Claude syncs to Notion via MCP)
+2. Writes new items to /tmp/varys-slack-inbox.json (Claude syncs to Notion via MCP)
 3. Posts a summary DM to Kamal: what was read, what was learned, what was done
 4. On any fatal error → DMs Kamal immediately
 
 Cron:
-  */30 * * * * python3 .claude/hooks/slack-poller.py >> /tmp/kamil-slack.log 2>&1
+  */30 * * * * python3 .claude/hooks/slack-poller.py >> /tmp/varys-slack.log 2>&1
 
 Config:
   ~/.claude/hooks/.slack  →  SLACK_TOKEN=xoxp-...
@@ -27,10 +27,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from agent_config import cfg
-from kamil_log import klog, klog_error, klog_poller
-from kamil_eval_tracker import eval_poller_summary, eval_self_question
+from varys_log import klog, klog_error, klog_poller
+from varys_eval_tracker import eval_poller_summary, eval_self_question
 try:
-    from kamil_harness_db import get_db, acquire_tick_lock, release_tick_lock
+    from varys_harness_db import get_db, acquire_tick_lock, release_tick_lock
     _harness_db_available = True
 except Exception:
     _harness_db_available = False
@@ -38,12 +38,12 @@ except Exception:
 # ── Config ────────────────────────────────────────────────────────────────────
 SLACK_CONFIG    = Path.home() / ".claude" / "hooks" / ".slack"
 INBOX_FILE      = Path("/tmp/agent-slack-inbox.json")
-STATE_FILE      = Path("/tmp/kamil-poller-state.json")
-KAMIL_INBOX_DIR = Path.home() / "kamil-inbox"
+STATE_FILE      = Path("/tmp/varys-poller-state.json")
+VARYS_INBOX_DIR = Path.home() / "varys-inbox"
 WORKSPACE       = cfg("SLACK_WORKSPACE", "taleemabad-talk.slack.com")
 
 KAMAL_USER_ID = cfg("USER_SLACK_ID", "")
-KAMIL_TRIGGER_KEYWORDS = ["@shoaib_s_pr_beacon", "<@u0b0cq34bst>", "pr beacon", "@shoaib's pr beacon"]
+VARYS_TRIGGER_KEYWORDS = ["@shoaib_s_pr_beacon", "<@u0b0cq34bst>", "pr beacon", "@shoaib's pr beacon"]
 
 LEARNING_CHANNELS = {
     "#engineering-learning", "#engineering-ai", "#growth-team",
@@ -225,8 +225,8 @@ def poll_channel(token: str, channel_id: str, channel_name: str,
         if not is_relevant:
             continue
 
-        if any(kw in text.lower() for kw in KAMIL_TRIGGER_KEYWORDS):
-            write_to_kamil_inbox(text, channel_name, from_id, ts)
+        if any(kw in text.lower() for kw in VARYS_TRIGGER_KEYWORDS):
+            write_to_varys_inbox(text, channel_name, from_id, ts)
 
         msg_type, status = classify_message(text, from_id, channel_name)
         preview = text[:300].replace("\n", " ")
@@ -309,10 +309,10 @@ def poll_dms(token: str, existing_permalinks: set, since_ts: str) -> list:
     return new_items
 
 
-def write_to_kamil_inbox(text: str, source_channel: str, from_id: str, ts: str):
-    KAMIL_INBOX_DIR.mkdir(parents=True, exist_ok=True)
+def write_to_varys_inbox(text: str, source_channel: str, from_id: str, ts: str):
+    VARYS_INBOX_DIR.mkdir(parents=True, exist_ok=True)
     safe_ts   = ts.replace(".", "-")
-    inbox_file = KAMIL_INBOX_DIR / f"{safe_ts}-slack.json"
+    inbox_file = VARYS_INBOX_DIR / f"{safe_ts}-slack.json"
     if inbox_file.exists():
         return
     payload = {
@@ -324,13 +324,13 @@ def write_to_kamil_inbox(text: str, source_channel: str, from_id: str, ts: str):
         "timestamp": datetime.now().isoformat(),
     }
     inbox_file.write_text(json.dumps(payload, indent=2))
-    log(f"Kamil inbox queued: {from_id} in {source_channel}")
+    log(f"Varys inbox queued: {from_id} in {source_channel}")
 
 
 # ── Self-question exploration ─────────────────────────────────────────────────
 
 SELF_QUESTIONS_PAGE = "365d8747b3b181b281b8ef5820e15881"
-QUESTION_INDEX_FILE = Path("/tmp/kamil-question-index.txt")
+QUESTION_INDEX_FILE = Path("/tmp/varys-question-index.txt")
 
 def explore_self_question(bot_token: str, dm_channel: str):
     """
@@ -352,7 +352,7 @@ def explore_self_question(bot_token: str, dm_channel: str):
     today = datetime.now().strftime('%Y-%m-%d')
     time_now = datetime.now().strftime('%H:%M')
 
-    prompt = f"""You are Kamil — Kamal's autonomous AI agent. Slack is quiet. Use this time well.
+    prompt = f"""You are Varys — Kamal's autonomous AI agent. Slack is quiet. Use this time well.
 
 ## YOUR JOB THIS CYCLE
 Pick question #{idx} from the "Next Questions to Explore" checklist on this Notion page:
@@ -364,7 +364,7 @@ Pick the #{idx % 8} item from the "Next Questions to Explore" section (wrap arou
 ## RESEARCH IT
 Use real data sources:
 - Notion MCP → for Kamal's PRs, Work Log, Harness, Team People
-- Slack Inbox file → /tmp/kamil-slack-inbox.json
+- Slack Inbox file → /tmp/varys-slack-inbox.json
 - GitHub → `gh pr list --repo taleemabad/taleemabad-core --limit 10` or relevant repo
 - Web search → if it's a technical or external question
 
@@ -385,10 +385,10 @@ Today: {today} PKT
 Time: {time_now}
 Question index: {idx}"""
 
-    env["KAMIL_PROMPT"] = prompt
+    env["VARYS_PROMPT"] = prompt
     try:
         result = subprocess.run(
-            ["bash", "-c", f'{nvm} && claude --dangerously-skip-permissions --print -p "$KAMIL_PROMPT"'],
+            ["bash", "-c", f'{nvm} && claude --dangerously-skip-permissions --print -p "$VARYS_PROMPT"'],
             capture_output=True, text=True,
             cwd=str(Path(__file__).parent.parent.parent),
             timeout=180, env=env,
@@ -449,12 +449,12 @@ def build_summary_dm(new_items: list, total_inbox: int, run_ts: str) -> str:
         if t == "Mention":
             lines.append(f"📣 *{frm}* mentioned you in {channel}")
             lines.append(f'   _"{msg}"_')
-            lines.append(f"   → Reply or: _\"Kamil reply to [name] tell them...\"_")
+            lines.append(f"   → Reply or: _\"Varys reply to [name] tell them...\"_")
             lines.append(f"   <{link}|Open>")
         elif t == "PR Review Request":
             lines.append(f"🔀 *New PR* in {channel} from {frm}")
             lines.append(f'   _"{msg}"_')
-            lines.append(f"   → Say _\"Kamil review that PR\"_ and I'll do it")
+            lines.append(f"   → Say _\"Varys review that PR\"_ and I'll do it")
             lines.append(f"   <{link}|Open>")
         elif t == "Bug Report":
             lines.append(f"🐛 *Bug/error* in {channel}")
@@ -570,10 +570,10 @@ def _main_body() -> int:
     except Exception as e:
         klog_error(context="poller_run", exc=e)
         error_msg = (
-            f"⚠️ *Kamil slack-poller CRASHED*\n"
+            f"⚠️ *Varys slack-poller CRASHED*\n"
             f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M')} PKT\n"
             f"Error: `{e}`\n"
-            f"Slack sync is broken. Check `/tmp/kamil-slack.log`."
+            f"Slack sync is broken. Check `/tmp/varys-slack.log`."
         )
         log(f"FATAL: {e}")
         try:

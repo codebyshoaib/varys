@@ -7,7 +7,7 @@ manual process pain: Virtual Assistant, Admin Assistant, Operations Coordinator,
 For each posting, extracts poster LinkedIn URL + job text as signal, then calls
 inject() to write a lead into OpenOutreach DB.
 
-State: /tmp/kamil-oo-scraped-jobs.json (dedup store, persists across runs)
+State: /tmp/varys-oo-scraped-jobs.json (dedup store, persists across runs)
 Called by job-finder.py every 30min.
 """
 
@@ -22,12 +22,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 try:
-    from kamil_log import klog, klog_error
+    from varys_log import klog, klog_error
 except ImportError:
     def klog(event, **kw): pass
     def klog_error(context, exc, **kw): pass
 
-STATE_FILE = Path("/tmp/kamil-oo-scraped-jobs.json")
+STATE_FILE = Path("/tmp/varys-oo-scraped-jobs.json")
 OPENOUTREACH_DB = Path.home() / ".openoutreach" / "data" / "db.sqlite3"
 AUTOMATION_CAMPAIGN_NAME = "Automation Freelance Outreach"
 

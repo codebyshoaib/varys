@@ -3,7 +3,7 @@
 canva-designer.py — Dumb Canva MCP executor.
 
 Receives a brief, calls Canva MCP, returns asset URLs.
-Called by kamil-canva-agent.py or directly from pipeline.
+Called by varys-canva-agent.py or directly from pipeline.
 
 Usage:
   python3 scripts/canva-designer.py --topic "Django tips" --copy "5 tips..." \
@@ -26,10 +26,10 @@ from design_philosopher import create_philosophy
 
 # Template registry — one entry per channel+format combo
 TEMPLATE_MAP = {
-    ("linkedin", "card"):      {"template_name": "kamil-linkedin-card",  "width": 1200, "height": 627},
-    ("instagram", "post"):     {"template_name": "kamil-ig-post",         "width": 1080, "height": 1080},
-    ("instagram", "story"):    {"template_name": "kamil-ig-story",        "width": 1080, "height": 1920},
-    ("youtube",  "thumbnail"): {"template_name": "kamil-yt-thumbnail",    "width": 1280, "height": 720},
+    ("linkedin", "card"):      {"template_name": "varys-linkedin-card",  "width": 1200, "height": 627},
+    ("instagram", "post"):     {"template_name": "varys-ig-post",         "width": 1080, "height": 1080},
+    ("instagram", "story"):    {"template_name": "varys-ig-story",        "width": 1080, "height": 1920},
+    ("youtube",  "thumbnail"): {"template_name": "varys-yt-thumbnail",    "width": 1280, "height": 720},
 }
 
 # All formats produced per pipeline run

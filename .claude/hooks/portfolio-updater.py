@@ -2,7 +2,7 @@
 """
 portfolio-updater.py — CV intelligence loop.
 
-Runs weekly (Monday via kamil-weekly-report.sh).
+Runs weekly (Monday via varys-weekly-report.sh).
 Reads Notion Job Tracker → finds skills in demand → compares to portfolio.json
 → proposes updates → commits + pushes → logs to Notion history.
 
@@ -25,15 +25,15 @@ from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from kamil_log import klog, klog_error
+from varys_log import klog, klog_error
 
 PORTFOLIO_REPO   = Path.home() / "Documents" / "free_work" / "portfolio-data"
 PORTFOLIO_JSON   = PORTFOLIO_REPO / "portfolio.json"
-KAMIL_DIR        = Path(__file__).parent.parent.parent
+VARYS_DIR        = Path(__file__).parent.parent.parent
 JOBS_DB          = "0d69c6ff-83d8-44c7-94c2-d341c4ded8d7"
 BRAIN_PAGE       = "364d8747-b3b1-813d-8ac8-c248800f0a4d"  # Agent Brain — replace with your Notion page ID
 PLAN_PAGE        = "369d8747-b3b1-81d5-9775-dcb4297d7dbd"  # Master Plan page
-HISTORY_FILE     = Path("/tmp/kamil-portfolio-history.jsonl")
+HISTORY_FILE     = Path("/tmp/varys-portfolio-history.jsonl")
 
 SLACK_CONFIG     = Path.home() / ".claude" / "hooks" / ".slack"
 
@@ -129,12 +129,12 @@ No explanation, just the JSON."""
 def run_claude_prompt(prompt: str) -> str:
     """Run a Claude prompt and return output."""
     env = os.environ.copy()
-    env["KAMIL_PORTFOLIO_PROMPT"] = prompt
+    env["VARYS_PORTFOLIO_PROMPT"] = prompt
     nvm = 'export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"'
     result = subprocess.run(
-        ["bash", "-c", f'{nvm} && claude --dangerously-skip-permissions --print -p "$KAMIL_PORTFOLIO_PROMPT"'],
+        ["bash", "-c", f'{nvm} && claude --dangerously-skip-permissions --print -p "$VARYS_PORTFOLIO_PROMPT"'],
         capture_output=True, text=True,
-        cwd=str(KAMIL_DIR),
+        cwd=str(VARYS_DIR),
         timeout=120, env=env,
     )
     return result.stdout.strip() if result.returncode == 0 else ""
@@ -236,7 +236,7 @@ def commit_and_push(summaries: list[str]) -> bool:
         return False
 
     today   = datetime.now().strftime("%Y-%m-%d")
-    message = f"kamil: cv update {today} — {'; '.join(summaries[:2])}"
+    message = f"varys: cv update {today} — {'; '.join(summaries[:2])}"
 
     ok, out = run_git(["git", "add", "portfolio.json"], PORTFOLIO_REPO)
     if not ok:
@@ -280,11 +280,11 @@ Find the table row format from existing rows and match it exactly.
 Reply only "ok"."""
 
     env = os.environ.copy()
-    env["KAMIL_NOTION_PROMPT"] = prompt
+    env["VARYS_NOTION_PROMPT"] = prompt
     nvm = 'export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"'
     subprocess.Popen(
-        ["bash", "-c", f'{nvm} && claude --dangerously-skip-permissions --print -p "$KAMIL_NOTION_PROMPT"'],
-        cwd=str(KAMIL_DIR), env=env,
+        ["bash", "-c", f'{nvm} && claude --dangerously-skip-permissions --print -p "$VARYS_NOTION_PROMPT"'],
+        cwd=str(VARYS_DIR), env=env,
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         start_new_session=True,
     )
@@ -322,7 +322,7 @@ def run():
             top = ", ".join(f"{k}({v})" for k, v in
                             sorted(job_skills.items(), key=lambda x: -x[1])[:5])
             slack_dm(token, f"📊 *Portfolio check:* No updates needed this week.\n"
-                            f"Top demanded skills match your CV: {top}\n🤖 Kamil")
+                            f"Top demanded skills match your CV: {top}\n🤖 Varys")
         return
 
     # Save updated portfolio.json
@@ -359,7 +359,7 @@ def run():
             f"{changes_text}\n\n"
             f"*Top demanded skills:* {top}\n"
             f"{status}\n"
-            f"_Reply \"revert\" if you don't want this change._\n🤖 Kamil"
+            f"_Reply \"revert\" if you don't want this change._\n🤖 Varys"
         )
 
 

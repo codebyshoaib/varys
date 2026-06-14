@@ -1,7 +1,7 @@
 ---
 type: reference
 last_verified: 2026-06-01
-owner: kamil
+owner: varys
 paths:
   - ".claude/hooks/*.py"
   - "vault/**"
@@ -12,7 +12,7 @@ paths:
 All Notion reads/writes use `mcp__claude_ai_Notion__*` tools (no API key file). **When {{USER_NAME}} asks about work context → fetch Notion via MCP first, then the Slack inbox file if needed.**
 
 ## Retrieval and Write Rules
-Retrieval and write rules are defined in `.claude/hooks/kamil_context.py` — do not re-specify here.
+Retrieval and write rules are defined in `.claude/hooks/varys_context.py` — do not re-specify here.
 
 ## Databases
 
@@ -24,7 +24,7 @@ Retrieval and write rules are defined in `.claude/hooks/kamil_context.py` — do
 | Harness backlog | `{{config:NOTION_HARNESS_DB_ID}}` | {{AGENT_NAME}}'s feature backlog + self-evolution |
 | People Intelligence | `{{config:NOTION_PEOPLE_DB_ID}}` | Mood, needs, recurring topics, what works |
 | Job Tracker | `{{config:NOTION_JOBS_DB_ID}}` | Job finds + application status |
-| Observability | `{{config:NOTION_OBSERVABILITY_DB_ID}}` | Errors, self-heal actions, daily digest — Status: 🔴 Needs {{USER_NAME}} / 🟡 Pending / 🟢 Solved / ⚪ Monitoring. Firehose in Axiom `kamil-logs`. |
+| Observability | `{{config:NOTION_OBSERVABILITY_DB_ID}}` | Errors, self-heal actions, daily digest — Status: 🔴 Needs {{USER_NAME}} / 🟡 Pending / 🟢 Solved / ⚪ Monitoring. Firehose in Axiom `varys-logs`. |
 | Canva Designs | `{{config:NOTION_CANVA_DB_ID}}` | Canva design assets — topic, channel, format, eval scores, asset URLs, status (draft/approved/posted/Needs-{{USER_NAME}}). Under Social Media Growth Plan. |
 
 Other DBs referenced by name only: Projects, {{USER_NAME}}'s Todo, {{AGENT_NAME}}'s Learning Log.

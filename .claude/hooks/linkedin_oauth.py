@@ -72,7 +72,7 @@ class OAuthHandler(BaseHTTPRequestHandler):
                 OAuthHandler.token = token
                 self.send_response(200)
                 self.end_headers()
-                self.wfile.write(b"<h1>LinkedIn token refreshed!</h1><p>You can close this tab. Kamil will now post automatically.</p>")
+                self.wfile.write(b"<h1>LinkedIn token refreshed!</h1><p>You can close this tab. Varys will now post automatically.</p>")
                 print(f"\n✅ New token obtained and saved!")
             else:
                 self.send_response(400)

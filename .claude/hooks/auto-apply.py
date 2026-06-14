@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-auto-apply.py — Kamil applies for work autonomously.
+auto-apply.py — Varys applies for work autonomously.
 
 Rules:
   score >= 75  → auto-apply immediately, DM Kamal confirmation
@@ -31,14 +31,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from agent_config import cfg
-from kamil_log import klog, klog_error
-from kamil_eval_tracker import log_action
+from varys_log import klog, klog_error
+from varys_eval_tracker import log_action
 
-KAMIL_DIR   = Path(__file__).parent.parent.parent
+VARYS_DIR   = Path(__file__).parent.parent.parent
 KAMAL_DM    = os.environ.get("USER_SLACK_DM", "")  # set USER_SLACK_DM in ~/.agent-config.json
 JOBS_DB     = "0d69c6ff-83d8-44c7-94c2-d341c4ded8d7"
 SLACK_CFG   = Path.home() / ".claude" / "hooks" / ".slack"
-APPLIED_FILE = Path("/tmp/kamil-applied.jsonl")  # dedup — never apply twice
+APPLIED_FILE = Path("/tmp/varys-applied.jsonl")  # dedup — never apply twice
 
 # Auto-apply threshold
 AUTO_APPLY_SCORE   = 75
@@ -89,11 +89,11 @@ def mark_applied(url: str, method: str, job_title: str):
 
 def run_claude(prompt: str, timeout: int = 120) -> str:
     env = os.environ.copy()
-    env["KAMIL_APPLY_PROMPT"] = prompt
+    env["VARYS_APPLY_PROMPT"] = prompt
     nvm = 'export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"'
     result = subprocess.run(
-        ["bash", "-c", f'{nvm} && claude --dangerously-skip-permissions --print -p "$KAMIL_APPLY_PROMPT"'],
-        capture_output=True, text=True, cwd=str(KAMIL_DIR),
+        ["bash", "-c", f'{nvm} && claude --dangerously-skip-permissions --print -p "$VARYS_APPLY_PROMPT"'],
+        capture_output=True, text=True, cwd=str(VARYS_DIR),
         timeout=timeout, env=env,
     )
     return result.stdout.strip() if result.returncode == 0 else ""
@@ -124,7 +124,7 @@ def write_proposal(job: dict) -> str:
     source      = job.get("source", "")
     rate        = job.get("rate", "")
 
-    prompt = f"""You are Kamil writing a freelance proposal for Kamal.
+    prompt = f"""You are Varys writing a freelance proposal for Kamal.
 
 JOB:
 Title: {title}
@@ -179,7 +179,7 @@ Reply only "sent" when done."""
             f"✉️ *Applied (email):* {job['title'][:70]}\n"
             f"Sent to: `{email}`\n"
             f"Score: {job.get('score',0)}/100\n"
-            f"🔗 {job['url'][:80]}\n🤖 Kamil")
+            f"🔗 {job['url'][:80]}\n🤖 Varys")
 
     return success
 
@@ -228,7 +228,7 @@ def apply_via_github(job: dict, token: str) -> bool:
             f"💬 *Applied (GitHub):* {job['title'][:70]}\n"
             f"Commented on: `{owner}/{repo}#{issue_num}`\n"
             f"Score: {job.get('score',0)}/100\n"
-            f"🔗 {job['url']}\n🤖 Kamil")
+            f"🔗 {job['url']}\n🤖 Varys")
 
     return success
 
@@ -269,7 +269,7 @@ def process_job(job: dict, token: str) -> str:
             f"🤔 *Approval needed:* {title[:70]}\n"
             f"Score: {score}/100 | Method: {method}\n"
             f"🔗 {url}\n"
-            f'_Reply "approve" to apply, "skip" to pass._\n🤖 Kamil')
+            f'_Reply "approve" to apply, "skip" to pass._\n🤖 Varys')
         mark_applied(url, "pending", title)
         return "pending_approval"
 
@@ -290,7 +290,7 @@ def process_job(job: dict, token: str) -> str:
                 f"Score: {score}/100\n"
                 f"🔗 {url}\n\n"
                 f"```{proposal[:800]}```\n"
-                f"🤖 Kamil")
+                f"🤖 Varys")
             applied = True
 
     if applied:

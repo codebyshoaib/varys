@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-honesty_gate.py — Pre-send filter for Kamil's Slack responses.
+honesty_gate.py — Pre-send filter for Varys's Slack responses.
 
 Detects false delivery claims ("here it is", "I posted X") when no actual
 file/upload happened. Rewrites to an honest fallback and logs the gap.
@@ -19,9 +19,9 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from kamil_log import klog, klog_error
+from varys_log import klog, klog_error
 
-KAMIL_DIR = Path(__file__).parent.parent.parent
+VARYS_DIR = Path(__file__).parent.parent.parent
 
 DELIVERY_CLAIMS = [
     "here's the infographic",
@@ -62,7 +62,7 @@ def _rewrite_honest(draft: str, request: str) -> str:
         f"or sent something but did not actually do it. "
         f"Remove the false claim. State clearly what wasn't possible "
         f"and offer 1-2 concrete alternatives that ARE possible. "
-        f"Keep it under 3 lines. Sign off: 🤖 Kamil\n\n"
+        f"Keep it under 3 lines. Sign off: 🤖 Varys\n\n"
         f"Original request: \"{request[:200]}\"\n\n"
         f"Draft to rewrite:\n\"{draft[:600]}\""
     )
@@ -74,7 +74,7 @@ def _rewrite_honest(draft: str, request: str) -> str:
             ["bash", "-c",
              f'{nvm} && claude --dangerously-skip-permissions --print -p "$_HONESTY_PROMPT"'],
             capture_output=True, text=True,
-            cwd=str(KAMIL_DIR),
+            cwd=str(VARYS_DIR),
             timeout=30, env=env,
         )
         if result.returncode == 0 and result.stdout.strip():
@@ -89,14 +89,14 @@ def _rewrite_honest(draft: str, request: str) -> str:
     return (
         "I wasn't able to produce that — something went wrong during generation. "
         "Try `nlm slides [topic]` for a slide deck, or ask me to describe the research instead. "
-        "🤖 Kamil"
+        "🤖 Varys"
     )
 
 
 def _log_gap(gap_type: str, request: str, draft: str) -> None:
     """Log to harness.db. Never raises."""
     try:
-        from kamil_harness_db import get_db, log_capability_gap
+        from varys_harness_db import get_db, log_capability_gap
         db = get_db()
         log_capability_gap(
             db,

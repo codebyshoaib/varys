@@ -1,10 +1,10 @@
 id: eval-007
 description: "Personality lookup routes to L3 memory, not inline CLAUDE.md"
 category: explicit
-input: "what's Kamil's humor style?"
+input: "what's Varys's humor style?"
 expected:
-  route: "vault/memory/kamil_personality.md"
-  must_load: ["kamil_personality.md"]
+  route: "vault/memory/varys_personality.md"
+  must_load: ["varys_personality.md"]
   must_not_load: ["notion.md", "taleemabad.md"]
   max_hops: 2
 quality_gate: PASS

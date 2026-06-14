@@ -34,7 +34,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 .claude/hooks/kamil-task-interceptor.py",
+            "command": "python3 .claude/hooks/varys-task-interceptor.py",
             "timeout": 5
           }
         ]

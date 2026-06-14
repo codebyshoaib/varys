@@ -36,7 +36,7 @@ import urllib.parse
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 
-UA = "Mozilla/5.0 (X11; Linux x86_64) kamil-trendscanner/1.0 (content-pipeline)"
+UA = "Mozilla/5.0 (X11; Linux x86_64) varys-trendscanner/1.0 (content-pipeline)"
 
 # Subreddits chosen for view/follower potential per channel (see @oykamal playbook).
 TRACK_SUBREDDITS = {

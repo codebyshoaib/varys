@@ -1,7 +1,7 @@
 ---
 type: reference
 last_verified: 2026-06-01
-owner: kamil
+owner: varys
 ---
 
 # Metadata Contract
@@ -11,7 +11,7 @@ Every markdown file (except CLAUDE.md) starts with:
     ---
     type: router|runbook|reference|investigation|plan|changelog
     last_verified: YYYY-MM-DD
-    owner: kamil
+    owner: varys
     ---
 
 ## Freshness SLOs

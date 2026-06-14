@@ -1,7 +1,7 @@
 id: eval-003
 description: "Starting work on taleemabad-core"
 category: explicit
-input: "Kamil, work on taleemabad-core — fix the login bug"
+input: "Varys, work on taleemabad-core — fix the login bug"
 expected:
   route: ".claude/rules/taleemabad.md"
   must_load: ["taleemabad.md"]

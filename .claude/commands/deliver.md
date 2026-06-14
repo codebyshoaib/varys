@@ -1,10 +1,10 @@
 ---
-description: Kamil-owned delivery gate. Runs after confidence ≥86% — verifies everything is clean, creates the PR, runs /reflect, updates Notion Harness, and DMs Kamal with the PR link + confidence score. Kamil never claims delivery without completing every check.
+description: Varys-owned delivery gate. Runs after confidence ≥86% — verifies everything is clean, creates the PR, runs /reflect, updates Notion Harness, and DMs Kamal with the PR link + confidence score. Varys never claims delivery without completing every check.
 ---
 
 # Command: /deliver
 
-Kamil owns this command end-to-end. Before running gates, Kamil asks one final question:
+Varys owns this command end-to-end. Before running gates, Varys asks one final question:
 **"Does this PR actually solve the problem Kamal described — not just pass the tests?"**
 
 If the answer is no, or uncertain → do NOT deliver. Go back to plan.md and diagnose.
@@ -53,7 +53,7 @@ Gate 7 — Migrations verified
 
 Gate 8 — Branch is not develop/main
   Run: git symbolic-ref --short HEAD
-  Check: branch name starts with "kamil/"
+  Check: branch name starts with "varys/"
   FAIL action: something went very wrong — stop and report to Kamal
 ```
 
@@ -67,7 +67,7 @@ Pre-flight check:
   ✅ Tests: 45/45 passing
   ✅ Open bugs: 0 CRITICAL, 0 HIGH
   ✅ Migrations: applied
-  ✅ Branch: kamil/beaconhouse-feature-flag
+  ✅ Branch: varys/beaconhouse-feature-flag
 
 All gates passed. Proceeding to delivery.
 ```
@@ -96,13 +96,13 @@ Coverage: <N>%"
 ## Step 2: Push branch
 
 ```bash
-git push origin kamil/<slug>
+git push origin varys/<slug>
 ```
 
 If push fails (remote has diverged):
 ```bash
 git pull --rebase origin develop
-git push origin kamil/<slug>
+git push origin varys/<slug>
 ```
 
 ---
@@ -156,7 +156,7 @@ gh pr create \
 - `confidence.md` — score breakdown
 - `bugs.md` — all bugs found + status
 
-🤖 Delivered by Kamil (personal-agent-v2)
+🤖 Delivered by Varys (personal-agent-v2)
 EOF
 )"
 ```
@@ -177,7 +177,7 @@ This extracts lessons, updates MEMORY.md, promotes rules. Always run — never s
 
 ## Step 5: Update Notion Harness entry
 
-Find the Harness DB entry for this task (created at session start by kamil-task-interceptor.py).
+Find the Harness DB entry for this task (created at session start by varys-task-interceptor.py).
 
 Update:
 - **Phase**: Done
@@ -196,7 +196,7 @@ Send to Kamal (USER_SLACK_ID from config):
 ✅ PR ready: <task description>
 
 PR: <URL>
-Branch: kamil/<slug>
+Branch: varys/<slug>
 Confidence: <score>%
 Tests: <N>/<N> passing | Coverage: <N>%
 Verifier: PASS / N/A
@@ -218,7 +218,7 @@ Append to `vault/logs/YYYY-MM-DD.md`:
 
 ---
 
-## What Kamil Never Does
+## What Varys Never Does
 
 - ❌ Creates PR with confidence < 86%
 - ❌ Creates PR with open CRITICAL or HIGH bugs
@@ -232,7 +232,7 @@ Append to `vault/logs/YYYY-MM-DD.md`:
 ## Full Pipeline (where /deliver fits)
 
 ```
-/feature  (research + plan, Kamil self-approves)
+/feature  (research + plan, Varys self-approves)
   → /develop  (implement)
     → /test  (verify + confidence scoring)
       → /fix  (loop until ≥ 86%)

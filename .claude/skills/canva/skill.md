@@ -1,6 +1,6 @@
 # Canva Design Skill
 
-Kamil's on-demand Canva design interface. Triggered when Kamil asks to create
+Varys's on-demand Canva design interface. Triggered when Varys asks to create
 any visual content: post, carousel, thumbnail, banner, graphic, design.
 
 ## Trigger phrases

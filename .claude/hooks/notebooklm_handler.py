@@ -26,9 +26,9 @@ from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from kamil_log import klog, klog_error
+from varys_log import klog, klog_error
 
-KAMIL_DIR  = Path(__file__).parent.parent.parent
+VARYS_DIR  = Path(__file__).parent.parent.parent
 KAMAL_DM   = os.environ.get("USER_SLACK_DM", "")  # set USER_SLACK_DM in ~/.agent-config.json
 SLACK_CFG  = Path.home() / ".claude" / "hooks" / ".slack"
 
@@ -411,8 +411,8 @@ def _post_artifact_to_slack(token: str, channel: str, artifact_type: str,
             # No files:write scope — post instructions
             slack_dm(token,
                 f"{icon} *{label}* ✅ ready!\n"
-                f"_File upload needs `files:write` scope on the Kamil Slack app._\n"
-                f"Fix: api.slack.com/apps → Kamil → OAuth Scopes → add `files:write` → Reinstall\n"
+                f"_File upload needs `files:write` scope on the Varys Slack app._\n"
+                f"Fix: api.slack.com/apps → Varys → OAuth Scopes → add `files:write` → Reinstall\n"
                 f"File saved at: `{filepath}`\n🤖 {{AGENT_NAME}}")
 
 

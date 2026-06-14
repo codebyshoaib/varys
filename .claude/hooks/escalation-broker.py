@@ -13,14 +13,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from agent_config import cfg
-from kamil_harness_db import get_db
+from varys_harness_db import get_db
 try:
-    from kamil_log import klog, klog_error
+    from varys_log import klog, klog_error
 except Exception:
     klog = klog_error = lambda *a, **kw: None
 
-KAMIL_DIR  = Path(__file__).parent.parent.parent
-AGENTS_DIR = KAMIL_DIR / ".claude" / "agents"
+VARYS_DIR  = Path(__file__).parent.parent.parent
+AGENTS_DIR = VARYS_DIR / ".claude" / "agents"
 STUCK_THRESHOLD_MINUTES = 9
 
 
@@ -77,17 +77,17 @@ def _spawn_broker(context_key: str) -> bool:
         f"Context key (Notion ticket entity): {context_key}. "
         f"Follow your protocol: partial delivery first, try different angle, "
         f"then DM the user{(' (' + _user_slack_id + ')') if _user_slack_id else ''}. "
-        f"Harness DB: {Path.home() / '.kamil-harness' / 'harness.db'}"
+        f"Harness DB: {Path.home() / '.varys-harness' / 'harness.db'}"
     )
     import shutil
-    tmpdir = Path(tempfile.mkdtemp(prefix="kamil-broker-"))
+    tmpdir = Path(tempfile.mkdtemp(prefix="varys-broker-"))
     tmp = tmpdir / "prompt.txt"
     tmp.write_text(prompt)
     try:
         result = subprocess.run(
             ["bash", "-c",
              f'{nvm} && claude --dangerously-skip-permissions --print -p "$(cat \'{tmp}\')"'],
-            cwd=str(KAMIL_DIR), capture_output=True, text=True, timeout=300,
+            cwd=str(VARYS_DIR), capture_output=True, text=True, timeout=300,
         )
         klog("escalation-broker-spawn", component="escalation-broker",
              context_key=context_key, returncode=result.returncode)

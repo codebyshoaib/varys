@@ -27,13 +27,13 @@ from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from kamil_harness_db import get_db, get_linked_entities
+from varys_harness_db import get_db, get_linked_entities
 try:
-    from kamil_log import klog, klog_error
+    from varys_log import klog, klog_error
 except Exception:
     klog = klog_error = lambda *a, **kw: None
 
-HARNESS_CFG = Path.home() / ".kamil-harness" / "config.json"
+HARNESS_CFG = Path.home() / ".varys-harness" / "config.json"
 SLACK_CFG   = Path.home() / ".claude" / "hooks" / ".slack"
 
 

@@ -3,8 +3,8 @@
 session-start hook: Runs at every Claude Code session start.
 
 Outputs a system message that:
-1. Establishes Kamil's identity
-2. Surfaces any unsynced Slack inbox items from /tmp/kamil-slack-inbox.json
+1. Establishes Varys's identity
+2. Surfaces any unsynced Slack inbox items from /tmp/varys-slack-inbox.json
 3. Tells Claude to use Notion MCP tools to fetch live DB state (PRs, Work Log, Harness)
 
 Notion reads/writes are done by Claude via MCP — no API key needed here.
@@ -17,7 +17,7 @@ from pathlib import Path
 import sys as _sys, time as _time
 _sys.path.insert(0, str(__import__('pathlib').Path(__file__).parent))
 try:
-    import kamil_log as _k
+    import varys_log as _k
 except Exception:
     _k = None
 
@@ -75,7 +75,7 @@ def _fetch_auto_tickets() -> list[dict]:
                 "Notion-Version": "2022-06-28",
             },
         )
-        # TODO: migrate to kamil_notion.notion_request() (orchestrator.md Hard Rule #3)
+        # TODO: migrate to varys_notion.notion_request() (orchestrator.md Hard Rule #3)
         with _ur.urlopen(req, timeout=8) as r:
             result = json.loads(r.read())
             tickets = []
@@ -126,7 +126,7 @@ def build_system_message() -> str:
     try:
         import sqlite3
         from pathlib import Path as _Path
-        brain_db = _Path.home() / ".kamil-harness" / "brain.db"
+        brain_db = _Path.home() / ".varys-harness" / "brain.db"
         if brain_db.exists():
             db = sqlite3.connect(str(brain_db))
             # Get learnings from last 7 days with their key insights
@@ -155,8 +155,8 @@ def build_system_message() -> str:
                     elif pred == "lesson_learned" and len(grouped[name]["lessons"]) < 1:
                         grouped[name]["lessons"].append(val)
 
-                lines.append("## 🧠 Recent Learnings — What Kamil Researched (last 7 days)")
-                lines.append("*(Use these when advising on architecture, agents, or content — Kamil already knows this)*")
+                lines.append("## 🧠 Recent Learnings — What Varys Researched (last 7 days)")
+                lines.append("*(Use these when advising on architecture, agents, or content — Varys already knows this)*")
                 for name, data in list(grouped.items())[:5]:
                     lines.append(f"\n**{data['ts']} — {name}**")
                     if data["summary"]:
@@ -174,7 +174,7 @@ def build_system_message() -> str:
         auto_tickets = _fetch_auto_tickets()
         if auto_tickets:
             lines.append("## 🔧 Pending Self-Improvement Tickets (from research)")
-            lines.append("*(These were auto-created by Kamil's Application Agent — derived from NLM research)*")
+            lines.append("*(These were auto-created by Varys's Application Agent — derived from NLM research)*")
             for t in auto_tickets:
                 lines.append(f"- [{t['phase']}] {t['title']}")
             lines.append("")

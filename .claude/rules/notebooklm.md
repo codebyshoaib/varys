@@ -1,6 +1,6 @@
 ---
 type: rule
-owner: kamil
+owner: varys
 last_verified: 2026-06-03
 ---
 
@@ -34,7 +34,7 @@ Content/research question arrives → check NLM Registry → query matching note
 ## How to Search
 
 ```bash
-# Via Slack trigger (kamil-slack-listener routes automatically)
+# Via Slack trigger (varys-slack-listener routes automatically)
 nlm ask harness-research "what is the evaluator rationalization problem?"
 
 # Manual query by alias

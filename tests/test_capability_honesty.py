@@ -2,19 +2,19 @@ import sys, os, sqlite3, tempfile, pytest
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / ".claude" / "hooks"))
 
-import kamil_harness_db
+import varys_harness_db
 
 
 @pytest.fixture(autouse=True)
 def fresh_db(tmp_path, monkeypatch):
     """Give every test its own isolated SQLite DB."""
     db_path = tmp_path / "test_harness.db"
-    monkeypatch.setattr(kamil_harness_db, "HARNESS_DB", db_path)
-    monkeypatch.setattr(kamil_harness_db, "HARNESS_DIR", tmp_path)
+    monkeypatch.setattr(varys_harness_db, "HARNESS_DB", db_path)
+    monkeypatch.setattr(varys_harness_db, "HARNESS_DIR", tmp_path)
     yield
 
 
-from kamil_harness_db import get_db, log_capability_gap, get_capability_gaps, update_gap_reaction
+from varys_harness_db import get_db, log_capability_gap, get_capability_gaps, update_gap_reaction
 
 
 def test_log_and_read_gap():
@@ -91,7 +91,7 @@ def test_honesty_gate_flags_false_claim_no_upload():
 def test_honesty_gate_passes_with_confirmed_upload():
     sys.path.insert(0, str(Path(__file__).parent.parent / ".claude" / "hooks"))
     from honesty_gate import check
-    result = check("Here's the infographic you requested! 🤖 Kamil", uploaded=True,
+    result = check("Here's the infographic you requested! 🤖 Varys", uploaded=True,
                    request="make infographic")
     assert "Here's the infographic" in result
 
@@ -99,7 +99,7 @@ def test_honesty_gate_passes_with_confirmed_upload():
 def test_gap_watcher_promotion_logic():
     """get_capability_gaps() with min_count=2 returns gaps at threshold."""
     sys.path.insert(0, str(Path(__file__).parent.parent / ".claude" / "hooks"))
-    import kamil_harness_db as hdb
+    import varys_harness_db as hdb
     db = hdb.get_db()
     hdb.log_capability_gap(db, gap_type="chart_rendering",
                            request_text="show me a chart", failed_step="no_tool",
@@ -117,11 +117,11 @@ def test_honesty_gate_rewrites_false_claim():
     sys.path.insert(0, str(Path(__file__).parent.parent / ".claude" / "hooks"))
     import honesty_gate
 
-    fake_rewrite = "I wasn't able to upload that image. Try `nlm slides pullups` instead. 🤖 Kamil"
+    fake_rewrite = "I wasn't able to upload that image. Try `nlm slides pullups` instead. 🤖 Varys"
 
     with mock.patch.object(honesty_gate, "_rewrite_honest", return_value=fake_rewrite):
         result = honesty_gate.check(
-            draft="Here's the infographic you requested! 🤖 Kamil",
+            draft="Here's the infographic you requested! 🤖 Varys",
             uploaded=False,
             request="make infographic about pullups",
         )

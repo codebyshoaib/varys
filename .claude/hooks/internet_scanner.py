@@ -27,7 +27,7 @@ try:
 except Exception:
     _cfg_scanner = lambda k, d=None: d
 
-HEADERS = {"User-Agent": f"KamilJobFinder/1.0 ({_cfg_scanner('USER_EMAIL', 'your-email@example.com')})"}
+HEADERS = {"User-Agent": f"VarysJobFinder/1.0 ({_cfg_scanner('USER_EMAIL', 'your-email@example.com')})"}
 
 # Reddit subreddits to scan
 HIRING_SUBS = [

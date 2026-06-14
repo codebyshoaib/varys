@@ -1,12 +1,12 @@
 ---
 type: reference
 last_verified: 2026-06-01
-owner: kamil
+owner: varys
 ---
 
 # Beads — Work Tracking
 
-Append-only JSONL. Source of truth for Kamil's work; mirrored to Notion Harness DB best-effort.
+Append-only JSONL. Source of truth for Varys's work; mirrored to Notion Harness DB best-effort.
 
 | File | Purpose |
 |------|---------|

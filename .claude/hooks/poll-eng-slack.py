@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-poll-eng-slack.py — Poll engineering Slack channels for @Kamil mentions.
+poll-eng-slack.py — Poll engineering Slack channels for @Varys mentions.
 
 Called once per /loop tick AFTER tick lock is acquired.
 Requires SLACK_USER_TOKEN (xoxp-) for search.messages API — bot token alone fails.
@@ -10,7 +10,7 @@ Two cases handled:
   2. EXISTING linked ticket (Blocked state resume) → write message.tagged event
 
 Event type produced:
-  message.tagged — @Kamil mention in an engineering channel
+  message.tagged — @Varys mention in an engineering channel
 
 Design rules:
   - Deterministic event ID: "slack-<channel_id>-<message_ts>"
@@ -29,23 +29,23 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from agent_config import cfg
-from kamil_harness_db import get_db, register_entity, link_entities, get_linked_entities
-from kamil_notion import notion_request
+from varys_harness_db import get_db, register_entity, link_entities, get_linked_entities
+from varys_notion import notion_request
 try:
-    from kamil_log import klog, klog_error
+    from varys_log import klog, klog_error
 except Exception:
     klog = klog_error = lambda *a, **kw: None
 
 # ── Config ────────────────────────────────────────────────────────────────────
 SLACK_CFG  = Path.home() / ".claude" / "hooks" / ".slack"
 NOTION_CFG = Path.home() / ".claude" / "hooks" / ".notion"
-HARNESS_CFG = Path.home() / ".kamil-harness" / "config.json"
+HARNESS_CFG = Path.home() / ".varys-harness" / "config.json"
 
 ENGINEERING_CHANNELS = [
     ""  # set your channel IDs in ~/.agent-config.json,  # #engineering-learning
 ]
-KAMIL_BOT_USER  = ""  # set BOT_SLACK_USER_ID in ~/.agent-config.json
-KAMIL_SLACK_ID  = cfg("USER_SLACK_ID", "")   # {{USER_NAME}}'s personal Slack user ID — set USER_SLACK_ID in ~/.agent-config.json
+VARYS_BOT_USER  = ""  # set BOT_SLACK_USER_ID in ~/.agent-config.json
+VARYS_SLACK_ID  = cfg("USER_SLACK_ID", "")   # {{USER_NAME}}'s personal Slack user ID — set USER_SLACK_ID in ~/.agent-config.json
 
 NOTION_HARNESS_DB = cfg("NOTION_HARNESS_DB_ID", "de10157da3e34ef58a74ea240f31fe98")
 
@@ -71,7 +71,7 @@ def _load_config() -> dict:
 
 
 def _slack_search(user_token: str, oldest_ts: str) -> list[dict]:
-    """Search all engineering channels for @Kamil mentions since oldest_ts."""
+    """Search all engineering channels for @Varys mentions since oldest_ts."""
     params = urllib.parse.urlencode({
         "query": "in:#engineering-learning",
         "sort": "timestamp",
@@ -90,18 +90,18 @@ def _slack_search(user_token: str, oldest_ts: str) -> list[dict]:
         raise RuntimeError(f"search.messages failed: {data.get('error')}")
 
     messages = data.get("messages", {}).get("matches", [])
-    # Filter: engineering channel + newer than oldest_ts + mentions Kamil
+    # Filter: engineering channel + newer than oldest_ts + mentions Varys
     filtered = []
     for m in messages:
         ch = m.get("channel", {}).get("id", "")
         ts = m.get("ts", "0")
         text = m.get("text", "").lower()
-        mentions_kamil = (
+        mentions_varys = (
             "u0b0cq34bst" in text or   # bot user ID mention
             "@shoaib_s_pr_beacon" in text or
             "pr beacon" in text
         )
-        if ch in ENGINEERING_CHANNELS and float(ts) > float(oldest_ts) and mentions_kamil:
+        if ch in ENGINEERING_CHANNELS and float(ts) > float(oldest_ts) and mentions_varys:
             filtered.append(m)
     return filtered
 
@@ -169,7 +169,7 @@ def main() -> int:
     dt = datetime.fromisoformat(last_sync_at.replace("Z", "+00:00"))
     oldest_slack_ts = str(dt.timestamp())
 
-    print(f"[poll-slack] Searching @Kamil mentions since {last_sync_at}")
+    print(f"[poll-slack] Searching @Varys mentions since {last_sync_at}")
 
     try:
         messages = _slack_search(user_token, oldest_slack_ts)
@@ -186,8 +186,8 @@ def main() -> int:
         text       = msg.get("text", "")[:200]
         user       = msg.get("user", "")
 
-        # Skip Kamil's own messages
-        if user == KAMIL_BOT_USER:
+        # Skip Varys's own messages
+        if user == VARYS_BOT_USER:
             continue
 
         slack_external_id = f"{channel_id}/{thread_ts}"
@@ -226,11 +226,11 @@ def main() -> int:
         if db.execute("SELECT changes()").fetchone()[0] > 0:
             new_events += 1
 
-        # Detect "@Kamil go" — triggers Phase 2 worker for awaiting_approval sessions
+        # Detect "@Varys go" — triggers Phase 2 worker for awaiting_approval sessions
         text_lower = msg.get("text", "").lower()
         if "go" in text_lower and (
-            "kamil" in text_lower or
-            f"<@{KAMIL_SLACK_ID}>" in msg.get("text", "")
+            "varys" in text_lower or
+            f"<@{VARYS_SLACK_ID}>" in msg.get("text", "")
         ):
             go_thread_ts = msg.get("thread_ts") or msg.get("ts")
             ext_id       = f"{channel_id}/{go_thread_ts}"

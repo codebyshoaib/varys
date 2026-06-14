@@ -4,7 +4,7 @@ description: Run one orchestrator tick — poll Notion/Slack/GitHub, dispatch su
 
 # /orchestrate — Team Orchestrator Tick
 
-Runs a single tick of Kamil's team orchestrator. Use with `/loop 270` for continuous operation.
+Runs a single tick of Varys's team orchestrator. Use with `/loop 270` for continuous operation.
 
 **Never change the 270s interval without asking Kamal.**
 
@@ -15,7 +15,7 @@ Execute these steps IN ORDER. If any step fails: release tick lock, stop, do NOT
 ### Step 1 — Acquire tick lock + read last_sync_at
 
 ```bash
-python3 .claude/hooks/kamil_harness_db.py
+python3 .claude/hooks/varys_harness_db.py
 ```
 
 Actually run this Python inline:
@@ -23,7 +23,7 @@ Actually run this Python inline:
 ```python
 import sys
 sys.path.insert(0, '.claude/hooks')
-from kamil_harness_db import get_db, acquire_tick_lock, get_last_sync_at
+from varys_harness_db import get_db, acquire_tick_lock, get_last_sync_at
 
 db = get_db()
 if not acquire_tick_lock(db, 'orchestrate-tick'):
@@ -78,7 +78,7 @@ Dispatcher handles its own failures per context_key — this step always succeed
 ### Step 5.5 — Run gap watcher
 
 ```bash
-python3 .claude/hooks/kamil-gap-watcher.py
+python3 .claude/hooks/varys-gap-watcher.py
 ```
 
 Gap watcher monitors for stalled contexts and escalates timeouts. Always succeeds at the tick level.
@@ -86,7 +86,7 @@ Gap watcher monitors for stalled contexts and escalates timeouts. Always succeed
 ### Step 6 — Update last_sync_at + release lock
 
 ```python
-from kamil_harness_db import set_last_sync_at, release_tick_lock
+from varys_harness_db import set_last_sync_at, release_tick_lock
 from datetime import datetime, timezone
 
 set_last_sync_at(db, datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'))

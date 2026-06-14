@@ -8,19 +8,19 @@ REPO_PATH=/path/to/your/personal-agent
 */30 * * * * nice -n 15 $REPO_PATH/.claude/hooks/cron-wrap.sh poller python3 $REPO_PATH/.claude/hooks/slack-poller.py
 
 # Daily tasks — 8am
-0 8 * * * $REPO_PATH/.claude/hooks/cron-wrap.sh daily $REPO_PATH/kamil-daily.sh
+0 8 * * * $REPO_PATH/.claude/hooks/cron-wrap.sh daily $REPO_PATH/varys-daily.sh
 
 # Weekly report — Monday 9am
-0 9 * * 1 $REPO_PATH/.claude/hooks/cron-wrap.sh weekly $REPO_PATH/kamil-weekly-report.sh
+0 9 * * 1 $REPO_PATH/.claude/hooks/cron-wrap.sh weekly $REPO_PATH/varys-weekly-report.sh
 
 # Slack listener — on reboot
-@reboot python3 $REPO_PATH/.claude/hooks/kamil-slack-listener.py >> /tmp/agent-slack-listener.log 2>&1
+@reboot python3 $REPO_PATH/.claude/hooks/varys-slack-listener.py >> /tmp/agent-slack-listener.log 2>&1
 
 # Learning loop — 2am daily
-0 2 * * * $REPO_PATH/.claude/hooks/cron-wrap.sh learn $REPO_PATH/kamil-learn.sh
+0 2 * * * $REPO_PATH/.claude/hooks/cron-wrap.sh learn $REPO_PATH/varys-learn.sh
 
 # Self-healer — every 10 minutes
-*/10 * * * * nice -n 15 $REPO_PATH/.claude/hooks/cron-wrap.sh self-healer python3 $REPO_PATH/.claude/hooks/kamil-self-healer.py
+*/10 * * * * nice -n 15 $REPO_PATH/.claude/hooks/cron-wrap.sh self-healer python3 $REPO_PATH/.claude/hooks/varys-self-healer.py
 
 # Job finder — every 35 minutes
 5,35 * * * * nice -n 15 $REPO_PATH/.claude/hooks/cron-wrap.sh job-finder python3 $REPO_PATH/.claude/hooks/job-finder.py
@@ -32,4 +32,4 @@ REPO_PATH=/path/to/your/personal-agent
 30 2 * * * $REPO_PATH/.claude/hooks/cron-wrap.sh notion-map python3 $REPO_PATH/.claude/hooks/notion-map-updater.py --mode daily
 
 # Observer — hourly at :15
-15 * * * * $REPO_PATH/.claude/hooks/cron-wrap.sh observer python3 $REPO_PATH/.claude/hooks/kamil-observer.py
+15 * * * * $REPO_PATH/.claude/hooks/cron-wrap.sh observer python3 $REPO_PATH/.claude/hooks/varys-observer.py

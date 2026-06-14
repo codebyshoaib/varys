@@ -163,7 +163,7 @@ def sync_to_mempalace(file_path: str) -> bool:
         print(f"[post-tool-use] Error syncing {file_path}: {e}", file=sys.stderr)
         return False
 
-ERROR_LOG = Path("/tmp/kamil-tool-errors.log")
+ERROR_LOG = Path("/tmp/varys-tool-errors.log")
 
 def log_tool_error(tool_name: str, error: str, input_data: dict):
     """Write tool errors to a file the self-healer monitors."""

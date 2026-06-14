@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-job-finder.py — Kamil's daily freelance job hunter.
+job-finder.py — Varys's daily freelance job hunter.
 
 Runs every 30 min via cron (same pattern as slack-poller).
 Searches Upwork, RemoteOK, We Work Remotely, Freelancer for jobs
@@ -8,9 +8,9 @@ matching Kamal's stack. Deduplicates, scores, surfaces only new
 high-quality matches. Saves to Notion Job Tracker. DMs Kamal.
 
 Cron:
-  */30 * * * * python3 .claude/hooks/job-finder.py >> /tmp/kamil-jobs.log 2>&1
+  */30 * * * * python3 .claude/hooks/job-finder.py >> /tmp/varys-jobs.log 2>&1
 
-Goal: Kamal buys a house. Kamil finds the clients.
+Goal: Kamal buys a house. Varys finds the clients.
 """
 
 import json
@@ -27,15 +27,15 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from agent_config import cfg
-from kamil_log import klog, klog_error
-from kamil_eval_tracker import log_action
+from varys_log import klog, klog_error
+from varys_eval_tracker import log_action
 
 # ── Config ────────────────────────────────────────────────────────────────────
 SLACK_CONFIG  = Path.home() / ".claude" / "hooks" / ".slack"
-JOBS_FILE     = Path("/tmp/kamil-jobs-seen.json")   # dedup store
-STATE_FILE    = Path("/tmp/kamil-jobs-state.json")
-LOG_FILE      = Path("/tmp/kamil-jobs.log")
-KAMIL_DIR     = Path(__file__).parent.parent.parent
+JOBS_FILE     = Path("/tmp/varys-jobs-seen.json")   # dedup store
+STATE_FILE    = Path("/tmp/varys-jobs-state.json")
+LOG_FILE      = Path("/tmp/varys-jobs.log")
+VARYS_DIR     = Path(__file__).parent.parent.parent
 
 KAMAL_USER_ID = cfg("USER_SLACK_ID", "")
 KAMAL_DM      = os.environ.get("USER_SLACK_DM", "")  # set USER_SLACK_DM in ~/.agent-config.json
@@ -463,14 +463,14 @@ Properties:
 Reply only "ok"."""
 
     env = os.environ.copy()
-    env["KAMIL_JOB_PROMPT"] = prompt
+    env["VARYS_JOB_PROMPT"] = prompt
     nvm = 'export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"'
 
     def _run():
         with _NOTION_SEMA:
             subprocess.Popen(
-                ["bash", "-c", f'{nvm} && claude --dangerously-skip-permissions --print -p "$KAMIL_JOB_PROMPT"'],
-                cwd=str(KAMIL_DIR), env=env,
+                ["bash", "-c", f'{nvm} && claude --dangerously-skip-permissions --print -p "$VARYS_JOB_PROMPT"'],
+                cwd=str(VARYS_DIR), env=env,
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                 start_new_session=True,
             ).wait()
@@ -810,7 +810,7 @@ def main():
         # Still tell Kamal what we explored
         if slot_name:
             slack_post(bot_token, {"channel": KAMAL_DM,
-                "text": f"🔍 *Explored:* {slot_name}\n_No new qualifying work found this pass. Back in 30 min._\n🤖 Kamil"})
+                "text": f"🔍 *Explored:* {slot_name}\n_No new qualifying work found this pass. Back in 30 min._\n🤖 Varys"})
         log("No new qualifying jobs this run — skipping DM.")
         return 0
 
@@ -838,7 +838,7 @@ def main():
         lines.append("")
 
     lines.append('_Reply `apply 1`, `apply 2`, or `apply 3` → I\'ll write the proposal._')
-    lines.append("🤖 Kamil")
+    lines.append("🤖 Varys")
 
     msg    = "\n".join(lines)
     result = slack_post(bot_token, {"channel": KAMAL_DM, "text": msg})

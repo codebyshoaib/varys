@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-poll-proactive-slack.py — Watch configured channels for signals Kamil should act on.
+poll-proactive-slack.py — Watch configured channels for signals Varys should act on.
 
 Runs every tick as the 4th poller. Reads proactive-channels.md for config.
 Inserts events into harness.db for any message matching watch keywords
@@ -24,14 +24,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from agent_config import cfg
-from kamil_harness_db import get_db, get_last_sync_at, set_last_sync_at
+from varys_harness_db import get_db, get_last_sync_at, set_last_sync_at
 try:
-    from kamil_log import klog, klog_error
+    from varys_log import klog, klog_error
 except Exception:
     klog = klog_error = lambda *a, **kw: None
 
-KAMIL_DIR    = Path(__file__).parent.parent.parent
-RULES_DIR    = KAMIL_DIR / ".claude" / "rules"
+VARYS_DIR    = Path(__file__).parent.parent.parent
+RULES_DIR    = VARYS_DIR / ".claude" / "rules"
 CHANNELS_CFG = RULES_DIR / "proactive-channels.md"
 SLACK_CFG    = Path.home() / ".claude" / "hooks" / ".slack"
 KAMAL_SLACK_ID = cfg("USER_SLACK_ID", "")
@@ -169,8 +169,8 @@ def main():
             if ch_cfg["mode"] == "watch" and ch_cfg["keywords"]:
                 if not _message_matches(text, ch_cfg["keywords"]):
                     continue
-                # Skip if already handled as @Kamil mention
-                if f"<@{KAMAL_SLACK_ID}>" in text or "kamil" in text.lower():
+                # Skip if already handled as @Varys mention
+                if f"<@{KAMAL_SLACK_ID}>" in text or "varys" in text.lower():
                     continue
 
                 event_id = f"slack-{ch_id}-{ts}"

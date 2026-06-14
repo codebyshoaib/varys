@@ -3,23 +3,23 @@ import importlib.util
 from pathlib import Path
 
 spec = importlib.util.spec_from_file_location(
-    "kamil_apply_learnings",
-    Path(__file__).parent.parent / ".claude/hooks/kamil-apply-learnings.py",
+    "varys_apply_learnings",
+    Path(__file__).parent.parent / ".claude/hooks/varys-apply-learnings.py",
 )
 kal = importlib.util.module_from_spec(spec)
-sys.modules["kamil_apply_learnings"] = kal
+sys.modules["varys_apply_learnings"] = kal
 spec.loader.exec_module(kal)
 
 
 def test_dedup_skips_existing_title():
-    gap = {"title": "Durable execution for kamil-listener", "what_to_build": "x", "why": "y", "priority": "P1", "effort": "medium"}
-    existing_titles = {"[auto] durable execution for kamil-listener"}
+    gap = {"title": "Durable execution for varys-listener", "what_to_build": "x", "why": "y", "priority": "P1", "effort": "medium"}
+    existing_titles = {"[auto] durable execution for varys-listener"}
     assert kal._is_duplicate(gap, existing_titles) is True
 
 
 def test_dedup_allows_new_title():
     gap = {"title": "Brand new feature nobody built yet", "what_to_build": "x", "why": "y", "priority": "P1", "effort": "medium"}
-    existing_titles = {"[auto] durable execution for kamil-listener"}
+    existing_titles = {"[auto] durable execution for varys-listener"}
     assert kal._is_duplicate(gap, existing_titles) is False
 
 
@@ -27,13 +27,13 @@ def test_dedup_strips_auto_prefix_from_gap_title():
     """Gap title that already has [Auto] prefix should still match."""
     import importlib.util, pathlib
     spec = importlib.util.spec_from_file_location(
-        "kamil_apply_learnings",
-        pathlib.Path(__file__).parent.parent / ".claude/hooks/kamil-apply-learnings.py"
+        "varys_apply_learnings",
+        pathlib.Path(__file__).parent.parent / ".claude/hooks/varys-apply-learnings.py"
     )
     kal = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(kal)
-    gap = {"title": "[Auto] Durable execution for kamil-listener", "what_to_build": "x", "why": "y", "priority": "P1", "effort": "medium"}
-    existing_titles = {"[auto] durable execution for kamil-listener"}
+    gap = {"title": "[Auto] Durable execution for varys-listener", "what_to_build": "x", "why": "y", "priority": "P1", "effort": "medium"}
+    existing_titles = {"[auto] durable execution for varys-listener"}
     assert kal._is_duplicate(gap, existing_titles) is True
 
 
@@ -42,8 +42,8 @@ def test_fetch_existing_titles_returns_none_on_network_error():
     import importlib.util, pathlib, urllib.error
     from unittest.mock import patch
     spec = importlib.util.spec_from_file_location(
-        "kamil_apply_learnings",
-        pathlib.Path(__file__).parent.parent / ".claude/hooks/kamil-apply-learnings.py"
+        "varys_apply_learnings",
+        pathlib.Path(__file__).parent.parent / ".claude/hooks/varys-apply-learnings.py"
     )
     kal = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(kal)
@@ -55,15 +55,15 @@ def test_fetch_existing_titles_returns_none_on_network_error():
 def test_slack_message_includes_why():
     import importlib.util, pathlib
     spec = importlib.util.spec_from_file_location(
-        "kamil_apply_learnings",
-        pathlib.Path(__file__).parent.parent / ".claude/hooks/kamil-apply-learnings.py"
+        "varys_apply_learnings",
+        pathlib.Path(__file__).parent.parent / ".claude/hooks/varys-apply-learnings.py"
     )
     kal = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(kal)
     item = {
         "gap": {
             "title": "Adversarial checker agent",
-            "what_to_build": "Add an agent that verifies Kamil outputs",
+            "what_to_build": "Add an agent that verifies Varys outputs",
             "why": "Lesson: silent failures are invisible without an adversary",
             "priority": "P0",
             "effort": "medium",

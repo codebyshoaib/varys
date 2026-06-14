@@ -1,7 +1,7 @@
 ---
 type: runbook
 last_verified: 2026-06-01
-owner: kamil
+owner: varys
 paths:
   - "../../taleemabad-core/**"
 ---
@@ -38,7 +38,7 @@ When {{USER_NAME}} says **"{{AGENT_NAME}}, work on taleemabad-core — [task]"**
 1. Create Notion Harness entry (FIRST — before anything). DB `{{config:NOTION_HARNESS_DB_ID}}`. Fields: Feature, Phase (Research→Planning→In Dev→Testing→Done/Blocked), Plan Summary, Jira Ticket, PR, Confidence 0–100, Last Activity.
 2. `cd {{config:TALEEMABAD_CORE_PATH}}`
 3. `git checkout develop && git pull origin develop`
-4. `git checkout -b kamil/<task-name>` — never work on develop.
+4. `git checkout -b varys/<task-name>` — never work on develop.
 5. `claude --dangerously-skip-permissions -p "/feature <task-name>"` from inside taleemabad-core → creates `.claude/features/YYYY-MM-DD-<name>/research.md` + `plan.md`.
 6. Review research.md + plan.md as engineering lead (not rubber-stamping): real root cause vs symptom? RIGHT solution not just A solution? risks/deps missed? If weak → fix plan.md or re-run /feature sharper; if a class of problem recurs → fix `.claude/commands/feature.md`. Update Harness entry.
 7. Approve + DM {{USER_NAME}}: "Plan approved. Approach: [what + why]. Starting /develop."

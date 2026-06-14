@@ -14,7 +14,7 @@ STATUS="ok"; [ "$RC" -ne 0 ] && STATUS="error"
 cd "$(dirname "$0")/.."  2>/dev/null
 python3 -c "
 import sys; sys.path.insert(0,'.claude/hooks')
-import kamil_log as k
+import varys_log as k
 k.klog_cron('$COMPONENT', status='$STATUS', duration_ms=$DUR, rc=$RC, error='''$TAIL'''[:500])
 " 2>/dev/null
 exit $RC

@@ -5,6 +5,6 @@ input: "what's the Harness DB ID?"
 expected:
   route: ".claude/rules/notion.md"
   must_load: ["notion.md"]
-  must_not_load: ["kamil_personality.md", "taleemabad.md", "content.md"]
+  must_not_load: ["varys_personality.md", "taleemabad.md", "content.md"]
   max_hops: 2
 quality_gate: PASS

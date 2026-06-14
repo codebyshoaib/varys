@@ -161,7 +161,7 @@ If any step fails, return:
             try:
                 req = urllib.request.Request(
                     result["export_url"],
-                    headers={"User-Agent": "kamil-content-pipeline/1.0"}
+                    headers={"User-Agent": "varys-content-pipeline/1.0"}
                 )
                 with urllib.request.urlopen(req, timeout=60) as resp:
                     Path(output_path).write_bytes(resp.read())

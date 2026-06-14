@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 """
-poll-harness-notion.py — Poll Kamil Harness Notion DB for new/updated tickets.
+poll-harness-notion.py — Poll Varys Harness Notion DB for new/updated tickets.
 
 Called once per /loop tick AFTER tick lock is acquired.
 Writes deterministic events to harness.db.
 
 Event types produced:
-  ticket.created  — new ticket assigned to Kamil (entity didn't exist before)
-  comment.tagged  — comment on a Notion page containing @Kamil
+  ticket.created  — new ticket assigned to Varys (entity didn't exist before)
+  comment.tagged  — comment on a Notion page containing @Varys
 
 Design rules:
   - Deterministic event IDs: "notion-<page_id>", "notion-comment-<comment_id>"
   - INSERT OR IGNORE — re-polling same window is always safe
-  - 350ms between Notion API calls via kamil_notion.notion_request()
+  - 350ms between Notion API calls via varys_notion.notion_request()
   - If this script exits non-zero: tick aborts, last_sync_at NOT updated
 """
 
@@ -24,16 +24,16 @@ from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from kamil_harness_db import get_db, register_entity
-from kamil_notion import notion_request
+from varys_harness_db import get_db, register_entity
+from varys_notion import notion_request
 try:
-    from kamil_log import klog, klog_error
+    from varys_log import klog, klog_error
 except Exception:
     klog = klog_error = lambda *a, **kw: None
 
 # ── Config ────────────────────────────────────────────────────────────────────
 NOTION_CFG = Path.home() / ".claude" / "hooks" / ".notion"
-HARNESS_CFG = Path.home() / ".kamil-harness" / "config.json"
+HARNESS_CFG = Path.home() / ".varys-harness" / "config.json"
 
 
 def _load_config() -> dict:
@@ -77,7 +77,7 @@ def poll_tickets(api_key: str, db_id: str, agent_user_id: str,
                  last_sync_at: str, db) -> list[dict]:
     """
     Query Notion DB for tickets modified since last_sync_at that are
-    assigned to Kamil OR have any status set.
+    assigned to Varys OR have any status set.
     Returns list of page dicts.
     """
     body = {
@@ -109,7 +109,7 @@ def poll_tickets(api_key: str, db_id: str, agent_user_id: str,
 
 
 def poll_comments(api_key: str, page_id: str, last_sync_at: str) -> list[dict]:
-    """Fetch comments on a page, filter to those after last_sync_at containing @Kamil."""
+    """Fetch comments on a page, filter to those after last_sync_at containing @Varys."""
     req = urllib.request.Request(
         f"https://api.notion.com/v1/comments?block_id={page_id}",
         headers=_notion_headers(api_key),
@@ -123,11 +123,11 @@ def poll_comments(api_key: str, page_id: str, last_sync_at: str) -> list[dict]:
     for c in comments:
         created = c.get("created_time", "")
         if created > last_sync_at:
-            # Check if any rich_text segment mentions @Kamil
+            # Check if any rich_text segment mentions @Varys
             texts = []
             for rt in c.get("rich_text", []):
                 texts.append(rt.get("plain_text", ""))
-            if any("aria" in t.lower() or "@aria" in t.lower() or "pr beacon" in t.lower() for t in texts):
+            if any("varys" in t.lower() or "@varys" in t.lower() or "pr beacon" in t.lower() for t in texts):
                 filtered.append(c)
     return filtered
 

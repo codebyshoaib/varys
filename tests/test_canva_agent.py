@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for kamil-canva-agent.py eval logic."""
+"""Tests for varys-canva-agent.py eval logic."""
 import sys
 import unittest
 from unittest.mock import MagicMock, patch
@@ -7,7 +7,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "agents"))
 
-from kamil_canva_agent import EvalScores, eval_passed, adjust_brief, pick_retry_hint
+from varys_canva_agent import EvalScores, eval_passed, adjust_brief, pick_retry_hint
 
 
 class TestEvalScores(unittest.TestCase):

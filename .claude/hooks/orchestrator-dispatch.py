@@ -23,20 +23,20 @@ from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from kamil_harness_db import get_db, get_linked_entities
-from kamil_notion import notion_request
+from varys_harness_db import get_db, get_linked_entities
+from varys_notion import notion_request
 try:
-    from kamil_log import klog, klog_error
+    from varys_log import klog, klog_error
 except Exception:
     klog = klog_error = lambda *a, **kw: None
 
 NOTION_CFG  = Path.home() / ".claude" / "hooks" / ".notion"
 SLACK_CFG   = Path.home() / ".claude" / "hooks" / ".slack"
-HARNESS_CFG = Path.home() / ".kamil-harness" / "config.json"
-WORKSPACE   = Path.home() / ".kamil-harness" / "workspace"
-KAMIL_DIR   = Path(__file__).parent.parent.parent
+HARNESS_CFG = Path.home() / ".varys-harness" / "config.json"
+WORKSPACE   = Path.home() / ".varys-harness" / "workspace"
+VARYS_DIR   = Path(__file__).parent.parent.parent
 
-SKILLS_DIR  = KAMIL_DIR / ".claude" / "commands"
+SKILLS_DIR  = VARYS_DIR / ".claude" / "commands"
 
 
 def _load_config() -> dict:
@@ -175,7 +175,7 @@ def _build_subagent_prompt(
 
     github_repo = cfg.get("GITHUB_REPO", "{{YOUR_GITHUB_ORG}}/{{YOUR_REPO}}")
 
-    return f"""You are Kamil, Taleemabad's AI engineer. You have been spawned to handle work.
+    return f"""You are Varys, Taleemabad's AI engineer. You have been spawned to handle work.
 
 SESSION ID: {session_id}
 CONTEXT KEY (Notion ticket entity): {context_key}
@@ -197,10 +197,10 @@ AVAILABLE SKILLS:
 RULES YOU MUST FOLLOW:
 1. PLAN-FIRST for all implementation work:
    - Step A: Read source code in workspace → draft implementation plan + define E2E test cases
-             → post plan to Slack thread with "Reply @Kamil go to proceed"
+             → post plan to Slack thread with "Reply @Varys go to proceed"
              → set Notion Status=Blocked → update session status='cancelled' in harness.db
              → exit (wait for human approval)
-   - Step B: Only when triggered by "@Kamil go" reply → implement per plan → run E2E tests
+   - Step B: Only when triggered by "@Varys go" reply → implement per plan → run E2E tests
              → if E2E pass: open PR → set Notion Status=Done LAST
              → if E2E fail after 5 attempts: open PR with failure report → Status=Blocked LAST
 
@@ -226,9 +226,9 @@ RULES YOU MUST FOLLOW:
 
 8. If you cannot proceed (need info, blocked):
    → explain in Slack → set Notion Status=Blocked → set session status='cancelled'
-   → next @Kamil reply will spawn a new session
+   → next @Varys reply will spawn a new session
 
-HARNESS DB: {Path.home() / '.kamil-harness' / 'harness.db'}
+HARNESS DB: {Path.home() / '.varys-harness' / 'harness.db'}
 GITHUB REPO: {github_repo}
 """
 
@@ -242,14 +242,14 @@ def _spawn_manager(
     github_pr,
 ) -> bool:
     """
-    Spawn kamil-manager.py Phase 1 instead of the old generic prompt.
+    Spawn varys-manager.py Phase 1 instead of the old generic prompt.
     Writes context to temp JSON files, calls manager with --phase manager.
     Returns True on success.
     """
     import tempfile
     import shutil
 
-    tmpdir = Path(tempfile.mkdtemp(prefix="kamil-dispatch-"))
+    tmpdir = Path(tempfile.mkdtemp(prefix="varys-dispatch-"))
     try:
         events_file  = tmpdir / "events.json"
         notion_file  = tmpdir / "notion.json"
@@ -261,7 +261,7 @@ def _spawn_manager(
         slack_file.write_text(json.dumps(slack_messages or []))
         github_file.write_text(json.dumps(github_pr or {}))
 
-        manager_script = Path(__file__).parent / "kamil-manager.py"
+        manager_script = Path(__file__).parent / "varys-manager.py"
         nvm_source = (
             'export NVM_DIR="$HOME/.nvm"; '
             '[ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"'
@@ -278,7 +278,7 @@ def _spawn_manager(
         )
         result = subprocess.run(
             ["bash", "-c", cmd],
-            cwd=str(KAMIL_DIR),
+            cwd=str(VARYS_DIR),
             capture_output=True,
             text=True,
             timeout=180,
@@ -385,7 +385,7 @@ def main() -> int:
         )
         db.commit()
 
-        # ── Step 6: Dispatch via kamil-manager.py ──
+        # ── Step 6: Dispatch via varys-manager.py ──
 
         # Check for go-signal — triggers Phase 2 worker
         go_events = [e for e in events if e["type"] == "message.go_signal"]
@@ -393,16 +393,16 @@ def main() -> int:
             go_payload = go_events[0]["payload"]
             worker_session_id = go_payload.get("session_id")
             if worker_session_id:
-                print(f"[dispatch] @Kamil go received — spawning worker for session {worker_session_id[:16]}")
+                print(f"[dispatch] @Varys go received — spawning worker for session {worker_session_id[:16]}")
                 nvm_source = 'export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"'
-                manager_script = KAMIL_DIR / ".claude" / "hooks" / "kamil-manager.py"
+                manager_script = VARYS_DIR / ".claude" / "hooks" / "varys-manager.py"
                 cmd = (
                     f'{nvm_source} && python3 {manager_script} '
                     f'--context-key "{context_key}" '
                     f'--session-id "{worker_session_id}" '
                     f'--phase worker'
                 )
-                subprocess.run(["bash", "-c", cmd], cwd=str(KAMIL_DIR),
+                subprocess.run(["bash", "-c", cmd], cwd=str(VARYS_DIR),
                                capture_output=True, text=True, timeout=600)
                 db.execute(
                     "UPDATE events SET status='done', processed_at=datetime('now') "
@@ -454,18 +454,18 @@ def main() -> int:
         if broker_script.exists():
             subprocess.run(
                 ["python3", str(broker_script)],
-                cwd=str(KAMIL_DIR), capture_output=True, text=True, timeout=60,
+                cwd=str(VARYS_DIR), capture_output=True, text=True, timeout=60,
             )
     except Exception as e:
         print(f"[dispatch] escalation-broker check failed: {e}", file=sys.stderr)
 
     # ── Evolution agent: fire if 3+ new failures ──
     try:
-        evo_script = Path(__file__).parent / "kamil-evolution-agent.py"
+        evo_script = Path(__file__).parent / "varys-evolution-agent.py"
         if evo_script.exists():
             subprocess.run(
                 ["python3", str(evo_script)],
-                cwd=str(KAMIL_DIR), capture_output=True, text=True, timeout=60,
+                cwd=str(VARYS_DIR), capture_output=True, text=True, timeout=60,
             )
     except Exception as e:
         print(f"[dispatch] evolution-agent check failed: {e}", file=sys.stderr)

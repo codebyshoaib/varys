@@ -1,7 +1,7 @@
 ---
 type: reference
 last_verified: 2026-06-01
-owner: kamil
+owner: varys
 ---
 
 # Retrieval Policy
@@ -17,7 +17,7 @@ owner: kamil
 - Any issue type → `.claude/rules/skills-router.md`
 
 ## L3 — only when blocked
-- The one doc that unblocks the task; max 2-3 per session. Personality → `vault/memory/kamil_personality.md`.
+- The one doc that unblocks the task; max 2-3 per session. Personality → `vault/memory/varys_personality.md`.
 
 ## Never auto-load
 - Archives, full changelogs, completed investigations, full work-log history.

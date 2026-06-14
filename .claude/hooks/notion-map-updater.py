@@ -24,12 +24,12 @@ try:
 except Exception:
     _cfg_map = lambda k, d=None: d
 try:
-    import kamil_log as _k
+    import varys_log as _k
 except Exception:
     _k = None
 
-KAMIL_DIR  = Path(__file__).parent.parent.parent
-MAP_FILE   = KAMIL_DIR / "vault" / "notion-map.md"
+VARYS_DIR  = Path(__file__).parent.parent.parent
+MAP_FILE   = VARYS_DIR / "vault" / "notion-map.md"
 HOOKS_DIR  = Path(__file__).parent
 
 # Known DB IDs with names — source of truth (normalized, no dashes)
@@ -46,7 +46,7 @@ KNOWN_DBS = {
     "630d86afb17746f9ad6f9bc78afefa02": "Content Log",
     # Page IDs
     "364d8747b3b1813d8ac8c248800f0a4d": "Kamal's Agent Brain (page)",
-    "365d8747b3b181b281b8ef5820e15881": "Kamil Self-Questions (page)",
+    "365d8747b3b181b281b8ef5820e15881": "Varys Self-Questions (page)",
     "369d8747b3b181d59775dcb4297d7dbd": "Master Plan / Freelance (page)",
     # Data source IDs
     "8749992f61404e728b487362533cb792": "Slack Inbox (data source)",
@@ -114,7 +114,7 @@ def daily_mode():
 
     # Scan hooks + root scripts for all DB IDs
     found_ids: dict[str, list[str]] = {}  # normalized_id -> [script names]
-    scan_dirs = [HOOKS_DIR, KAMIL_DIR]
+    scan_dirs = [HOOKS_DIR, VARYS_DIR]
     for scan_dir in scan_dirs:
         pattern = "*.py" if scan_dir == HOOKS_DIR else "*.sh"
         for script in scan_dir.glob(pattern):
@@ -159,10 +159,10 @@ def daily_mode():
 
     # Git commit
     try:
-        subprocess.run(["git", "add", str(MAP_FILE)], cwd=str(KAMIL_DIR), check=False)
+        subprocess.run(["git", "add", str(MAP_FILE)], cwd=str(VARYS_DIR), check=False)
         result = subprocess.run(
             ["git", "commit", "-m", f"chore: notion-map daily scan {ts}"],
-            cwd=str(KAMIL_DIR), capture_output=True, text=True, check=False
+            cwd=str(VARYS_DIR), capture_output=True, text=True, check=False
         )
         if result.returncode == 0:
             log("Committed updated map")

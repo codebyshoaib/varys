@@ -26,7 +26,7 @@ from datetime import datetime
 import sys as _sys, time as _time
 _sys.path.insert(0, str(__import__("pathlib").Path(__file__).parent))
 try:
-    import kamil_log as _k
+    import varys_log as _k
 except Exception:
     _k = None
 

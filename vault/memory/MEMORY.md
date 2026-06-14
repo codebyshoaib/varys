@@ -9,8 +9,8 @@ They are loaded at session start and help your agent understand who you are and 
 |------|---------------|
 | `user_profile.md` | Your name, role, preferences — edit after /setup |
 | `agent_personality.md` | How your agent talks and acts — customise freely |
-| `kamil_humor_profile.md` | Humor style — edit to your preference |
-| `kamil_face.md` | Visual identity — optional |
+| `varys_humor_profile.md` | Humor style — edit to your preference |
+| `varys_face.md` | Visual identity — optional |
 
 ## How to Add Your Own Memory
 

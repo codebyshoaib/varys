@@ -13,10 +13,10 @@ from unittest.mock import patch
 
 sys.path.insert(0, ".claude/hooks")
 
-# Load kamil-apply-learnings (hyphenated filename — can't use normal import)
+# Load varys-apply-learnings (hyphenated filename — can't use normal import)
 _spec = importlib.util.spec_from_file_location(
-    "kamil_apply_learnings",
-    Path(__file__).parent.parent / ".claude/hooks/kamil-apply-learnings.py",
+    "varys_apply_learnings",
+    Path(__file__).parent.parent / ".claude/hooks/varys-apply-learnings.py",
 )
 kal = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(kal)

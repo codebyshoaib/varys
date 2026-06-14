@@ -51,7 +51,7 @@ Wait for the user's reply. Store as USER_NAME.
 Say:
 ```
 Nice to meet you, [USER_NAME]! What do you want to call your agent?
-(e.g. Aria, Max, Nova, Atlas — pick anything you like)
+(e.g. Varys, Max, Nova, Atlas — pick anything you like)
 ```
 
 Wait for reply. Store as AGENT_NAME.

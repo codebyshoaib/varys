@@ -1,6 +1,6 @@
 ---
 type: reference
-owner: kamil
+owner: varys
 last_verified: 2026-06-08
 ---
 
@@ -9,7 +9,7 @@ last_verified: 2026-06-08
 Every agent that feeds another agent MUST return one of these schemas.
 The dispatcher validates before routing. Malformed output → escalation-broker fires.
 
-## Manager Phase 1 Output (kamil-manager.py → dispatcher)
+## Manager Phase 1 Output (varys-manager.py → dispatcher)
 
 ```json
 {

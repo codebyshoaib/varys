@@ -2,14 +2,14 @@ import sqlite3, os, sys, tempfile, json, time, uuid
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '.claude', 'hooks'))
 
 def make_test_db():
-    import kamil_context as kc
+    import varys_context as kc
     f = tempfile.NamedTemporaryFile(suffix='.db', delete=False)
     kc.HARNESS_DB = f.name
     kc.init_schema()
     return f.name
 
 def test_create_job_returns_id():
-    import kamil_context as kc
+    import varys_context as kc
     kc.HARNESS_DB = make_test_db()
     job_id = kc.create_job(
         event_id='evt_001',
@@ -24,14 +24,14 @@ def test_create_job_returns_id():
     assert len(job_id) == 64  # sha256 hex
 
 def test_create_job_idempotent():
-    import kamil_context as kc
+    import varys_context as kc
     kc.HARNESS_DB = make_test_db()
     id1 = kc.create_job(event_id='evt_002', source='slack_mention')
     id2 = kc.create_job(event_id='evt_002', source='slack_mention')
     assert id1 == id2
 
 def test_mark_job_delivered():
-    import kamil_context as kc
+    import varys_context as kc
     kc.HARNESS_DB = make_test_db()
     job_id = kc.create_job(event_id='evt_003', source='slack_mention')
     kc.mark_job_delivered(job_id)
@@ -42,7 +42,7 @@ def test_mark_job_delivered():
     assert row[1] is not None
 
 def test_mark_job_failed():
-    import kamil_context as kc
+    import varys_context as kc
     kc.HARNESS_DB = make_test_db()
     job_id = kc.create_job(event_id='evt_004', source='slack_mention')
     kc.mark_job_failed(job_id, 'no_url_in_context')
@@ -53,7 +53,7 @@ def test_mark_job_failed():
     assert row[1] == 'no_url_in_context'
 
 def test_get_stale_jobs():
-    import kamil_context as kc
+    import varys_context as kc
     kc.HARNESS_DB = make_test_db()
     job_id = kc.create_job(event_id='evt_005', source='slack_mention')
     # backdate created_at to simulate stale
@@ -66,7 +66,7 @@ def test_get_stale_jobs():
     assert any(j['id'] == job_id for j in stale)
 
 def test_mark_job_processing():
-    import kamil_context as kc
+    import varys_context as kc
     kc.HARNESS_DB = make_test_db()
     job_id = kc.create_job(event_id='evt_006', source='slack_mention')
     kc.mark_job_processing(job_id)
@@ -77,7 +77,7 @@ def test_mark_job_processing():
     assert row[1] is not None
 
 def test_log_suppression_writes_to_db():
-    import kamil_context as kc
+    import varys_context as kc
     kc.HARNESS_DB = make_test_db()
     kc.log_suppression(
         event_id='evt_sup_001',
@@ -95,7 +95,7 @@ def test_log_suppression_writes_to_db():
     assert row[0] == 'no_url_in_context'
 
 def test_log_milestone_updates_steps_done():
-    import kamil_context as kc
+    import varys_context as kc
     kc.HARNESS_DB = make_test_db()
     job_id = kc.create_job(event_id='evt_ms_001', source='slack_mention', steps_total=3)
     kc.log_milestone(job_id, 'fetch_thread', 1, 3, 'completed')
@@ -105,7 +105,7 @@ def test_log_milestone_updates_steps_done():
     assert row[0] == 1
 
 def test_extract_pr_url_from_trigger():
-    import kamil_context as kc
+    import varys_context as kc
     url = kc.extract_pr_url(
         trigger_text='please review https://github.com/{{YOUR_GITHUB_ORG}}/{{YOUR_REPO}}/pull/5151',
         thread_context=''
@@ -113,20 +113,20 @@ def test_extract_pr_url_from_trigger():
     assert url == 'https://github.com/{{YOUR_GITHUB_ORG}}/{{YOUR_REPO}}/pull/5151'
 
 def test_extract_pr_url_from_thread():
-    import kamil_context as kc
+    import varys_context as kc
     url = kc.extract_pr_url(
-        trigger_text='@Kamil review this PR',
+        trigger_text='@Varys review this PR',
         thread_context='[123.456] <U01>: https://github.com/{{YOUR_GITHUB_ORG}}/{{YOUR_REPO}}/pull/5151\n@channel Please review.'
     )
     assert url == 'https://github.com/{{YOUR_GITHUB_ORG}}/{{YOUR_REPO}}/pull/5151'
 
 def test_extract_pr_url_returns_none_when_missing():
-    import kamil_context as kc
+    import varys_context as kc
     url = kc.extract_pr_url(trigger_text='review this', thread_context='no url here')
     assert url is None
 
 def test_fetch_thread_context_returns_empty_on_failure():
-    import kamil_context as kc
+    import varys_context as kc
     kc.HARNESS_DB = make_test_db()
     class FakeWeb:
         def conversations_replies(self, **kwargs):
@@ -135,7 +135,7 @@ def test_fetch_thread_context_returns_empty_on_failure():
     assert result == ''
 
 def test_tracked_thread_marks_delivered():
-    import kamil_context as kc, time as _time
+    import varys_context as kc, time as _time
     kc.HARNESS_DB = make_test_db()
     job_id = kc.create_job(event_id='evt_tt_001', source='slack_mention')
     results = []
@@ -150,7 +150,7 @@ def test_tracked_thread_marks_delivered():
     assert row[0] == 'delivered'
 
 def test_tracked_thread_marks_failed_on_exception():
-    import kamil_context as kc
+    import varys_context as kc
     kc.HARNESS_DB = make_test_db()
     job_id = kc.create_job(event_id='evt_tt_002', source='slack_mention')
     def _work():
@@ -164,7 +164,7 @@ def test_tracked_thread_marks_failed_on_exception():
     assert 'boom' in row[1]
 
 def test_stale_job_checker_marks_timed_out():
-    import kamil_context as kc, time as _t, sqlite3
+    import varys_context as kc, time as _t, sqlite3
     kc.HARNESS_DB = make_test_db()
     job_id = kc.create_job(event_id='evt_stale_001', source='slack_mention')
     conn = sqlite3.connect(kc.HARNESS_DB)

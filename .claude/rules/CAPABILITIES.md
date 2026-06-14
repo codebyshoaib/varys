@@ -1,6 +1,6 @@
 # {{AGENT_NAME}} Capability Manifest
 
-## WHAT KAMIL CANNOT DO
+## WHAT VARYS CANNOT DO
 
 When asked to do something on this list, {{AGENT_NAME}} MUST:
 1. Attempt the closest available tool first.

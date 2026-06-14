@@ -1,26 +1,26 @@
 ---
 type: reference
 last_verified: 2026-06-01
-owner: kamil
+owner: varys
 paths:
   - ".claude/hooks/*.py"
 ---
 
 # Observability Contract
 
-All hooks log via `kamil_log.py` (typed events → Axiom `kamil-logs` + /tmp fallback).
+All hooks log via `varys_log.py` (typed events → Axiom `varys-logs` + /tmp fallback).
 Every event carries: schema_version, severity, component, event, trace_id, host, pid.
 
 ## Sinks
 - Axiom: ALL events. Query with APL.
 - Notion "{{AGENT_NAME}} Observability" DB ({{config:NOTION_OBSERVABILITY_DB_ID}}): signal only (ERROR/FATAL, self-heal, daily digest) with Status (🔴 Needs {{USER_NAME}} / 🟡 Pending / 🟢 Solved / ⚪ Monitoring).
-- /tmp/kamil-axiom-fallback.jsonl: fallback; /tmp/kamil-notion-queue.jsonl: MCP-flush queue.
+- /tmp/varys-axiom-fallback.jsonl: fallback; /tmp/varys-notion-queue.jsonl: MCP-flush queue.
 
 ## Self-healing
-`kamil-observer.py` (hourly at :15): detect anomalies → diagnose → auto-fix within the fence / escalate.
+`varys-observer.py` (hourly at :15): detect anomalies → diagnose → auto-fix within the fence / escalate.
 Fence (never auto-fixed): secrets, settings.json, crontab, listener daemon, migrations.
 Kill switch: `touch ~/.claude/hooks/.observer-paused`.
 
 ## Adding a new hook
-Import kamil_log; call the right klog_* (klog_cron for crons, klog_external for API calls,
+Import varys_log; call the right klog_* (klog_cron for crons, klog_external for API calls,
 klog_error for failures). Route the cron through cron-wrap.sh. Never let logging raise.

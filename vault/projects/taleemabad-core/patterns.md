@@ -16,7 +16,7 @@ updated: 2026-06-02
 - **Increment Dexie version on schema change**: any change to indexed fields or stores requires bumping `db.version(N)` in the frontend
 - **Include `profileId` in Dexie key AND filter**: every write in `api/teachertraining.ts` must scope to `profileId` in both the key and the query filter
 - **Feature branch → PR**: never push to `develop` or `main` directly
-- **Run `/feature` before `/develop`**: always research + plan with Kamil's approval before coding
+- **Run `/feature` before `/develop`**: always research + plan with Varys's approval before coding
 - **Log every bug** to `.claude/features/<feature>/bugs.md` with OPEN/FIXED status
 - **Confidence ≥ 86%** before marking a feature ready for PR
 
@@ -27,7 +27,7 @@ updated: 2026-06-02
 - **Forget `tenant_id` filter on GET** — every queryset must filter by tenant; missing this = data leak
 - **Work on `develop` branch directly** — always feature branch → PR → review → merge
 - **Use Haiku model** for taleemabad-core tasks — codebase is too large and complex; use Sonnet or higher
-- **Skip the harness** — no direct coding without `/feature` plan approval from Kamil
+- **Skip the harness** — no direct coding without `/feature` plan approval from Varys
 - **Mock the database in tests** — use Django test DB; only mock external APIs
 - **Leave `any` types in new Python code** — mypy strict; all new code must be fully typed
 

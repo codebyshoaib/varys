@@ -10,7 +10,7 @@ for y in .claude/evals/tasks/*.yaml; do
 done
 
 echo "== Tier-1: markdown frontmatter (rules/standards/memory) =="
-for f in .claude/rules/*.md .claude/standards/*.md vault/memory/kamil_personality.md; do
+for f in .claude/rules/*.md .claude/standards/*.md vault/memory/varys_personality.md; do
   [ -f "$f" ] || continue
   if head -1 "$f" | grep -q '^---'; then echo "  OK fm $f"; else echo "  FAIL no frontmatter: $f"; FAIL=1; fi
 done

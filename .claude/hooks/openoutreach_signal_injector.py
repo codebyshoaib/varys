@@ -38,7 +38,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 try:
-    from kamil_log import klog, klog_error
+    from varys_log import klog, klog_error
 except ImportError:
     def klog(event, **kw): pass
     def klog_error(context, exc, **kw): pass

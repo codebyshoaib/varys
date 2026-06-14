@@ -12,7 +12,7 @@ Daily pipeline at 11am PKT (6am UTC via cron):
   7. Slack DM: images + caption (fitness/tech) or script (vlog)
   8. Mark Done in Notion
 
-Cron: 0 6 * * * python3 .claude/hooks/content-scheduler.py >> /tmp/kamil-content.log 2>&1
+Cron: 0 6 * * * python3 .claude/hooks/content-scheduler.py >> /tmp/varys-content.log 2>&1
 """
 
 import copy
@@ -27,7 +27,7 @@ from datetime import datetime, date
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from kamil_log import klog, klog_error
+from varys_log import klog, klog_error
 
 # NLM fallback: Claude research + Canva infographic
 _SCRIPTS_DIR = Path(__file__).parent.parent.parent / "scripts"
@@ -57,7 +57,7 @@ CONTENT RULES (Emotional Content Playbook):
 # ─── Config ───────────────────────────────────────────────────────────────────
 
 HOOKS_DIR         = Path(__file__).parent
-KAMIL_DIR         = HOOKS_DIR.parent.parent
+VARYS_DIR         = HOOKS_DIR.parent.parent
 SLACK_CFG         = Path.home() / ".claude" / "hooks" / ".slack"
 KAMAL_DM          = os.environ.get("USER_SLACK_DM", "")  # set USER_SLACK_DM env var or ~/.agent-config.json
 NLM                  = os.environ.get("NLM_PATH", "/usr/local/bin/nlm")
@@ -66,7 +66,7 @@ NLM_PROFILE_PERSONAL = os.environ.get("NLM_PROFILE_PERSONAL", "default")  # set 
 NOTION_CONTENT_DB = os.environ.get("NOTION_CONTENT_DB_ID", "")  # set in ~/.agent-config.json
 NOTION_CONTENT_LOG = os.environ.get("NOTION_CONTENT_LOG_ID", "")  # Content Log DB — set in ~/.agent-config.json
 CANVA_BRAND_KIT_ID = os.environ.get("CANVA_BRAND_KIT_ID", "")
-CANVA_AGENT        = KAMIL_DIR / "agents" / "canva_agent.py"
+CANVA_AGENT        = VARYS_DIR / "agents" / "canva_agent.py"
 
 # Set your social handles — used when posting content
 HANDLES = {"fitness": "@{{YOUR_HANDLE}}", "tech": "@{{YOUR_HANDLE}}", "vlog": "@{{YOUR_HANDLE}}"}
@@ -253,7 +253,7 @@ def _notion_token() -> str:
             if line.startswith("NOTION_API_KEY="):
                 return line.split("=", 1)[1].strip()
     # 2. Check MCP settings
-    for path in [KAMIL_DIR / ".claude" / "settings.json",
+    for path in [VARYS_DIR / ".claude" / "settings.json",
                  Path.home() / ".claude" / "settings.json"]:
         if not path.exists():
             continue
@@ -715,11 +715,11 @@ def nlm_poll_and_send(nb_id: str, artifact_type: str, topic: str,
                                 slack_upload(
                                     token, outfile,
                                     title=f"{topic} — {artifact_type.replace('_', ' ')}",
-                                    comment=f"{icon} *{topic}* — {artifact_type.replace('_', ' ')}\n🤖 Kamil",
+                                    comment=f"{icon} *{topic}* — {artifact_type.replace('_', ' ')}\n🤖 Varys",
                                 )
                                 state[artifact_type] = "completed"
                             else:
-                                slack_dm(token, f"{icon} *{topic}* — {artifact_type} ready in NotebookLM (download failed)\n🤖 Kamil")
+                                slack_dm(token, f"{icon} *{topic}* — {artifact_type} ready in NotebookLM (download failed)\n🤖 Varys")
                                 state[artifact_type] = "download_failed"
                             _update_nlm_artifact_status(log_page_id, state)
                             return
@@ -740,7 +740,7 @@ def nlm_poll_and_send(nb_id: str, artifact_type: str, topic: str,
 # ─── Image generation ─────────────────────────────────────────────────────────
 
 def generate_image(topic: str, track: str) -> str | None:
-    outfile = f"/tmp/kamil-content-{datetime.now().strftime('%Y%m%d-%H%M%S')}.png"
+    outfile = f"/tmp/varys-content-{datetime.now().strftime('%Y%m%d-%H%M%S')}.png"
     palette = "fitness" if track == "fitness" else "tech"
     handle  = HANDLES.get(track, "@oykamal")
     gen     = str(HOOKS_DIR / "image_generator.py")
@@ -961,14 +961,14 @@ def run_nlm_with_profile_fallback(token: str, topic: str, track: str) -> tuple[s
     slack_dm(token,
         f"⚠️ *Both NLM accounts quota-exhausted for {track}*\n"
         f"Topic: *{topic}*\n"
-        f"Caption will still go out — no infographic today for this track.\n🤖 Kamil")
+        f"Caption will still go out — no infographic today for this track.\n🤖 Varys")
     return None, "", {}
 
 
 # ─── Canva ───────────────────────────────────────────────────────────────────
 
 def run_canva_designs(topic: str, copy: str, content_db_ref: str = "") -> dict:
-    """Run kamil-canva-agent for all formats. Returns results dict."""
+    """Run varys-canva-agent for all formats. Returns results dict."""
     if not CANVA_BRAND_KIT_ID:
         klog("canva_skip", msg="CANVA_BRAND_KIT_ID not set — skipping Canva designs")
         return {}
@@ -1053,7 +1053,7 @@ def canva_infographic_from_nlm_insights(topic: str, track: str,
         if result.get("export_url"):
             slack_dm(token,
                 f"🖼️ *Canva infographic (NLM fallback):* {topic}\n"
-                f"View: {result['export_url']}\n🤖 Kamil")
+                f"View: {result['export_url']}\n🤖 Varys")
         return None
     except Exception as e:
         print(f"[scheduler] Canva infographic exception: {e}")
@@ -1071,7 +1071,7 @@ def _canva_fallback_thread(topic: str, track: str, nlm_insights: str,
             comment=(
                 f"🖼️ *{topic}* — infographic\n"
                 f"_(NLM rate-limited → generated via Canva using NLM research insights)_\n"
-                f"🤖 Kamil"
+                f"🤖 Varys"
             ),
         )
         print(f"[scheduler] Canva fallback uploaded to Slack: {local_path}")
@@ -1090,7 +1090,7 @@ def run_fitness_or_tech(track: str, token: str):
     if not result:
         slack_dm(token,
             f"📅 *{track} content* — no Pending topics in Notion Content Calendar.\n"
-            f"Add topics with Status=Pending, Track={track}\n🤖 Kamil")
+            f"Add topics with Status=Pending, Track={track}\n🤖 Varys")
         return
 
     page_id, topic, post_type, score, reason, existing_nb_id = result
@@ -1099,7 +1099,7 @@ def run_fitness_or_tech(track: str, token: str):
     slack_dm(token,
         f"🚀 *{track} pipeline started* — *{topic}*\n"
         f"Score: {score}/100 | {reason}\n"
-        f"Checking NLM notebooks + generating...\n🤖 Kamil")
+        f"Checking NLM notebooks + generating...\n🤖 Varys")
 
     # NLM pipeline — try work profile first, personal profile second, skip visuals if both exhausted
     # If Notion has a stored notebook ID, try to reuse it on the work profile first
@@ -1158,7 +1158,7 @@ def run_fitness_or_tech(track: str, token: str):
         f"{li_line}{nb_line}"
         f"{li_section}\n\n"
         f"*Instagram/TikTok caption:*\n{caption}\n\n"
-        f"📱 Post to Instagram + TikTok\n🤖 Kamil")
+        f"📱 Post to Instagram + TikTok\n🤖 Varys")
 
     # Extract hashtags from caption for logging
     hashtag_line = " ".join(w for w in caption.split() if w.startswith("#"))
@@ -1227,7 +1227,7 @@ def run_fitness_or_tech(track: str, token: str):
          topic=topic, track=track, score=score,
          linkedin=bool(li_result), nlm=bool(nb_id))
 
-    # Seed brain.db — Kamil learns from his own research, not just posts it
+    # Seed brain.db — Varys learns from his own research, not just posts it
     if nb_id and nlm_insights:
         try:
             from brain_seed_from_content import seed_from_nlm_insights
@@ -1246,7 +1246,7 @@ def run_vlog(token: str):
     if not result:
         slack_dm(token,
             "📅 *Vlog* — no Pending topics in Notion Content Calendar.\n"
-            "Add topics with Track=vlog, Status=Pending\n🤖 Kamil")
+            "Add topics with Track=vlog, Status=Pending\n🤖 Varys")
         return
 
     page_id, topic, _, score, reason, _ = result
@@ -1261,7 +1261,7 @@ def run_vlog(token: str):
         f"🎬 *Vlog script ready — {topic}*\n"
         f"Score: {score}/100 — {reason}\n\n"
         f"{script}\n\n"
-        f"📱 Film today → post to YouTube/TikTok/Reels/Shorts\n🤖 Kamil")
+        f"📱 Film today → post to YouTube/TikTok/Reels/Shorts\n🤖 Varys")
 
     # Log vlog to Content Log — get back page ID for backlink
     log_page_id = log_to_content_log(
@@ -1325,5 +1325,5 @@ if __name__ == "__main__":
         token = load_slack_token()
         slack_dm(token,
             f"⚠️ *Content scheduler crashed*: {e}\n"
-            f"Check: tail -50 /tmp/kamil-content.log\n🤖 Kamil")
+            f"Check: tail -50 /tmp/varys-content.log\n🤖 Varys")
         raise

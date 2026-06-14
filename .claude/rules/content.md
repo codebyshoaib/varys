@@ -1,7 +1,7 @@
 ---
 type: router
 last_verified: 2026-06-01
-owner: kamil
+owner: varys
 paths:
   - ".claude/hooks/content-scheduler.py"
   - ".claude/hooks/image_generator.py"
@@ -19,4 +19,4 @@ Daily LinkedIn/social pipeline runs via `content-scheduler.py` (cron 8am, see cr
 | `vault/memory/project_oykamal_content.md` | 3 channels (vlog/fitness/tech), what works, topic rules |
 | `vault/memory/feedback_content_creation.md` | 4-part viral structure, hook templates, cut markers, what NOT to do |
 
-Pipeline: Notion topics → NotebookLM research → `image_generator.py` → `linkedin_poster.py`. Log: `/tmp/kamil-content.log`.
+Pipeline: Notion topics → NotebookLM research → `image_generator.py` → `linkedin_poster.py`. Log: `/tmp/varys-content.log`.

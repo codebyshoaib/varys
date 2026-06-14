@@ -22,11 +22,11 @@ from datetime import datetime
 from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).parent))
-from kamil_log import klog, klog_error
+from varys_log import klog, klog_error
 
 OPENOUTREACH_DB  = Path.home() / ".openoutreach" / "data" / "db.sqlite3"
-STATE_FILE       = Path("/tmp/kamil-openoutreach-state.json")
-KAMIL_DIR        = Path(__file__).parent.parent.parent
+STATE_FILE       = Path("/tmp/varys-openoutreach-state.json")
+VARYS_DIR        = Path(__file__).parent.parent.parent
 KAMAL_DM         = os.environ.get("USER_SLACK_DM", "")  # set USER_SLACK_DM in ~/.agent-config.json
 JOBS_DB          = "0d69c6ff-83d8-44c7-94c2-d341c4ded8d7"
 
@@ -90,11 +90,11 @@ Properties:
 Reply only "ok"."""
 
     env = os.environ.copy()
-    env["KAMIL_LINKEDIN_PROMPT"] = prompt
+    env["VARYS_LINKEDIN_PROMPT"] = prompt
     nvm = 'export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"'
     subprocess.Popen(
-        ["bash", "-c", f'{nvm} && claude --dangerously-skip-permissions --print -p "$KAMIL_LINKEDIN_PROMPT"'],
-        cwd=str(KAMIL_DIR), env=env,
+        ["bash", "-c", f'{nvm} && claude --dangerously-skip-permissions --print -p "$VARYS_LINKEDIN_PROMPT"'],
+        cwd=str(VARYS_DIR), env=env,
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         start_new_session=True,
     )
@@ -247,7 +247,7 @@ def run(token: str) -> int:
         if len(new_connections) > 5:
             lines.append(f"_(+{len(new_connections)-5} more — check Notion Job Tracker)_")
 
-        lines.append("_Reply \"followup [name]\" and I'll write a message._\n🤖 Kamil")
+        lines.append("_Reply \"followup [name]\" and I'll write a message._\n🤖 Varys")
         slack_dm(token, "\n".join(lines))
 
     # New inbound replies
@@ -281,7 +281,7 @@ def run(token: str) -> int:
             seen_replies.add(str(r["id"]))
             new_events += 1
         lines.append("\n_Check OpenOutreach admin to respond: http://localhost:8000/admin_")
-        lines.append("🤖 Kamil")
+        lines.append("🤖 Varys")
         slack_dm(token, "\n".join(lines))
 
     # Log new connections and replies to Axiom

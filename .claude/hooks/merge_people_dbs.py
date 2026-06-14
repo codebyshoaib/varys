@@ -50,7 +50,7 @@ def _get_api_key() -> str:
     return key
 
 def _fetch_db_pages(db_id: str) -> list:
-    from kamil_notion import notion_request
+    from varys_notion import notion_request
     api_key = _get_api_key()
     results, cursor = [], None
     while True:
@@ -129,7 +129,7 @@ def print_report(matches: list):
     print(f"\n---\nReview fuzzy matches carefully. Run with --write only after approval.")
 
 def do_write(matches: list):
-    from kamil_notion import notion_request
+    from varys_notion import notion_request
     api_key = _get_api_key()
 
     def _patch(page_id, updates):

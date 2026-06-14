@@ -1,5 +1,5 @@
 # Content Creation Rules
-> Kamil reads this before generating ANY social media content. No exceptions.
+> Varys reads this before generating ANY social media content. No exceptions.
 > Last updated: 2026-05-28
 
 ---

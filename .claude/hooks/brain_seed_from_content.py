@@ -13,7 +13,7 @@ What it writes to brain.db:
   - facts: key_insight, pattern, tool_mentioned, lesson, source_notebook
   - links: learning → concept/tool entities (creates them if missing)
 
-This is how Kamil learns from his own research instead of discarding it.
+This is how Varys learns from his own research instead of discarding it.
 """
 
 import argparse
@@ -26,13 +26,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from kamil_brain import get_brain_db, upsert_entity, write_fact, write_link, find_entity
-from kamil_log import klog, klog_error
+from varys_brain import get_brain_db, upsert_entity, write_fact, write_link, find_entity
+from varys_log import klog, klog_error
 
 NLM         = "/home/oye/.local/bin/nlm"
 NLM_PROFILE = os.environ.get("NLM_PROFILE", "work")
 
-# Notebooks that are high-value for Kamil's self-improvement as an agent.
+# Notebooks that are high-value for Varys's self-improvement as an agent.
 # These get seeded automatically when this script is run standalone (daily cron).
 PRIORITY_NOTEBOOKS = {
     "1ba69f8c-06cd-427d-bac8-d0f6ca855961": ("The harness I built so I never write the same code twice", "tech"),
@@ -66,7 +66,7 @@ def query_notebook_for_brain(nb_id: str, topic: str) -> dict:
         f"1. key_insights: list of 5 specific, concrete facts or principles (each max 20 words)\n"
         f"2. patterns: list of 3 reusable architectural or behavioral patterns discovered\n"
         f"3. tools_mentioned: list of specific tools, libraries, or systems referenced\n"
-        f"4. lessons_learned: list of 3 lessons that should change how Kamil builds agents\n"
+        f"4. lessons_learned: list of 3 lessons that should change how Varys builds agents\n"
         f"5. one_line_summary: single sentence summarising the most important takeaway\n\n"
         f"Output ONLY valid JSON with these exact keys. No explanation."
     )
@@ -150,7 +150,7 @@ def seed_from_nlm_insights(topic: str, track: str, nb_id: str,
 
     ok = _write_to_brain(topic, track, nb_id, structured, session_id, source="content_pipeline")
     if ok:
-        # Application Agent: what should Kamil build given what he just learned?
+        # Application Agent: what should Varys build given what he just learned?
         try:
             import threading
             threading.Thread(
@@ -300,9 +300,9 @@ def seed_priority_notebooks():
 
 
 def _run_application_agent():
-    """Fire kamil-apply-learnings in the same process environment. Non-blocking (called in thread)."""
+    """Fire varys-apply-learnings in the same process environment. Non-blocking (called in thread)."""
     try:
-        apply_mod_path = Path(__file__).parent / "kamil-apply-learnings.py"
+        apply_mod_path = Path(__file__).parent / "varys-apply-learnings.py"
         if apply_mod_path.exists():
             subprocess.run(
                 ["python3", str(apply_mod_path), "--days", "1"],
@@ -313,7 +313,7 @@ def _run_application_agent():
             sys.path.insert(0, str(Path(__file__).parent))
             import importlib.util
             spec = importlib.util.spec_from_file_location(
-                "kamil_apply_learnings", apply_mod_path
+                "varys_apply_learnings", apply_mod_path
             )
             mod = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(mod)

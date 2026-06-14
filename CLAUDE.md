@@ -10,7 +10,7 @@
 
 | Looking for… | Go to… |
 |---|---|
-| Who Aria is / personality / humor | `vault/memory/kamil_personality.md` |
+| Who Varys is / personality / humor | `vault/memory/varys_personality.md` |
 | Notion DB IDs + MCP queries | `.claude/rules/notion.md` |
 | Slack send/lookup patterns | `.claude/rules/slack.md` |
 | Working on taleemabad-core (STOP protocol) | `.claude/rules/taleemabad.md` |
@@ -35,9 +35,9 @@
 
 ```
 Notion (brain)   → 8 DBs (see .claude/rules/notion.md)
-Slack (feed)     → slack-poller.py every 30min → /tmp/kamil-slack-inbox.json → summary DM
-kamil-listener   → Socket Mode daemon (@reboot); DMs + @Shoaib's PR Beacon mentions; runs `claude -p` IN THIS REPO
-                   → so this harness upgrades every Slack/cron Aria response
+Slack (feed)     → slack-poller.py every 30min → /tmp/varys-slack-inbox.json → summary DM
+varys-listener   → Socket Mode daemon (@reboot); DMs + @Shoaib's PR Beacon mentions; runs `claude -p` IN THIS REPO
+                   → so this harness upgrades every Slack/cron Varys response
 SessionStart hook→ surfaces unsynced Slack items + tells Claude to fetch Notion via MCP
 Stop hook        → writes Work Log to Notion + commits vault/logs
 Job Hunter       → job-finder.py cron; internet-scanner; auto-apply (score≥75); OpenOutreach monitor
@@ -48,17 +48,17 @@ Team Orchestrator→ /loop 270s — see .claude/rules/orchestrator.md for full r
 ## Team Orchestrator (/loop — 270s tick, never change interval without asking Shoaib Ud Din)
 
 ```
-1. kamil_harness_db: acquire tick lock → read last_sync_at
+1. varys_harness_db: acquire tick lock → read last_sync_at
    (if lock held: exit immediately — another tick is running)
-2. poll-harness-notion.py  → Notion Harness DB: new/updated tickets assigned to Aria
+2. poll-harness-notion.py  → Notion Harness DB: new/updated tickets assigned to Varys
 3. poll-eng-slack.py       → #engineering-* channels: @Shoaib's PR Beacon mentions (SLACK_USER_TOKEN)
 4. poll-taleemabad-github.py → taleemabad-core: PRs on agent branches (entity-filtered)
    (if ANY poller fails: release lock, abort — do NOT update last_sync_at)
 5. orchestrator-dispatch.py → group pending events by context_key → spawn subagents
-6. kamil_harness_db: set last_sync_at=now → release tick lock
+6. varys_harness_db: set last_sync_at=now → release tick lock
 ```
 
-Detail: `.claude/rules/orchestrator.md` · DB: `~/.kamil-harness/harness.db`
+Detail: `.claude/rules/orchestrator.md` · DB: `~/.varys-harness/harness.db`
 
 ## NotebookLM (Slack "nlm" prefix)
 `nlm list | ask [nb] [q] | research [topic] | create | podcast | brief | debate | slides | mindmap | quiz`.

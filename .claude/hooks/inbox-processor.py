@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
-inbox-processor.py — Process queued messages for Kamil.
+inbox-processor.py — Process queued messages for Varys.
 
-Reads ~/kamil-inbox/*.json, spins a claude session per message,
+Reads ~/varys-inbox/*.json, spins a claude session per message,
 posts response to Kamal via Slack DM, marks message as done.
 
 Run manually:
   python3 .claude/hooks/inbox-processor.py
 
-Called automatically by kamil-daily.sh at the start of each loop.
+Called automatically by varys-daily.sh at the start of each loop.
 
 Config files (same as slack-poller.py):
   ~/.claude/hooks/.notion   →  NOTION_API_KEY=secret_...
@@ -25,13 +25,13 @@ import sys as _sys, time as _time
 _sys.path.insert(0, str(Path(__file__).parent))
 from agent_config import cfg
 try:
-    import kamil_log as _k
+    import varys_log as _k
 except Exception:
     _k = None
 
-INBOX_DIR = Path.home() / "kamil-inbox"
-KAMIL_DIR = Path(__file__).parent.parent.parent  # personal-agent-v2/
-LOG_FILE = Path("/tmp/kamil-inbox-processor.log")
+INBOX_DIR = Path.home() / "varys-inbox"
+VARYS_DIR = Path(__file__).parent.parent.parent  # personal-agent-v2/
+LOG_FILE = Path("/tmp/varys-inbox-processor.log")
 
 NOTION_BRAIN_PAGE_ID = "364d8747b3b1813d8ac8c248800f0a4d"
 KAMAL_SLACK_ID = cfg("USER_SLACK_ID", "")
@@ -88,7 +88,7 @@ def build_prompt(message: dict) -> str:
     if project:
         project_context = f"\nContext: Kamal was working in project '{project}' (path: {cwd}) when he sent this."
 
-    return f"""You are Kamil, Kamal's autonomous personal agent.
+    return f"""You are Varys, Kamal's autonomous personal agent.
 
 Kamal has a question or message for you (sent via {source}):
 
@@ -101,7 +101,7 @@ Your job:
    If the question is about a specific project ({project or 'check the context'}), read that project's harness too.
 2. Send your response as a Slack DM to Kamal (Slack user ID: {KAMAL_SLACK_ID}).
    Keep the response direct and specific — show you actually checked Notion data, not just guessing.
-   Sign off as: Kamil 🤖
+   Sign off as: Varys 🤖
 3. Log this conversation to Notion Work Log with title: "Kamal asked: {text[:60]}"
 
 Rules:
@@ -160,17 +160,17 @@ def process_message(inbox_file: Path) -> bool:
     # Load NVM so claude is available
     nvm_source = 'export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"'
 
-    cmd = f'{nvm_source} && claude --dangerously-skip-permissions --print -p "$KAMIL_PROMPT"'
+    cmd = f'{nvm_source} && claude --dangerously-skip-permissions --print -p "$VARYS_PROMPT"'
 
     env = os.environ.copy()
-    env["KAMIL_PROMPT"] = prompt
+    env["VARYS_PROMPT"] = prompt
 
     try:
         result = subprocess.run(
             ["bash", "-c", cmd],
             capture_output=True,
             text=True,
-            cwd=str(KAMIL_DIR),
+            cwd=str(VARYS_DIR),
             timeout=300,
             env=env,
         )

@@ -36,14 +36,14 @@ from datetime import datetime
 from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).parent))
-from kamil_log import klog, klog_error
+from varys_log import klog, klog_error
 
 # DB is at ~/.openoutreach/data/db.sqlite3 on the host.
 # This is a Docker bind-mount of /app/data inside the openoutreach container.
 # Verified: docker inspect shows /home/oye/.openoutreach/data -> /app/data
 OPENOUTREACH_DB  = Path.home() / ".openoutreach" / "data" / "db.sqlite3"
-STATE_FILE       = Path("/tmp/kamil-openoutreach-state.json")
-KAMIL_DIR        = Path(__file__).parent.parent.parent
+STATE_FILE       = Path("/tmp/varys-openoutreach-state.json")
+VARYS_DIR        = Path(__file__).parent.parent.parent
 KAMAL_DM         = os.environ.get("USER_SLACK_DM", "")  # set USER_SLACK_DM in ~/.agent-config.json
 JOBS_DB          = "0d69c6ff-83d8-44c7-94c2-d341c4ded8d7"
 SLACK_CONFIG     = Path.home() / ".claude" / "hooks" / ".slack"
@@ -281,7 +281,7 @@ def handle_inbound_replies(conn, token: str, seen_reply_ids: set) -> tuple[list[
             "",
             pause_note,
             f'Reply *"followup {handle}"* and I\'ll send this. Or respond manually on LinkedIn.',
-            "🤖 Kamil",
+            "🤖 Varys",
         ]
         slack_dm(token, "\n".join(lines))
 
@@ -318,7 +318,7 @@ def check_stuck_tasks(conn, token: str):
         slack_dm(token,
             f"⚠️ *OpenOutreach: {stuck} tasks are stuck* (pending but never started).\n"
             f"The daemon may have stopped. Check: `docker logs openoutreach --tail 20`\n"
-            f"Restart if needed: `docker restart openoutreach`\n🤖 Kamil"
+            f"Restart if needed: `docker restart openoutreach`\n🤖 Varys"
         )
 
 
@@ -344,11 +344,11 @@ def save_linkedin_lead_to_notion(name: str, title: str, company: str,
         f"Properties:\n{json.dumps(props, indent=2)}\nReply only \"ok\"."
     )
     env = os.environ.copy()
-    env["KAMIL_LINKEDIN_PROMPT"] = prompt
+    env["VARYS_LINKEDIN_PROMPT"] = prompt
     nvm = 'export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"'
     subprocess.Popen(
-        ["bash", "-c", f'{nvm} && claude --dangerously-skip-permissions --print -p "$KAMIL_LINKEDIN_PROMPT"'],
-        cwd=str(KAMIL_DIR), env=env,
+        ["bash", "-c", f'{nvm} && claude --dangerously-skip-permissions --print -p "$VARYS_LINKEDIN_PROMPT"'],
+        cwd=str(VARYS_DIR), env=env,
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         start_new_session=True,
     )
@@ -393,7 +393,7 @@ def handle_new_connections(conn, token: str, seen_connected_ids: set) -> tuple[l
 
         if len(new_rows) > 5:
             lines.append(f"_(+{len(new_rows)-5} more — check Notion Job Tracker)_")
-        lines.append('_Reply "followup [name]" and I\'ll write a value-first message._\n🤖 Kamil')
+        lines.append('_Reply "followup [name]" and I\'ll write a value-first message._\n🤖 Varys')
         slack_dm(token, "\n".join(lines))
 
     return list(seen_connected_ids), new_events

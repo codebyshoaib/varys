@@ -3,7 +3,7 @@
 import json, re, sys
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).parent))
 try:
-    import kamil_log as _k
+    import varys_log as _k
 except Exception:
     _k = None
 
@@ -18,14 +18,14 @@ def main():
         (r"\brm\s+-rf\s+(~|/home/oye|\$HOME)(/\s|/?$|\s|$)",
          "Blocked: rm -rf on home root. Target a specific subdirectory."),
         (r"\brm\s+-rf\s+([^|&;]*/)?vault(/\s|/?$|\s|$)",
-         "Blocked: rm -rf on the vault. The vault is Kamil's memory — delete specific files only."),
+         "Blocked: rm -rf on the vault. The vault is Varys's memory — delete specific files only."),
         (r"git\s+push\b[^|&;]*--force[^|&;]*\b(master|main)\b|git\s+push\b[^|&;]*\bmaster\b[^|&;]*--force",
          "Blocked: force-push to master/main. Use a branch + PR."),
         (r"git\s+add\b[^|&;]*(\.slack|\.env)\b",
          "Blocked: staging a secrets file (.slack/.env). Stage explicit non-secret paths."),
         (r"git\s+add\s+(-A|--all|\.)(\s|$)",
          "Blocked: `git add -A`/`git add .` can stage secrets. Stage explicit paths instead."),
-        (r"\b(pkill|kill(all)?)\b[^|&;]*kamil-slack-listener",
+        (r"\b(pkill|kill(all)?)\b[^|&;]*varys-slack-listener",
          "Blocked: killing the Slack listener daemon. Stop it deliberately if truly intended."),
     ]
     for pattern, msg in blocks:

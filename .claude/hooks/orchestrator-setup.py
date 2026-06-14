@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-orchestrator-setup.py — One-time setup for Kamil's team orchestrator.
+orchestrator-setup.py — One-time setup for Varys's team orchestrator.
 
 Run manually: python3 .claude/hooks/orchestrator-setup.py
 
 Checks:
-  1. ~/.kamil-harness/ directory + harness.db schema
-  2. ~/.kamil-harness/workspace/ (taleemabad-core checkout)
+  1. ~/.varys-harness/ directory + harness.db schema
+  2. ~/.varys-harness/workspace/ (taleemabad-core checkout)
   3. Required env vars in config files
   4. Required Notion DB properties exist
   5. Test tick (dry run) to verify pollers can connect
@@ -22,19 +22,19 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from agent_config import cfg as _cfg
-from kamil_harness_db import get_db, HARNESS_DIR, HARNESS_DB
+from varys_harness_db import get_db, HARNESS_DIR, HARNESS_DB
 
 WORKSPACE = HARNESS_DIR / "workspace"
 CONFIG    = HARNESS_DIR / "config.json"
 
 REQUIRED_VARS = [
     ("NOTION_API_KEY",       "~/.claude/hooks/.notion"),
-    ("NOTION_DATABASE_ID",   "~/.kamil-harness/config.json (or use default)"),
-    ("NOTION_AGENT_USER_ID", "~/.kamil-harness/config.json"),
+    ("NOTION_DATABASE_ID",   "~/.varys-harness/config.json (or use default)"),
+    ("NOTION_AGENT_USER_ID", "~/.varys-harness/config.json"),
     ("SLACK_BOT_TOKEN",      "~/.claude/hooks/.slack as BOT_TOKEN= or SLACK_BOT_TOKEN="),
     ("SLACK_USER_TOKEN",     "~/.claude/hooks/.slack as SLACK_USER_TOKEN= (xoxp- user token)"),
-    ("GITHUB_TOKEN",         "~/.kamil-harness/config.json"),
-    ("GITHUB_AGENT_LOGIN",   "~/.kamil-harness/config.json"),
+    ("GITHUB_TOKEN",         "~/.varys-harness/config.json"),
+    ("GITHUB_AGENT_LOGIN",   "~/.varys-harness/config.json"),
 ]
 
 REQUIRED_NOTION_PROPS = [
@@ -72,7 +72,7 @@ def _load_all_config() -> dict:
 
 
 def main():
-    print("\n🔧  Kamil Team Orchestrator — Setup Check\n")
+    print("\n🔧  Varys Team Orchestrator — Setup Check\n")
     results = []
 
     # 1. DB
