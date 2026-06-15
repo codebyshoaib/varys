@@ -66,6 +66,12 @@
             "type": "command",
             "command": "python3 .claude/hooks/stop.py",
             "timeout": 30
+          },
+          {
+            "type": "command",
+            "command": "python3 .claude/hooks/varys-brain-watcher.py",
+            "timeout": 90,
+            "statusMessage": "Indexing session into Brain..."
           }
         ]
       }
