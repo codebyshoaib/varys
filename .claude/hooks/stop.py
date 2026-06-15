@@ -38,13 +38,25 @@ def git_commit(workspace_root: Path) -> bool:
     Stage and commit all changes with timestamp.
     """
     today = datetime.now().strftime("%Y-%m-%d")
-    message = f"log: session {today}"
 
     # Add all changes
     success, output = run_cmd(["git", "add", "-A"], cwd=str(workspace_root))
     if not success:
         print(f"[stop] Git add failed: {output}", file=sys.stderr)
         return False
+
+    # Check what's staged — skip if nothing
+    _, staged = run_cmd(["git", "diff", "--cached", "--name-only"], cwd=str(workspace_root))
+    files = [f.strip() for f in staged.strip().splitlines() if f.strip()]
+    if not files:
+        print("[stop] Nothing to commit", file=sys.stderr)
+        return True
+
+    # Build a descriptive message from changed files
+    summary = ", ".join(files[:4])
+    if len(files) > 4:
+        summary += f" +{len(files)-4} more"
+    message = f"log: {today} — {summary}"
 
     # Only commit if there's something staged
     success, output = run_cmd(["git", "commit", "-m", message], cwd=str(workspace_root))
