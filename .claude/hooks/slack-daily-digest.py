@@ -291,7 +291,7 @@ def build_summary_dm(person_updates: list[dict], total_msgs: int,
 
 def main():
     slack_cfg     = load_config(SLACK_CONFIG)
-    token         = slack_cfg.get("SLACK_TOKEN") or os.environ.get("SLACK_TOKEN")
+    token         = slack_cfg.get("SLACK_USER_TOKEN") or slack_cfg.get("SLACK_TOKEN") or os.environ.get("SLACK_TOKEN")
     bot_token     = slack_cfg.get("BOT_TOKEN")   or os.environ.get("BOT_TOKEN")
     notion_token  = os.environ.get("NOTION_API_KEY") or slack_cfg.get("NOTION_API_KEY")
     user_slack_id = cfg("USER_SLACK_ID", "")
