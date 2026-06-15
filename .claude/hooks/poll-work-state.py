@@ -4,7 +4,7 @@ poll-work-state.py — Every 30min cron.
 Captures Shoaib's active work state: branch + PRs + commits + Harness tickets.
 Output: /tmp/varys-work-state.json  ← read by session-start.py at every session.
 """
-import json, subprocess, sys, urllib.request
+import json, os, subprocess, sys
 from datetime import datetime
 from pathlib import Path
 
@@ -19,50 +19,36 @@ OUTPUT    = Path("/tmp/varys-work-state.json")
 CORE_PATH = Path(cfg("TALEEMABAD_CORE_PATH", str(Path.home() / "Taleemabad" / "taleemabad-core")))
 
 
-def _notion_token() -> str:
-    cfg_file = Path.home() / ".claude" / "hooks" / ".notion"
-    if cfg_file.exists():
-        for line in cfg_file.read_text().splitlines():
-            if line.startswith("NOTION_API_KEY="):
-                return line.split("=", 1)[1].strip()
-    return ""
+
+NVM      = 'export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"'
+VARYS_DIR = Path(__file__).parent.parent.parent
+
+HARNESS_PROMPT = """Query the Notion Harness DB (de10157da3e34ef58a74ea240f31fe98) for tickets where Phase is In Progress, In Dev, or Blocked. Use mcp__claude_ai_Notion__notion-search on the data source collection://a173fd5a-b953-4a53-a020-4545db41ccb5.
+
+Output ONLY a JSON array, no prose:
+[{"title": "...", "phase": "...", "pr": "...", "jira": "...", "plan": "..."}]
+
+Empty array if none found."""
 
 
 def fetch_harness_active() -> list:
-    token = _notion_token()
-    if not token:
-        return []
-    db_id = cfg("NOTION_HARNESS_DB_ID", "de10157da3e34ef58a74ea240f31fe98")
+    env = os.environ.copy()
+    env["VARYS_PROMPT"] = HARNESS_PROMPT
     try:
-        data = json.dumps({
-            "filter": {"or": [
-                {"property": "Phase", "select": {"equals": "In Progress"}},
-                {"property": "Phase", "select": {"equals": "In Dev"}},
-                {"property": "Phase", "select": {"equals": "Blocked"}},
-            ]},
-            "page_size": 10,
-        }).encode()
-        req = urllib.request.Request(
-            f"https://api.notion.com/v1/databases/{db_id}/query",
-            data=data,
-            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json",
-                     "Notion-Version": "2022-06-28"},
+        r = subprocess.run(
+            ["bash", "-c", f'{NVM} && claude --dangerously-skip-permissions --print -p "$VARYS_PROMPT"'],
+            capture_output=True, text=True, cwd=str(VARYS_DIR), timeout=60, env=env,
         )
-        with urllib.request.urlopen(req, timeout=8) as r:
-            pages = json.loads(r.read()).get("results", [])
-        results = []
-        for page in pages:
-            p = page["properties"]
-            results.append({
-                "title": (p.get("Feature", {}).get("title") or [{}])[0].get("plain_text", ""),
-                "phase": (p.get("Phase", {}).get("select") or {}).get("name", ""),
-                "pr":    (p.get("PR", {}).get("rich_text") or [{}])[0].get("plain_text", ""),
-                "plan":  ((p.get("Plan Summary", {}).get("rich_text") or [{}])[0].get("plain_text", ""))[:200],
-                "jira":  (p.get("Jira Ticket", {}).get("rich_text") or [{}])[0].get("plain_text", ""),
-            })
-        return results
+        if r.returncode != 0 or not r.stdout.strip():
+            return []
+        # Extract JSON array from output
+        out = r.stdout.strip()
+        start, end = out.find("["), out.rfind("]")
+        if start == -1 or end == -1:
+            return []
+        return json.loads(out[start:end+1])
     except Exception as e:
-        print(f"[poll-work-state] harness: {e}", file=sys.stderr)
+        print(f"[poll-work-state] harness via claude: {e}", file=sys.stderr)
         return []
 
 
