@@ -2,40 +2,38 @@
 """
 slack-daily-digest.py — Daily 4:50 PM channel sweep.
 
-Reads all messages from monitored channels since yesterday's digest,
-extracts who said what, infers mood/work state per person, updates
-the People Intelligence DB, and appends a context snapshot to a
-rolling daily context file.
+For each channel with messages today, calls Claude once to produce a
+structured summary: who worked on what, who's blocked, what shipped.
+#presence is parsed directly (attendance signals, no Claude needed).
+Builds a 7-day rolling context file and DMs Shoaib a useful digest.
 
 Cron: 50 16 * * * cd ~/Taleemabad/varys-agent-v2 && python3 .claude/hooks/slack-daily-digest.py >> /tmp/varys-daily-digest.log 2>&1
 """
 
 import json
 import os
+import re
+import subprocess
 import sys
 import time
 import urllib.request
 import urllib.parse
-import urllib.error
 from datetime import datetime, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from agent_config import cfg
 from varys_log import klog, klog_error
-from varys_notion import notion_request
 
 # ── Config ────────────────────────────────────────────────────────────────────
-SLACK_CONFIG = Path.home() / ".claude" / "hooks" / ".slack"
-STATE_FILE   = Path("/tmp/varys-daily-digest-state.json")
-CONTEXT_FILE = Path.home() / "varys-inbox" / "channel-context.json"
+SLACK_CONFIG  = Path.home() / ".claude" / "hooks" / ".slack"
+STATE_FILE    = Path("/tmp/varys-daily-digest-state.json")
+CONTEXT_FILE  = Path.home() / "varys-inbox" / "channel-context.json"
+VARYS_DIR     = Path(__file__).parent.parent.parent
 
-PEOPLE_DB_ID = "c976d58ea4e34b0585f245529cdc4528"
-PEOPLE_DS_ID = "c00daef1-c072-4263-b23d-e1b5e2ba596c"
+PRESENCE_CHANNEL_ID = "C0AU4DPFG21"  # #presence — attendance only, no Claude
 
-WORKSPACE = cfg("SLACK_WORKSPACE", "taleemabad-talk.slack.com")
-
-MONITOR_CHANNELS = {
+WORK_CHANNELS = {
     "C0B0BP5RT8F": "#engineering-pr-review",
     "C0AGBDTPCHZ": "#engineering",
     "C0ATWHRCYS0": "#engineering-fullstack",
@@ -43,7 +41,6 @@ MONITOR_CHANNELS = {
     "C0ATBGETMDM": "#engineering-qa",
     "C0B0X1SGQD7": "#engineering-ai",
     "C0AUM8FFRPS": "#engineering-deployments",
-    "C0AU4DPFG21": "#presence",
     "C0AU5BWCHF0": "#missioncomms",
     "C0AG25N6ST1": "#orenda-general",
     "C0AV1U13GU8": "#team-digitalcoach",
@@ -57,9 +54,28 @@ MONITOR_CHANNELS = {
     "C0B02K9V6R0": "#digital-learning-schema-architects",
 }
 
-# ponytail: mood inference is intentionally heuristic — good enough, no ML needed
-STRESS_WORDS   = {"blocked", "broken", "crash", "urgent", "asap", "stuck", "failing", "error", "oom", "critical"}
-POSITIVE_WORDS = {"thanks", "done", "shipped", "merged", "fixed", "lgtm", "approved", "great"}
+CHANNEL_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "summary":    {"type": "string", "description": "One sentence: what happened in this channel today"},
+        "mood":       {"type": "string", "enum": ["productive", "tense", "blocked", "quiet", "mixed"]},
+        "people":     {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name":        {"type": "string"},
+                    "working_on":  {"type": ["string", "null"]},
+                    "blocked_on":  {"type": ["string", "null"]},
+                    "shipped":     {"type": ["string", "null"]}
+                },
+                "required": ["name"]
+            }
+        },
+        "key_links":  {"type": "array", "items": {"type": "string"}}
+    },
+    "required": ["summary", "mood", "people", "key_links"]
+}
 
 
 def log(msg):
@@ -105,6 +121,162 @@ def slack_post(token: str, endpoint: str, payload: dict) -> dict:
         return {}
 
 
+def sweep_channel(token: str, ch_id: str, ch_name: str, since_ts: str) -> list[dict]:
+    messages = []
+    cursor   = None
+    while True:
+        params = {"channel": ch_id, "oldest": since_ts, "limit": 200}
+        if cursor:
+            params["cursor"] = cursor
+        result = slack_get(token, "conversations.history", params)
+        if not result.get("ok"):
+            log(f"{ch_name}: {result.get('error', 'unknown')}")
+            break
+        for msg in result.get("messages", []):
+            uid  = msg.get("user", "")
+            text = msg.get("text", "")
+            ts   = msg.get("ts", "")
+            if uid and text:
+                messages.append({"uid": uid, "text": text, "ts": ts})
+        cursor = (result.get("response_metadata") or {}).get("next_cursor")
+        if not cursor:
+            break
+    return messages
+
+
+def resolve_names(token: str, uids: set) -> dict:
+    names = {}
+    for uid in uids:
+        resp = slack_get(token, "users.info", {"user": uid})
+        if resp.get("ok"):
+            p = resp["user"].get("profile", {})
+            names[uid] = p.get("display_name") or p.get("real_name") or uid
+        time.sleep(0.2)
+    return names
+
+
+def parse_attendance(messages: list[dict], name_map: dict) -> dict:
+    """Extract on_leave / working_remote / in_office from #presence messages."""
+    attendance = {"on_leave": [], "working_remote": [], "in_office": []}
+    for msg in messages:
+        text  = msg["text"].lower()
+        name  = name_map.get(msg["uid"], msg["uid"])
+        if any(w in text for w in ("sick leave", "on leave", "hospital", "hospitali", "food poisoning", "fever", "not feeling")):
+            attendance["on_leave"].append(name)
+        elif any(w in text for w in ("working remote", "work remote", "remotely", "working from home", "wfh")):
+            attendance["working_remote"].append(name)
+        elif any(w in text for w in ("in office", "in the office", "heading to", "around")):
+            attendance["in_office"].append(name)
+    return attendance
+
+
+def run_claude(prompt: str, timeout: int = 90) -> str:
+    nvm = 'export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"'
+    env = os.environ.copy()
+    env["VARYS_PROMPT"] = prompt
+    try:
+        result = subprocess.run(
+            ["bash", "-c", f'{nvm} && claude --dangerously-skip-permissions --print -p "$VARYS_PROMPT"'],
+            capture_output=True, text=True,
+            cwd=str(VARYS_DIR), timeout=timeout, env=env,
+        )
+        return result.stdout.strip() if result.returncode == 0 else ""
+    except Exception as e:
+        log(f"Claude call failed: {e}")
+        return ""
+
+
+def summarise_channel(ch_name: str, messages: list[dict], name_map: dict) -> dict | None:
+    """Call Claude once to summarise what happened in this channel today."""
+    lines = []
+    for msg in messages:
+        name = name_map.get(msg["uid"], msg["uid"])
+        lines.append(f"{name}: {msg['text'][:300]}")
+
+    prompt = f"""You are reading today's Slack messages from {ch_name} at Taleemabad (an EdTech company).
+
+MESSAGES:
+{chr(10).join(lines)}
+
+Return a JSON object with exactly these fields:
+- summary: one sentence describing what happened in this channel today
+- mood: one of "productive", "tense", "blocked", "quiet", "mixed"
+- people: array of objects, one per person who said something meaningful. Each object:
+  - name: their name
+  - working_on: what they're building/doing (null if not clear)
+  - blocked_on: what's blocking them (null if not blocked)
+  - shipped: what they finished/merged/deployed (null if nothing)
+- key_links: array of GitHub PR URLs or important links found in the messages (empty array if none)
+
+Be specific. If someone posted a GitHub PR link, extract it. If someone said they're blocked on a review, say so.
+Return ONLY the JSON object, no other text."""
+
+    raw = run_claude(prompt)
+    if not raw:
+        return None
+
+    # Extract JSON from output
+    match = re.search(r'\{.*\}', raw, re.DOTALL)
+    if not match:
+        log(f"{ch_name}: no JSON in Claude output")
+        return None
+    try:
+        return json.loads(match.group())
+    except Exception as e:
+        log(f"{ch_name}: JSON parse failed: {e}")
+        return None
+
+
+def build_dm(today: str, attendance: dict, channel_summaries: dict) -> str:
+    lines = [f"*📊 Daily digest — {today}*\n"]
+
+    # Attendance block
+    if attendance["on_leave"]:
+        lines.append(f"🏥 On leave: {', '.join(attendance['on_leave'])}")
+    if attendance["working_remote"]:
+        lines.append(f"🏠 Remote: {', '.join(attendance['working_remote'])}")
+    lines.append("")
+
+    # Channel summaries — only channels with signal
+    tense    = [(ch, s) for ch, s in channel_summaries.items() if s.get("mood") in ("tense", "blocked")]
+    active   = [(ch, s) for ch, s in channel_summaries.items() if s.get("mood") == "productive"]
+    shipped  = []
+    blocked  = []
+    for ch, s in channel_summaries.items():
+        for p in s.get("people", []):
+            if p.get("shipped"):
+                shipped.append(f"{p['name']} ({ch}): {p['shipped']}")
+            if p.get("blocked_on"):
+                blocked.append(f"{p['name']} ({ch}): {p['blocked_on']}")
+
+    if blocked:
+        lines.append("*⚠️ Blocked:*")
+        for b in blocked[:4]:
+            lines.append(f"  • {b}")
+        lines.append("")
+
+    if shipped:
+        lines.append("*✅ Shipped:*")
+        for s in shipped[:4]:
+            lines.append(f"  • {s}")
+        lines.append("")
+
+    lines.append("*Channels:*")
+    for ch, s in channel_summaries.items():
+        mood_icon = {"productive": "🟢", "tense": "🟡", "blocked": "🔴", "quiet": "⚪", "mixed": "🔵"}.get(s.get("mood", ""), "⚪")
+        lines.append(f"  {mood_icon} *{ch}* — {s.get('summary', '')}")
+
+    links = []
+    for s in channel_summaries.values():
+        links.extend(s.get("key_links", []))
+    if links:
+        lines.append(f"\n*PRs/Links:*")
+        for link in links[:5]:
+            lines.append(f"  • {link}")
+
+    return "\n".join(lines)
+
+
 def load_state() -> dict:
     if STATE_FILE.exists():
         try:
@@ -118,182 +290,10 @@ def save_state(state: dict):
     STATE_FILE.write_text(json.dumps(state, indent=2))
 
 
-def infer_mood(texts: list[str]) -> str:
-    combined = " ".join(texts).lower()
-    stress   = sum(1 for w in STRESS_WORDS   if w in combined)
-    positive = sum(1 for w in POSITIVE_WORDS if w in combined)
-    if stress > positive:
-        return "stressed"
-    if positive > stress:
-        return "positive"
-    return "neutral"
-
-
-def resolve_user_names(token: str, user_ids: set) -> dict:
-    """Batch-resolve Slack user IDs → display names."""
-    names = {}
-    for uid in user_ids:
-        resp = slack_get(token, "users.info", {"user": uid})
-        if resp.get("ok"):
-            profile = resp.get("user", {}).get("profile", {})
-            names[uid] = profile.get("display_name") or profile.get("real_name") or uid
-        time.sleep(0.2)  # be kind to Slack rate limits
-    return names
-
-
-def sweep_channel(token: str, ch_id: str, ch_name: str, since_ts: str) -> list[dict]:
-    """Collect all messages in a channel since since_ts."""
-    messages = []
-    cursor   = None
-    while True:
-        params = {"channel": ch_id, "oldest": since_ts, "limit": 200}
-        if cursor:
-            params["cursor"] = cursor
-        result = slack_get(token, "conversations.history", params)
-        if not result.get("ok"):
-            log(f"{ch_name}: {result.get('error', 'unknown error')}")
-            break
-        for msg in result.get("messages", []):
-            uid  = msg.get("user", "")
-            text = msg.get("text", "")
-            ts   = msg.get("ts", "")
-            if not uid or not text:
-                continue
-            messages.append({"uid": uid, "text": text, "ts": ts, "channel": ch_name})
-        meta = result.get("response_metadata", {})
-        cursor = meta.get("next_cursor")
-        if not cursor:
-            break
-    return messages
-
-
-def lookup_notion_person(name: str, notion_token: str) -> str | None:
-    """Search People DB for a page matching this name, return page_id or None."""
-    url  = "https://api.notion.com/v1/databases/{}/query".format(PEOPLE_DB_ID)
-    body = json.dumps({
-        "filter": {
-            "property": "Name",
-            "title": {"contains": name[:20]}
-        }
-    }).encode()
-    req = urllib.request.Request(
-        url, data=body,
-        headers={
-            "Authorization":  f"Bearer {notion_token}",
-            "Notion-Version": "2022-06-28",
-            "Content-Type":   "application/json",
-        },
-        method="POST",
-    )
-    try:
-        status, body_bytes = notion_request(req)
-        data = json.loads(body_bytes)
-        results = data.get("results", [])
-        return results[0]["id"] if results else None
-    except Exception as e:
-        log(f"Notion lookup error for {name}: {e}")
-        return None
-
-
-def update_notion_person(page_id: str, name: str, mood: str,
-                          topics: list[str], today: str, notion_token: str):
-    url  = f"https://api.notion.com/v1/pages/{page_id}"
-    props = {
-        "Current Mood":    {"select": {"name": mood.capitalize()}},
-        "date:Last Seen:start": {"date": {"start": today}},
-        "Recurring Topics": {"rich_text": [{"text": {"content": ", ".join(topics[:5])}}]},
-    }
-    body = json.dumps({"properties": props}).encode()
-    req  = urllib.request.Request(
-        url, data=body,
-        headers={
-            "Authorization":  f"Bearer {notion_token}",
-            "Notion-Version": "2022-06-28",
-            "Content-Type":   "application/json",
-        },
-        method="PATCH",
-    )
-    try:
-        notion_request(req)
-    except Exception as e:
-        log(f"Notion update error for {page_id}: {e}")
-
-
-def create_notion_person(name: str, uid: str, mood: str,
-                          topics: list[str], today: str, notion_token: str):
-    url  = "https://api.notion.com/v1/pages"
-    body = json.dumps({
-        "parent":     {"database_id": PEOPLE_DB_ID},
-        "properties": {
-            "Name":             {"title": [{"text": {"content": name}}]},
-            "Slack ID":         {"rich_text": [{"text": {"content": uid}}]},
-            "Current Mood":     {"select": {"name": mood.capitalize()}},
-            "Relationship":     {"select": {"name": "Distant"}},
-            "Interaction Count":{"number": 1},
-            "Recurring Topics": {"rich_text": [{"text": {"content": ", ".join(topics[:5])}}]},
-            "date:Last Seen:start": {"date": {"start": today}},
-            "Varys Notes":      {"rich_text": [{"text": {"content": f"[{today}] First seen via daily digest"}}]},
-        },
-    }).encode()
-    req = urllib.request.Request(
-        url, data=body,
-        headers={
-            "Authorization":  f"Bearer {notion_token}",
-            "Notion-Version": "2022-06-28",
-            "Content-Type":   "application/json",
-        },
-        method="POST",
-    )
-    try:
-        notion_request(req)
-    except Exception as e:
-        log(f"Notion create error for {name}: {e}")
-
-
-def extract_topics(texts: list[str]) -> list[str]:
-    """Simple keyword extraction — no ML, good enough."""
-    import re
-    stopwords = {"the", "a", "an", "is", "in", "on", "at", "to", "for", "of",
-                 "and", "or", "but", "it", "this", "that", "was", "are", "has",
-                 "have", "i", "you", "we", "they", "be", "with", "from", "not",
-                 "can", "will", "just", "also", "been"}
-    freq = {}
-    for text in texts:
-        for word in re.findall(r"[a-z]{4,}", text.lower()):
-            if word not in stopwords:
-                freq[word] = freq.get(word, 0) + 1
-    return [w for w, _ in sorted(freq.items(), key=lambda x: -x[1])[:10]]
-
-
-def build_summary_dm(person_updates: list[dict], total_msgs: int,
-                     channels_swept: int, today: str) -> str:
-    lines = [f"*📊 Daily digest — {today}*"]
-    lines.append(f"Swept {channels_swept} channels · {total_msgs} messages\n")
-
-    stressed = [p for p in person_updates if p["mood"] == "stressed"]
-    positive = [p for p in person_updates if p["mood"] == "positive"]
-    active   = sorted(person_updates, key=lambda p: -p["msg_count"])[:5]
-
-    if stressed:
-        names = ", ".join(p["name"] for p in stressed[:3])
-        lines.append(f"⚠️ Stressed signals: {names}")
-    if positive:
-        names = ", ".join(p["name"] for p in positive[:3])
-        lines.append(f"✅ Positive vibes: {names}")
-
-    lines.append(f"\n*Most active:*")
-    for p in active:
-        topics = ", ".join(p["topics"][:3]) if p["topics"] else "misc"
-        lines.append(f"  • {p['name']} ({p['msg_count']} msgs) — {topics}")
-
-    return "\n".join(lines)
-
-
 def main():
     slack_cfg     = load_config(SLACK_CONFIG)
     token         = slack_cfg.get("SLACK_USER_TOKEN") or slack_cfg.get("SLACK_TOKEN") or os.environ.get("SLACK_TOKEN")
-    bot_token     = slack_cfg.get("BOT_TOKEN")   or os.environ.get("BOT_TOKEN")
-    notion_token  = os.environ.get("NOTION_API_KEY") or slack_cfg.get("NOTION_API_KEY")
+    bot_token     = slack_cfg.get("BOT_TOKEN")        or os.environ.get("BOT_TOKEN")
     user_slack_id = cfg("USER_SLACK_ID", "")
 
     if not token:
@@ -302,72 +302,47 @@ def main():
 
     state    = load_state()
     today    = datetime.now().strftime("%Y-%m-%d")
-    # Read since last digest, or 24h ago if first run
     since_ts = state.get("last_run_ts") or str((datetime.now() - timedelta(hours=24)).timestamp())
     log(f"Sweeping since {datetime.fromtimestamp(float(since_ts)).strftime('%Y-%m-%d %H:%M')}")
 
-    # ── Sweep all channels ────────────────────────────────────────────────────
-    all_msgs: list[dict] = []
-    for ch_id, ch_name in MONITOR_CHANNELS.items():
+    # ── Collect all messages ──────────────────────────────────────────────────
+    all_uids: set = set()
+    presence_msgs = sweep_channel(token, PRESENCE_CHANNEL_ID, "#presence", since_ts)
+    log(f"#presence: {len(presence_msgs)} messages")
+    all_uids |= {m["uid"] for m in presence_msgs}
+
+    channel_msgs: dict[str, list] = {}
+    for ch_id, ch_name in WORK_CHANNELS.items():
         msgs = sweep_channel(token, ch_id, ch_name, since_ts)
-        log(f"{ch_name}: {len(msgs)} messages")
-        all_msgs.extend(msgs)
+        if msgs:
+            channel_msgs[ch_name] = msgs
+            all_uids |= {m["uid"] for m in msgs}
+            log(f"{ch_name}: {len(msgs)} messages")
 
-    if not all_msgs:
-        log("No messages today — nothing to digest")
-        save_state({"last_run_ts": str(datetime.now().timestamp()), "last_run_date": today})
-        return 0
+    # ── Resolve names once ────────────────────────────────────────────────────
+    log(f"Resolving {len(all_uids)} users")
+    name_map = resolve_names(token, all_uids - {user_slack_id})
 
-    # ── Group by person ───────────────────────────────────────────────────────
-    by_person: dict[str, list[str]] = {}
-    by_person_channels: dict[str, set] = {}
-    for msg in all_msgs:
-        uid = msg["uid"]
-        if uid == user_slack_id:
-            continue  # skip Shoaib's own messages
-        by_person.setdefault(uid, []).append(msg["text"])
-        by_person_channels.setdefault(uid, set()).add(msg["channel"])
+    # ── Attendance from #presence ─────────────────────────────────────────────
+    attendance = parse_attendance(presence_msgs, name_map)
+    log(f"Attendance — leave: {len(attendance['on_leave'])}, remote: {len(attendance['working_remote'])}, office: {len(attendance['in_office'])}")
 
-    # Resolve names
-    user_ids  = set(by_person.keys())
-    log(f"Resolving {len(user_ids)} unique users")
-    name_map  = resolve_user_names(token, user_ids)
+    # ── Summarise each work channel with Claude ───────────────────────────────
+    channel_summaries: dict[str, dict] = {}
+    for ch_name, msgs in channel_msgs.items():
+        log(f"Summarising {ch_name} ({len(msgs)} msgs)...")
+        summary = summarise_channel(ch_name, msgs, name_map)
+        if summary:
+            channel_summaries[ch_name] = summary
+            log(f"  → {summary.get('mood')} — {summary.get('summary', '')[:80]}")
 
-    # ── Per-person analysis + Notion update ──────────────────────────────────
-    person_updates = []
-    for uid, texts in by_person.items():
-        name   = name_map.get(uid, uid)
-        mood   = infer_mood(texts)
-        topics = extract_topics(texts)
-        channels_active = list(by_person_channels.get(uid, set()))
-
-        person_updates.append({
-            "uid":      uid,
-            "name":     name,
-            "mood":     mood,
-            "topics":   topics,
-            "channels": channels_active,
-            "msg_count": len(texts),
-        })
-        log(f"{name}: {len(texts)} msgs, mood={mood}, topics={topics[:3]}")
-
-        # Update or create Notion People Intelligence entry
-        if notion_token:
-            page_id = lookup_notion_person(name, notion_token)
-            if page_id:
-                update_notion_person(page_id, name, mood, topics, today, notion_token)
-            else:
-                create_notion_person(name, uid, mood, topics, today, notion_token)
-
-    # ── Write rolling context snapshot ───────────────────────────────────────
+    # ── Write rolling context file ────────────────────────────────────────────
     CONTEXT_FILE.parent.mkdir(parents=True, exist_ok=True)
-    context_data = {
-        "date":            today,
-        "total_messages":  len(all_msgs),
-        "channels_swept":  len(MONITOR_CHANNELS),
-        "people":          person_updates,
+    snapshot = {
+        "date":       today,
+        "attendance": attendance,
+        "channels":   channel_summaries,
     }
-    # Keep last 7 days of snapshots in one file
     history = []
     if CONTEXT_FILE.exists():
         try:
@@ -376,20 +351,20 @@ def main():
                 history = []
         except Exception:
             history = []
-    history = [h for h in history if h.get("date") != today]  # replace today if re-run
-    history.append(context_data)
-    history = history[-7:]  # ponytail: keep 7 days, not infinite
+    history = [h for h in history if h.get("date") != today]
+    history.append(snapshot)
+    history = history[-7:]
     CONTEXT_FILE.write_text(json.dumps(history, indent=2))
-    log(f"Context snapshot written ({len(person_updates)} people)")
+    log(f"Context written — {len(channel_summaries)} channels, 7-day rolling")
 
-    # ── Summary DM to Shoaib ──────────────────────────────────────────────────
-    if bot_token:
+    # ── DM Shoaib ─────────────────────────────────────────────────────────────
+    if bot_token and channel_summaries:
         dm_resp = slack_post(bot_token, "conversations.open", {"users": user_slack_id})
         if dm_resp.get("ok"):
-            dm_ch  = dm_resp["channel"]["id"]
-            summary = build_summary_dm(person_updates, len(all_msgs), len(MONITOR_CHANNELS), today)
+            dm_ch   = dm_resp["channel"]["id"]
+            summary = build_dm(today, attendance, channel_summaries)
             slack_post(bot_token, "chat.postMessage", {"channel": dm_ch, "text": summary})
-            log("Summary DM sent")
+            log("DM sent")
 
     save_state({"last_run_ts": str(datetime.now().timestamp()), "last_run_date": today})
     log("Done.")
