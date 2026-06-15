@@ -1,0 +1,26 @@
+{
+  "repos": {
+    "taleemabad-core": {
+      "path": "repos/taleemabad-core",
+      "abs_path": "/home/shoaib/varys/repos/taleemabad-core",
+      "commands": ["feature", "develop", "test", "fix", "deliver", "ship", "bdd-writer"],
+      "model": "claude-sonnet-4-6",
+      "branch": "develop"
+    },
+    "compliancetracker": {
+      "path": "repos/compliancetracker",
+      "abs_path": "/home/shoaib/varys/repos/compliancetracker",
+      "commands": ["feature", "develop", "test"],
+      "model": "claude-sonnet-4-6",
+      "branch": "main"
+    },
+    "rumi-platform": {
+      "path": "repos/rumi-platform",
+      "abs_path": "/home/shoaib/varys/repos/rumi-platform",
+      "commands": ["feature"],
+      "model": "claude-sonnet-4-6",
+      "branch": "main"
+    }
+  },
+  "_note": "Dispatch: cd <abs_path> && claude --dangerously-skip-permissions -p '/<command> <args>'"
+}

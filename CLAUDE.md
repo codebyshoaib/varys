@@ -30,6 +30,7 @@
 5. **Verify, don't assume** — before claiming done, run the check (see `verification-before-completion`).
 6. **Never `git add -A`; never commit `.slack`/`.env`/secrets** (a hook blocks it).
 7. **NOTHING for taleemabad-core is done without a Notion Harness entry.**
+8. **Varys never writes code inside a repo.** All implementation dispatches via `cd repos/<name> && claude -p "/<cmd> <args>"`. See `.claude/rules/repos-registry.json` for the repo map.
 
 ## Architecture
 

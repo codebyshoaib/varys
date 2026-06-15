@@ -43,7 +43,7 @@ def detect_session() -> dict:
     project = "taleemabad-core"
     cwd = os.getcwd()
     if "taleemabad-cms" in cwd:   project = "taleemabad-cms"
-    elif "varys-agent-v2" in cwd: project = "personal-agent"
+    elif "/varys" in cwd and "taleemabad" not in cwd: project = "personal-agent"
 
     what_done = ""
     if branch:

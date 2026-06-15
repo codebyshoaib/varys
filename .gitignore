@@ -15,3 +15,6 @@ __pycache__/
 
 # OS
 .DS_Store
+
+# Repo symlinks — these point to sibling repos, not tracked here
+repos/

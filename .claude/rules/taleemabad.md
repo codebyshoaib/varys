@@ -3,7 +3,7 @@ type: runbook
 last_verified: 2026-06-01
 owner: varys
 paths:
-  - "../../taleemabad-core/**"
+  - "repos/taleemabad-core/**"
 ---
 
 # STOP — Before Touching taleemabad-core
