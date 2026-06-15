@@ -190,6 +190,42 @@ def build_system_message() -> str:
     else:
         lines.append("## 📬 Slack Inbox — Nothing new since last session\n")
 
+    # Active work state — written by poll-work-state.py cron every 30min
+    work_state_file = Path("/tmp/varys-work-state.json")
+    if work_state_file.exists():
+        try:
+            ws = json.loads(work_state_file.read_text())
+            lines.append("## 🔨 Active Work State (live — updated every 30min)")
+            updated = ws.get("updated_at", "")[:16].replace("T", " ")
+            branch  = ws.get("active_branch", "")
+            if branch:
+                lines.append(f"**Branch:** `{branch}` (taleemabad-core) — as of {updated}")
+            tickets = ws.get("harness_active", [])
+            if tickets:
+                lines.append("**Harness (In Progress / Blocked):**")
+                for t in tickets:
+                    pr   = f" → {t['pr']}" if t.get("pr") else ""
+                    jira = f" [{t['jira']}]" if t.get("jira") else ""
+                    lines.append(f"  - [{t['phase']}]{jira} {t['title']}{pr}")
+                    if t.get("plan"):
+                        lines.append(f"    _{t['plan']}_")
+            prs = ws.get("open_prs", [])
+            if prs:
+                lines.append("**Open PRs:**")
+                for pr in prs:
+                    draft = " [DRAFT]" if pr.get("isDraft") else ""
+                    lines.append(f"  - #{pr['number']}{draft} {pr['title']} ({pr.get('headRefName','')})")
+            commits = ws.get("recent_commits", [])
+            if commits:
+                lines.append(f"**Recent commits (7d):** {len(commits)} commits")
+                for c in commits[:5]:
+                    lines.append(f"  - {c}")
+                if len(commits) > 5:
+                    lines.append(f"  - ... and {len(commits)-5} more")
+            lines.append("")
+        except Exception:
+            pass
+
     # Pre-fetch live Notion context (reliable in --print mode; MCP instruction alone is not)
     try:
         work_log = _fetch_work_log()
@@ -285,7 +321,7 @@ def build_system_message() -> str:
         f"- Harness DB: `{DB_PAGE_HARNESS}` — filter Phase != Done",
         f"- Slack Inbox DB: `{DB_PAGE_SLACK_INBOX}` — filter Status = Unread/Needs Action",
         "",
-        "After fetching, greet Kamal with: open PRs + last session summary + any inbox items needing action.",
+        "After fetching, greet Shoaib with: open PRs + last session summary + any inbox items needing action.",
         "If there are unsynced Slack items above, write them to Notion Slack Inbox DB via MCP.",
     ]
 

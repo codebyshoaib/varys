@@ -124,12 +124,47 @@ def main():
     # Extract any session summary Claude may have printed
     # (Claude is instructed to output a JSON summary block)
     session_summary = hook_input.get("session_summary", {})
-    what_done  = session_summary.get("what_done", "Session ended — no summary provided.")
+    what_done  = session_summary.get("what_done", "")
     prs_worked = session_summary.get("prs_worked", "")
     blockers   = session_summary.get("blockers", "")
     next_steps = session_summary.get("next_steps", "")
     project    = session_summary.get("project", "taleemabad-core")
     phase      = session_summary.get("phase", "Feature")
+
+    # Claude rarely outputs session_summary JSON — auto-detect from git + gh as fallback
+    if not what_done:
+        import subprocess
+        core = Path.home() / "Taleemabad" / "taleemabad-core"
+        parts = []
+        try:
+            branch = subprocess.run(["git", "branch", "--show-current"],
+                capture_output=True, text=True, timeout=5, cwd=str(core)).stdout.strip()
+            if branch:
+                parts.append(f"Branch: {branch}")
+                if "taleemabad-core" in str(core):
+                    project = "taleemabad-core"
+        except Exception:
+            pass
+        try:
+            log = subprocess.run(
+                ["git", "log", "--since=midnight", "--oneline", "--no-merges", "--max-count=10"],
+                capture_output=True, text=True, timeout=5, cwd=str(core))
+            if log.returncode == 0 and log.stdout.strip():
+                parts.append("Commits today:\n" + "\n".join(f"  {l}" for l in log.stdout.strip().splitlines()))
+        except Exception:
+            pass
+        try:
+            gh = subprocess.run(
+                ["gh", "pr", "list", "--author", "@me", "--state", "open",
+                 "--json", "number,title", "--limit", "5"],
+                capture_output=True, text=True, timeout=10, cwd=str(core))
+            if gh.returncode == 0 and gh.stdout.strip():
+                pr_data = json.loads(gh.stdout)
+                if pr_data and not prs_worked:
+                    prs_worked = "; ".join(f"#{p['number']} {p['title']}" for p in pr_data)
+        except Exception:
+            pass
+        what_done = "\n".join(parts) if parts else "Session ended — no commits detected today."
 
     # Detect project from cwd if not in summary
     cwd = os.getcwd()
