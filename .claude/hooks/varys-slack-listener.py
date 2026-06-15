@@ -1136,43 +1136,6 @@ def _check_pending_reactions(channel: str, ts: str):
         pass
 
 
-# ── Proactive idle work ───────────────────────────────────────────────────────
-
-def proactive_loop(web: WebClient, dm_channel: str):
-    """Background thread: every 35min of idle, do something useful."""
-    global last_activity_time, last_idle_work
-    last_proactive_ts = None
-    while True:
-        time.sleep(60)
-        idle_min  = (time.time() - last_activity_time) / 60
-        since_idle = (time.time() - last_idle_work) / 60
-        if idle_min >= 35 and since_idle >= 60:  # Increased cooldown to 60min to prevent duplicates
-            last_idle_work = time.time()
-            log("Idle 35min — doing proactive work")
-            answer = run_claude(f"""You are {AGENT_NAME} — {USER_NAME}'s autonomous AI agent. You have idle time.
-
-Pick ONE valuable action:
-1. Check Notion My PRs DB (18017a67136a4561ada9818c239b8f33) — any CI failing or stale PRs?
-2. Check /tmp/varys-slack-inbox.json — any unsynced learning links worth summarising?
-3. Check Harness DB ({DB_PAGE_HARNESS}) — any tasks stuck >2 days?
-4. Web search one topic relevant to your projects (add your topics to the listener config).
-
-Do the work, then reply in 2-3 lines for Slack:
-"📚 While you were away: [what I found/learned]. [action taken]"
-Sign off: 🤖 {{AGENT_NAME}}""", timeout=180, event_context="proactive_idle")
-
-            if answer and len(answer) > 20:
-                answer_normalized = " ".join(answer.strip().split())
-                try:
-                    resp = web.chat_postMessage(channel=dm_channel, text=answer_normalized)
-                    last_proactive_ts = resp.get("ts", "") if isinstance(resp, dict) else None
-                    log(f"Proactive: {answer_normalized[:80]}")
-                    # Eval: log proactive DM, watch for Shoaib reaction
-                    eval_proactive_dm(content=answer_normalized, channel=dm_channel, ts=last_proactive_ts or "")
-                except Exception as e:
-                    klog_error(context="proactive_loop-send_message", exc=e)
-
-
 # ── Socket Mode event handler ─────────────────────────────────────────────────
 
 def make_handler(web: WebClient, dm_channel: str, bot_token: str):
@@ -1262,11 +1225,6 @@ def main():
     except Exception as e:
         log(f"Could not open DM: {e}")
         dm_channel = None
-
-    # Start proactive idle thread
-    if dm_channel:
-        t = threading.Thread(target=proactive_loop, args=(web, dm_channel), daemon=True)
-        t.start()
 
     # Connect via Socket Mode
     socket_client = SocketModeClient(app_token=app_token, web_client=web)
