@@ -72,6 +72,12 @@
     ]
   },
   "mcpServers": {
+    "notion": {
+      "command": "/home/shoaib/.nvm/versions/node/v24.14.0/bin/notion-mcp-server",
+      "env": {
+        "OPENAPI_MCP_HEADERS": "{\"Authorization\": \"Bearer ${NOTION_API_KEY}\", \"Notion-Version\": \"2022-06-28\"}"
+      }
+    },
     "mempalace": {
       "command": "mempalace",
       "args": ["serve", "--palace", "mempalace"],

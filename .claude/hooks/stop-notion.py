@@ -1,24 +1,25 @@
 #!/usr/bin/env python3
 """
-stop-notion hook: blocks session end so Claude can write Work Log via MCP.
-Returns {"decision": "block", "reason": "<instruction>"} on first run.
-On second run (flag file exists), lets session end normally.
+stop-notion hook: writes Work Log to Notion via direct REST (ntn_ token).
+Fast — no subprocess, no MCP, no blocking.
 """
-import json, os, sys
+import json, os, sys, urllib.request, urllib.error
 from datetime import datetime
 from pathlib import Path
+import time as _time
+
+sys.path.insert(0, str(Path(__file__).parent))
+try:
+    import varys_log as _k
+except Exception:
+    _k = None
+from agent_config import cfg
 
 VARYS_DIR = Path(__file__).parent.parent.parent
-FLAG_DIR  = Path.home() / ".varys"
-FLAG_DIR.mkdir(exist_ok=True)
-
-import sys as _sys
-_sys.path.insert(0, str(Path(__file__).parent))
-from agent_config import cfg as _cfg
 
 
 def session_summary() -> str:
-    today    = datetime.now().strftime("%Y-%m-%d")
+    today = datetime.now().strftime("%Y-%m-%d")
     log_file = VARYS_DIR / "vault" / "logs" / f"{today}.md"
     if not log_file.exists():
         return "Session ended."
@@ -28,38 +29,56 @@ def session_summary() -> str:
 
 
 def main():
-    today     = datetime.now().strftime("%Y-%m-%d")
-    flag_file = FLAG_DIR / f"worklog-{today}"
+    t0 = _time.time()
+    key = cfg("NOTION_API_KEY")
+    db_id = cfg("NOTION_WORK_LOG_DB_ID", "37f902248f3d817890d2c70c1635bad9")
 
-    # Second run — entry already written, let session end
-    if flag_file.exists():
-        print(json.dumps({"systemMessage": f"✅ Work Log written for {today}"}))
+    if not key:
+        print(json.dumps({"systemMessage": "⚠️ stop-notion: NOTION_API_KEY not set"}))
         return 0
 
-    # Mark done before blocking (prevents infinite loop on second Stop hook run)
-    flag_file.touch()
-
+    today = datetime.now().strftime("%Y-%m-%d")
     cwd = os.getcwd()
-    if "taleemabad-cms" in cwd:     project = "taleemabad-cms"
-    elif "taleemabad-core" in cwd:  project = "taleemabad-core"
-    else:                           project = "personal-agent"
+    if "taleemabad-cms" in cwd:    project = "taleemabad-cms"
+    elif "taleemabad-core" in cwd: project = "taleemabad-core"
+    else:                          project = "personal-agent"
 
     summary = session_summary()
 
-    db_id = _cfg('NOTION_WORK_LOG_DB_ID', '37f902248f3d817890d2c70c1635bad9')
-    instruction = (
-        f"Write a Notion Work Log entry using the notion MCP tool notion-create-pages. "
-        f"Use parent database_id '{db_id}'. "
-        f"Set these properties: "
-        f"Session='{today} — {project}', "
-        f"date:Date:start='{today}', "
-        f"Project='{project}', "
-        f"Phase='Feature', "
-        f"What Was Done='{summary[:800]}'. "
-        f"Reply with just 'OK' when done."
+    body = json.dumps({
+        "parent": {"database_id": db_id},
+        "properties": {
+            "Date":      {"title": [{"text": {"content": f"{today} — {project}"}}]},
+            "Session ID":{"rich_text": [{"text": {"content": project}}]},
+            "Summary":   {"rich_text": [{"text": {"content": summary[:2000]}}]},
+        },
+    }).encode()
+
+    req = urllib.request.Request(
+        "https://api.notion.com/v1/pages",
+        data=body,
+        headers={
+            "Authorization": f"Bearer {key}",
+            "Notion-Version": "2022-06-28",
+            "Content-Type": "application/json",
+        },
+        method="POST",
     )
 
-    print(json.dumps({"decision": "block", "reason": instruction}))
+    try:
+        with urllib.request.urlopen(req, timeout=15) as r:
+            result = json.loads(r.read())
+            msg = f"✅ Work Log written: {today} — {project}"
+    except urllib.error.HTTPError as e:
+        msg = f"⚠️ stop-notion HTTP {e.code}: {e.read().decode()[:150]}"
+    except Exception as e:
+        msg = f"⚠️ stop-notion failed: {e}"
+
+    print(msg, file=sys.stderr)
+    print(json.dumps({"systemMessage": msg}))
+    if _k:
+        _k.klog_cron("stop-notion", status="ok" if "✅" in msg else "error",
+                     duration_ms=(_time.time()-t0)*1000)
     return 0
 
 

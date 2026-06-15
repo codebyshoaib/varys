@@ -9,7 +9,22 @@ paths:
 
 # Notion Brain — Databases & MCP Queries
 
-All Notion reads/writes use `mcp__claude_ai_Notion__*` tools (no API key file). **When {{USER_NAME}} asks about work context → fetch Notion via MCP first, then the Slack inbox file if needed.**
+All Notion reads/writes use `mcp__notion__*` tools (local `notion-mcp-server`). **When {{USER_NAME}} asks about work context → fetch Notion via MCP first, then the Slack inbox file if needed.**
+
+Note: Python hook processes (`varys_notion.py`, `varys_context.py`, `stop-notion.py`, etc.) use HTTP — they are subprocesses without MCP access. Only the Claude agent uses MCP tools.
+
+## Available MCP Tools
+
+| Tool | Operation |
+|---|---|
+| `mcp__notion__post-search` | Full-text search across all pages/databases |
+| `mcp__notion__retrieve-a-database` | Get database schema and metadata |
+| `mcp__notion__query-data-source` | Query a database — use `database_id` as `data_source_id` |
+| `mcp__notion__retrieve-a-page` | Get a page and its properties |
+| `mcp__notion__post-page` | Create a page or database entry |
+| `mcp__notion__patch-page` | Update page properties |
+| `mcp__notion__get-block-children` | Read page content blocks |
+| `mcp__notion__patch-block-children` | Append content blocks to a page |
 
 ## Retrieval and Write Rules
 Retrieval and write rules are defined in `.claude/hooks/varys_context.py` — do not re-specify here.
