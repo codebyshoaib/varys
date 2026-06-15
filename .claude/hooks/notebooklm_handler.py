@@ -639,7 +639,7 @@ def create_quiz(topic: str, token: str, notebook_ref: str = None):
 
 def handle(text: str, token: str):
     """
-    Parse Kamal's message and route to the right NotebookLM action.
+    Parse Shoaib's message and route to the right NotebookLM action.
 
     Trigger patterns (case-insensitive):
       nlm list

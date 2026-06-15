@@ -7,7 +7,7 @@ After every research seed, this agent reads the new learnings and asks:
 
 Then creates concrete Notion Harness tickets for each gap found.
 
-This is the loop Kamal described:
+This is the loop Shoaib described:
   Research → Learn → Apply → Improve → Better research next time
 
 Called:

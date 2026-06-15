@@ -65,12 +65,12 @@ def escalate(anom, root_cause, proposed):
         with open(FAILURES, "a") as f:
             f.write(json.dumps({"date": detected,
                 "incident": f"{anom.get('component')}: {anom.get('error_type')}",
-                "root_cause": root_cause, "fix": "ESCALATED — awaiting Kamal",
+                "root_cause": root_cause, "fix": "ESCALATED — awaiting Shoaib",
                 "lesson": "see observer", "related_bead": None}) + "\n")
     except Exception: pass
     notion_sink.push(title=f"{anom.get('component')}: {anom.get('error_type')}",
         severity="ERROR", component=anom.get("component","?"), event="error",
-        root_cause=root_cause, status="🔴 Needs Kamal",
+        root_cause=root_cause, status="🔴 Needs Shoaib",
         action_taken=f"proposed: {proposed[:300]}", detected=detected)
     k.klog("observer_escalated", component="observer", severity="WARN",
            target=anom.get("component"))
@@ -92,7 +92,7 @@ def auto_fix(anom, root_cause):
         notion_sink.push(title=f"{anom.get('component')}: {anom.get('error_type')}",
             severity="ERROR", component=anom.get("component","?"), event="error",
             root_cause=root_cause,
-            status="🟢 Solved" if ok else "🔴 Needs Kamal",
+            status="🟢 Solved" if ok else "🔴 Needs Shoaib",
             action_taken=(r.stdout or "")[-400:], detected=detected,
             resolved=detected if ok else "")
         k.klog("observer_autofix", component="observer",

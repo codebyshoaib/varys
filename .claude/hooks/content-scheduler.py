@@ -48,7 +48,7 @@ CONTENT RULES (Emotional Content Playbook):
 - Hook in first 3 seconds: most striking visual first, 4-7 word text overlay, pattern interrupt.
 - Use delayed-answer technique: "this place" not "Trail 5" — open the loop, close it at payoff.
 - Never end on sadness. Resolve upward into awe, hope, or warmth.
-- No anger, no anxiety, no rage-bait. Kamal's lane: awe + amusement only.
+- No anger, no anxiety, no rage-bait. Shoaib's lane: awe + amusement only.
 - Specifics beat generalities: "naan so hot it burned my fingers" not "the food was amazing".
 - Write like you talk. Read it out loud. One idea per line.
 - Earn the emotion — don't announce it. Show the thing, don't say "this is emotional".
@@ -95,7 +95,7 @@ TRACK_CHANNEL = {
 }
 
 # ─── Curated Topic Bank ───────────────────────────────────────────────────────
-# Personal story seeds — Kamal's real life, Islamabad-specific, personal angle.
+# Personal story seeds — Shoaib's real life, Islamabad-specific, personal angle.
 # These are seeded into Notion on first run; this dict is the source of truth.
 # Trend scanner adds to Notion but these always take priority.
 TOPIC_BANK = {
@@ -209,7 +209,7 @@ def slack_dm(token: str, text: str):
 
 
 def slack_upload(token: str, filepath: str, title: str, comment: str = ""):
-    """Upload a file to Kamal's DM channel."""
+    """Upload a file to Shoaib's DM channel."""
     try:
         with open(filepath, "rb") as f:
             file_data = f.read()
@@ -442,7 +442,7 @@ def pick_topic(track: str) -> tuple | None:
     """Returns (page_id, topic, post_type, score, reason, existing_nb_id) or None.
 
     Priority order:
-    1. Curated topics (Source=curated) — Kamal's personal story bank
+    1. Curated topics (Source=curated) — Shoaib's personal story bank
     2. Any other Pending topic (trend scanner additions, manually queued)
     """
     # Try curated topics first
@@ -954,7 +954,7 @@ def _try_nlm_research_and_visuals(topic: str, profile: str) -> tuple[str | None,
 def run_nlm_with_profile_fallback(token: str, topic: str, track: str) -> tuple[str | None, str, dict]:
     """Try work NLM profile, then personal profile. Returns (nb_id, insights, artifacts_state).
 
-    If both profiles are quota-exhausted: DMs Kamal, returns (None, "", {}).
+    If both profiles are quota-exhausted: DMs Shoaib, returns (None, "", {}).
     Canva is NOT used as fallback — if both NLM accounts are out, we skip visuals.
     """
     for profile, label in [(NLM_PROFILE, "work"), (NLM_PROFILE_PERSONAL, "personal")]:

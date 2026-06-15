@@ -41,7 +41,7 @@ skill-X → handles → concept-Y (what the skill does)
 skill-X → reads → skill-Z (skill files it depends on)
 ```
 
-### When Kamal expresses a preference
+### When Shoaib expresses a preference
 ```
 person-kamal → prefers → X
 person-kamal → mentioned_with → context-Y (when/why)

@@ -5,7 +5,7 @@ varys-gap-watcher.py — Weekly capability gap promoter.
 Reads capability_gaps from harness.db. For any gap_type with 2+ occurrences
 in the last 7 days that isn't already in CAPABILITIES.md:
   1. Appends it to CAPABILITIES.md under CANNOT DO
-  2. DMs Kamal
+  2. DMs Shoaib
   3. If priority score >= 4, creates a Notion Harness ticket
 
 Run: weekly via cron (cron-wrap.sh)
@@ -82,7 +82,7 @@ def _append_to_capabilities(gap_type: str, sample_requests: list[str]) -> None:
     entry = (
         f"| {gap_type} | Not yet implemented "
         f"(auto-detected from {len(sample_requests)} requests)"
-        f" | Tell Kamal: `@Varys I need {gap_type}` to trigger a build ticket |"
+        f" | Tell Shoaib: `@Varys I need {gap_type}` to trigger a build ticket |"
         f"  _(sample: {samples[:100]})_ |\n"
     )
     with open(CAPABILITIES_MD, "a") as f:

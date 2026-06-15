@@ -3,7 +3,7 @@
 inbox-processor.py — Process queued messages for Varys.
 
 Reads ~/varys-inbox/*.json, spins a claude session per message,
-posts response to Kamal via Slack DM, marks message as done.
+posts response to Shoaib via Slack DM, marks message as done.
 
 Run manually:
   python3 .claude/hooks/inbox-processor.py
@@ -86,11 +86,11 @@ def build_prompt(message: dict) -> str:
 
     project_context = ""
     if project:
-        project_context = f"\nContext: Kamal was working in project '{project}' (path: {cwd}) when he sent this."
+        project_context = f"\nContext: Shoaib was working in project '{project}' (path: {cwd}) when he sent this."
 
-    return f"""You are Varys, Kamal's autonomous personal agent.
+    return f"""You are Varys, Shoaib's autonomous personal agent.
 
-Kamal has a question or message for you (sent via {source}):
+Shoaib has a question or message for you (sent via {source}):
 
 \"{text}\"
 {project_context}
@@ -99,14 +99,14 @@ Your job:
 1. Answer using your Notion brain (page ID: {NOTION_BRAIN_PAGE_ID}).
    Read the relevant Notion databases: Work Log, Slack Inbox, Team People, My PRs.
    If the question is about a specific project ({project or 'check the context'}), read that project's harness too.
-2. Send your response as a Slack DM to Kamal (Slack user ID: {KAMAL_SLACK_ID}).
+2. Send your response as a Slack DM to Shoaib (Slack user ID: {KAMAL_SLACK_ID}).
    Keep the response direct and specific — show you actually checked Notion data, not just guessing.
    Sign off as: Varys 🤖
-3. Log this conversation to Notion Work Log with title: "Kamal asked: {text[:60]}"
+3. Log this conversation to Notion Work Log with title: "Shoaib asked: {text[:60]}"
 
 Rules:
-- Never send Slack messages to anyone other than Kamal without his explicit approval
-- Never push code without Kamal's approval
+- Never send Slack messages to anyone other than Shoaib without his explicit approval
+- Never push code without Shoaib's approval
 - If you can't find the answer in Notion/Slack, say so clearly rather than guessing
 - Be direct, no fluff
 """

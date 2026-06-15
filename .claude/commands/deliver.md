@@ -1,11 +1,11 @@
 ---
-description: Varys-owned delivery gate. Runs after confidence ≥86% — verifies everything is clean, creates the PR, runs /reflect, updates Notion Harness, and DMs Kamal with the PR link + confidence score. Varys never claims delivery without completing every check.
+description: Varys-owned delivery gate. Runs after confidence ≥86% — verifies everything is clean, creates the PR, runs /reflect, updates Notion Harness, and DMs Shoaib with the PR link + confidence score. Varys never claims delivery without completing every check.
 ---
 
 # Command: /deliver
 
 Varys owns this command end-to-end. Before running gates, Varys asks one final question:
-**"Does this PR actually solve the problem Kamal described — not just pass the tests?"**
+**"Does this PR actually solve the problem Shoaib described — not just pass the tests?"**
 
 If the answer is no, or uncertain → do NOT deliver. Go back to plan.md and diagnose.
 If yes → run the gates and ship.
@@ -54,7 +54,7 @@ Gate 7 — Migrations verified
 Gate 8 — Branch is not develop/main
   Run: git symbolic-ref --short HEAD
   Check: branch name starts with "varys/"
-  FAIL action: something went very wrong — stop and report to Kamal
+  FAIL action: something went very wrong — stop and report to Shoaib
 ```
 
 Print gate summary before proceeding:
@@ -188,9 +188,9 @@ Update:
 
 ---
 
-## Step 6: DM Kamal on Slack
+## Step 6: DM Shoaib on Slack
 
-Send to Kamal (USER_SLACK_ID from config):
+Send to Shoaib (USER_SLACK_ID from config):
 
 ```
 ✅ PR ready: <task description>
@@ -223,9 +223,9 @@ Append to `vault/logs/YYYY-MM-DD.md`:
 - ❌ Creates PR with confidence < 86%
 - ❌ Creates PR with open CRITICAL or HIGH bugs
 - ❌ Skips /reflect
-- ❌ Asks Kamal to run any of these steps
+- ❌ Asks Shoaib to run any of these steps
 - ❌ Claims delivery without Slack DM sent
-- ❌ Merges to develop — PR review is Kamal's call
+- ❌ Merges to develop — PR review is Shoaib's call
 
 ---
 
@@ -239,4 +239,4 @@ Append to `vault/logs/YYYY-MM-DD.md`:
         → /deliver  (gate check → commit → push → PR → /reflect → Notion → Slack DM)  ← YOU ARE HERE
 ```
 
-Kamal only acts after the Slack DM. His job: review the PR and merge or comment.
+Shoaib only acts after the Slack DM. His job: review the PR and merge or comment.

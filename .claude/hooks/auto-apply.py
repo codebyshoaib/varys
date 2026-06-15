@@ -3,8 +3,8 @@
 auto-apply.py — Varys applies for work autonomously.
 
 Rules:
-  score >= 75  → auto-apply immediately, DM Kamal confirmation
-  score 60-74  → DM Kamal for approval, apply when he says "approve"
+  score >= 75  → auto-apply immediately, DM Shoaib confirmation
+  score 60-74  → DM Shoaib for approval, apply when he says "approve"
   score < 60   → skip
 
 Channels:
@@ -124,7 +124,7 @@ def write_proposal(job: dict) -> str:
     source      = job.get("source", "")
     rate        = job.get("rate", "")
 
-    prompt = f"""You are Varys writing a freelance proposal for Kamal.
+    prompt = f"""You are Varys writing a freelance proposal for Shoaib.
 
 JOB:
 Title: {title}
@@ -136,7 +136,7 @@ KAMAL'S BACKGROUND:
 {USER_BIO}
 
 Write a SHORT, tailored proposal (max 150 words). Rules:
-- Open with ONE specific thing from the job description that matches Kamal's experience
+- Open with ONE specific thing from the job description that matches Shoaib's experience
 - 2-3 bullet points of relevant proof (use real numbers from bio)
 - Clear CTA: "Happy to jump on a quick call or send more details"
 - Natural, human tone — not AI-sounding
@@ -262,7 +262,7 @@ def process_job(job: dict, token: str) -> str:
     is_gh  = bool(extract_github_issue(url))
     source = job.get("source", "")
 
-    # Score 60-74: ask Kamal first
+    # Score 60-74: ask Shoaib first
     if score < AUTO_APPLY_SCORE:
         method = "email" if email else ("github" if is_gh else "manual")
         slack_dm(token,
@@ -281,7 +281,7 @@ def process_job(job: dict, token: str) -> str:
     elif email:
         applied = apply_via_email(job, email, token)
     else:
-        # No direct contact — DM Kamal with ready-to-send proposal
+        # No direct contact — DM Shoaib with ready-to-send proposal
         proposal = write_proposal(job)
         if proposal:
             slack_dm(token,

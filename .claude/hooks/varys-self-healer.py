@@ -13,7 +13,7 @@ On error/crash:
   1. Read logs for root cause
   2. Call Claude with full context: logs + source code
   3. Claude patches the file and restarts the service
-  4. DM Kamal on Slack: "🔧 Self-healed: [what broke] → [what was fixed]"
+  4. DM Shoaib on Slack: "🔧 Self-healed: [what broke] → [what was fixed]"
 
 On healthy:
   - Just logs a heartbeat line, no DM (no noise)
@@ -419,7 +419,7 @@ def check_service(service: dict, token: str | None) -> bool:
 
     root_cause = "\n".join(recent_errors[:2])[:400]
     log_needs_manual(service=name, root_cause=root_cause, attempted="escalate-only (no auto-fix)")
-    eval_self_heal(service=name, root_cause=root_cause, fix="escalated to Kamal", applied=False)
+    eval_self_heal(service=name, root_cause=root_cause, fix="escalated to Shoaib", applied=False)
     msg = (
         f"⚠️ *Varys flagged errors in `{name}` — needs your eyes*\n"
         f"• *Recent error(s):* {root_cause[:300]}\n"

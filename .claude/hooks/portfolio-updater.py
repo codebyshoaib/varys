@@ -88,7 +88,7 @@ def log_portfolio_change(change: str, reason: str, skills_added: list, skills_pr
         "reason":          reason,
         "skills_added":    skills_added,
         "skills_promoted": skills_promoted,
-        "outcome":         "pending",  # updated when Kamal reports a win
+        "outcome":         "pending",  # updated when Shoaib reports a win
     }
     with open(HISTORY_FILE, "a") as f:
         f.write(json.dumps(entry) + "\n")
@@ -348,7 +348,7 @@ def run():
     # Log to Notion Master Plan history
     log_to_notion_history(summaries, job_skills, token)
 
-    # DM Kamal
+    # DM Shoaib
     if token:
         status = "✅ Pushed to GitHub — Netlify will redeploy in ~1 min" if pushed else "⚠️ Could not push (check portfolio repo)"
         changes_text = "\n".join(f"  • {s}" for s in summaries)

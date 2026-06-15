@@ -93,7 +93,7 @@ Canonical avatar: `vault/memory/varys_avatar.png` (= asset 1)
 
 ---
 
-## Locked Base (v4 — FINAL, do not change without Kamal approval)
+## Locked Base (v4 — FINAL, do not change without Shoaib approval)
 
 Reference file: `vault/memory/varys_avatar.png`
 Approved: 2026-06-05

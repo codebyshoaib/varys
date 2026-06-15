@@ -4,13 +4,13 @@ job-finder.py — Varys's daily freelance job hunter.
 
 Runs every 30 min via cron (same pattern as slack-poller).
 Searches Upwork, RemoteOK, We Work Remotely, Freelancer for jobs
-matching Kamal's stack. Deduplicates, scores, surfaces only new
-high-quality matches. Saves to Notion Job Tracker. DMs Kamal.
+matching Shoaib's stack. Deduplicates, scores, surfaces only new
+high-quality matches. Saves to Notion Job Tracker. DMs Shoaib.
 
 Cron:
   */30 * * * * python3 .claude/hooks/job-finder.py >> /tmp/varys-jobs.log 2>&1
 
-Goal: Kamal buys a house. Varys finds the clients.
+Goal: Shoaib buys a house. Varys finds the clients.
 """
 
 import json
@@ -51,7 +51,7 @@ MAX_JOBS_PER_DM = 3
 # Max 2 Claude subprocesses at a time — prevents OOM freeze on busy job runs
 _NOTION_SEMA = threading.Semaphore(2)
 
-# Scoring weights — Kamal does ANY digital work (laptop or mobile)
+# Scoring weights — Shoaib does ANY digital work (laptop or mobile)
 # Higher score = better match. Baseline score = 50 for any remote digital job.
 SCORE_WEIGHTS = {
     # AI / Claude — highest value work
@@ -214,7 +214,7 @@ def score_job(title: str, description: str, rate_text: str = "") -> int:
     text = (title + " " + description + " " + rate_text).lower()
 
     # Baseline: any remote/digital/freelance job starts at 50
-    # Kamal will do ANY work that needs a laptop or mobile
+    # Shoaib will do ANY work that needs a laptop or mobile
     score = 50
 
     for kw, weight in SCORE_WEIGHTS.items():
@@ -501,7 +501,7 @@ def main():
     cfg       = load_config()
     bot_token = cfg.get("BOT_TOKEN") or os.environ.get("BOT_TOKEN")
     if not bot_token:
-        log("No BOT_TOKEN — cannot DM Kamal.")
+        log("No BOT_TOKEN — cannot DM Shoaib.")
         return 1
 
     log("Starting job hunt...")
@@ -571,7 +571,7 @@ def main():
                                 url_p = f"https://reddit.com{post.get('permalink','')}"
                                 if not is_recent(ts, hours=hours):
                                     continue
-                                # Broad relevance — Kamal is open to any work
+                                # Broad relevance — Shoaib is open to any work
                                 slot_id = slot.get("id", "")
                                 full_lower = full.lower()
 
@@ -638,7 +638,7 @@ def main():
                                     continue
 
                                 # Stack signal check — relaxed for startup/microtask channels
-                                # No stack filter — Kamal does any digital/remote work
+                                # No stack filter — Shoaib does any digital/remote work
                                 internet_jobs.append({
                                     "title":       title[:120],
                                     "url":         url_p,
@@ -807,7 +807,7 @@ def main():
     # Only DM top N if there are new jobs
     dm_jobs = new_jobs[:MAX_JOBS_PER_DM]
     if not dm_jobs:
-        # Still tell Kamal what we explored
+        # Still tell Shoaib what we explored
         if slot_name:
             slack_post(bot_token, {"channel": KAMAL_DM,
                 "text": f"🔍 *Explored:* {slot_name}\n_No new qualifying work found this pass. Back in 30 min._\n🤖 Varys"})
@@ -846,7 +846,7 @@ def main():
     if result.get("ok"):
         msg_ts = result.get("ts", "")
         log(f"DM sent with {len(dm_jobs)} jobs (top score: {dm_jobs[0]['score']})")
-        # Eval: track this DM, watch for Kamal's "apply X" reaction
+        # Eval: track this DM, watch for Shoaib's "apply X" reaction
         log_action(
             action_type = "proactive-dm",
             event       = f"Job hunt DM: {len(dm_jobs)} new jobs",

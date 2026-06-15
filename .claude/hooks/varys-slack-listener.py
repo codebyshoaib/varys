@@ -338,7 +338,7 @@ def run_claude(prompt: str, cwd: str = None, timeout: int = 240,
 
 HUMOR_LOG = Path("/tmp/varys-humor-log.jsonl")
 
-# Privacy: what Varys must NEVER share with non-Kamal people
+# Privacy: what Varys must NEVER share with non-Shoaib people
 PRIVACY_RULES = """
 PRIVACY EVAL — before sending to a non-{USER_NAME} person, strip or rewrite anything that:
 1. Reveals another person's work issues, failures, or personal situation
@@ -766,7 +766,7 @@ Reply now. Do NOT output any mode label, header, or internal reasoning — just 
         thread_preview = thread_history,
     )
 
-    # Write to Eval Log for Kamal to review and rate
+    # Write to Eval Log for Shoaib to review and rate
     log_to_eval(
         conv_id     = conv_id,
         sender_name = sender_name or USER_NAME,
@@ -803,7 +803,7 @@ Reply now. Do NOT output any mode label, header, or internal reasoning — just 
             request = text,
         )
 
-    # Eval tracker — log this action, watch for Kamal's reaction
+    # Eval tracker — log this action, watch for Shoaib's reaction
     if not is_third_party:
         eval_conversation(
             request             = text,
@@ -837,7 +837,7 @@ def process_missed_messages(web: WebClient, dm_channel: str, retry_count: int = 
             subtype = m.get("subtype", "")
 
             # Skip bot messages, Varys's own replies, and edits/deletes
-            # MCP Slack tool sends as Kamal's OAuth token so bot_id is absent —
+            # MCP Slack tool sends as Shoaib's OAuth token so bot_id is absent —
             # detect Varys's own messages by the leading robot emoji signature
             is_varys_own = (user == VARYS_BOT_USER or text.startswith("🤖"))
             if not text or bot_id or subtype or ts == last_ts or is_varys_own:
@@ -930,7 +930,7 @@ def dispatch(text: str, web: WebClient, channel: str, thread_ts: str, source: st
     if is_third_party and thread_history:
         save_conversation_to_notion(sender_name or "Unknown", channel, thread_history, clean)
 
-    # Reaction watcher: if Kamal is replying, check if this is a reaction to a pending Varys action
+    # Reaction watcher: if Shoaib is replying, check if this is a reaction to a pending Varys action
     if sender_id == KAMAL_USER_ID and not is_third_party:
         _check_pending_reactions(channel, thread_ts)
 
@@ -939,7 +939,7 @@ def dispatch(text: str, web: WebClient, channel: str, thread_ts: str, source: st
 
     # ── First message of the day — run content pipeline if not done yet ──────
     # DISABLED 2026-06-15: this auto-posted hardcoded TECH_CAPTIONS to LinkedIn
-    # (previous owner Kamal's content) with no human approval, triggered by the
+    # (previous owner Shoaib's content) with no human approval, triggered by the
     # first Slack message each day. LinkedIn posting is manual-only for this user
     # to avoid spam/ban risk. Re-enable only with an explicit opt-in + per-post
     # approval. See memory: content-linkedin-pipeline-setup / user-linkedin-identity.
@@ -1167,7 +1167,7 @@ Sign off: 🤖 {{AGENT_NAME}}""", timeout=180, event_context="proactive_idle")
                     resp = web.chat_postMessage(channel=dm_channel, text=answer_normalized)
                     last_proactive_ts = resp.get("ts", "") if isinstance(resp, dict) else None
                     log(f"Proactive: {answer_normalized[:80]}")
-                    # Eval: log proactive DM, watch for Kamal reaction
+                    # Eval: log proactive DM, watch for Shoaib reaction
                     eval_proactive_dm(content=answer_normalized, channel=dm_channel, ts=last_proactive_ts or "")
                 except Exception as e:
                     klog_error(context="proactive_loop-send_message", exc=e)
@@ -1205,7 +1205,7 @@ def make_handler(web: WebClient, dm_channel: str, bot_token: str):
         if user == VARYS_BOT_USER and event_type == "message":
             _varys_thread_origins.add(ts)
 
-        # 1. DM to Varys bot — Kamal, Fatima, anyone. is_dm=True → flat history fetch
+        # 1. DM to Varys bot — Shoaib, Fatima, anyone. is_dm=True → flat history fetch
         if event_type == "message" and event.get("channel_type") == "im":
             dispatch(text, web, channel, ts, "DM", sender_id=user, is_dm=True, bot_token=bot_token)
 
@@ -1254,7 +1254,7 @@ def main():
 
     web = WebClient(token=bot_token)
 
-    # Open DM with Kamal for proactive messages
+    # Open DM with Shoaib for proactive messages
     try:
         dm_resp    = web.conversations_open(users=KAMAL_USER_ID)
         dm_channel = dm_resp["channel"]["id"]

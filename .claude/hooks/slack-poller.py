@@ -4,8 +4,8 @@ slack-poller: Runs every 30 min via cron.
 
 1. Reads Slack channels → captures relevant messages
 2. Writes new items to /tmp/varys-slack-inbox.json (Claude syncs to Notion via MCP)
-3. Posts a summary DM to Kamal: what was read, what was learned, what was done
-4. On any fatal error → DMs Kamal immediately
+3. Posts a summary DM to Shoaib: what was read, what was learned, what was done
+4. On any fatal error → DMs Shoaib immediately
 
 Cron:
   */30 * * * * python3 .claude/hooks/slack-poller.py >> /tmp/varys-slack.log 2>&1
@@ -121,7 +121,7 @@ def slack_post(token: str, endpoint: str, payload: dict) -> dict:
 
 
 def open_dm(token: str) -> str | None:
-    """Open a DM channel with Kamal, return channel ID."""
+    """Open a DM channel with Shoaib, return channel ID."""
     resp = slack_post(token, "conversations.open", {"users": KAMAL_USER_ID})
     if resp.get("ok"):
         return resp.get("channel", {}).get("id")
@@ -239,7 +239,7 @@ def poll_channel(token: str, channel_id: str, channel_name: str,
 
         from_label = f"<@{from_id}>" if from_id else "Unknown"
         if from_id == KAMAL_USER_ID:
-            from_label = "You (Kamal)"
+            from_label = "You (Shoaib)"
 
         new_items.append({
             "permalink":      permalink,
@@ -336,7 +336,7 @@ def explore_self_question(bot_token: str, dm_channel: str):
     """
     When Slack is quiet, pick the next unanswered question from the
     Self-Questions page, research it with real data, update the page,
-    and DM Kamal the finding.
+    and DM Shoaib the finding.
     """
     # Rotate through question index
     idx = 0
@@ -352,7 +352,7 @@ def explore_self_question(bot_token: str, dm_channel: str):
     today = datetime.now().strftime('%Y-%m-%d')
     time_now = datetime.now().strftime('%H:%M')
 
-    prompt = f"""You are Varys — Kamal's autonomous AI agent. Slack is quiet. Use this time well.
+    prompt = f"""You are Varys — Shoaib's autonomous AI agent. Slack is quiet. Use this time well.
 
 ## YOUR JOB THIS CYCLE
 Pick question #{idx} from the "Next Questions to Explore" checklist on this Notion page:
@@ -363,7 +363,7 @@ Pick the #{idx % 8} item from the "Next Questions to Explore" section (wrap arou
 
 ## RESEARCH IT
 Use real data sources:
-- Notion MCP → for Kamal's PRs, Work Log, Harness, Team People
+- Notion MCP → for Shoaib's PRs, Work Log, Harness, Team People
 - Slack Inbox file → /tmp/varys-slack-inbox.json
 - GitHub → `gh pr list --repo taleemabad/taleemabad-core --limit 10` or relevant repo
 - Web search → if it's a technical or external question
@@ -510,7 +510,7 @@ def _main_body() -> int:
     bot_token = slack_cfg.get("BOT_TOKEN")   or os.environ.get("BOT_TOKEN")
 
     if not token:
-        log("FATAL: No SLACK_TOKEN — cannot poll Slack or DM Kamal.")
+        log("FATAL: No SLACK_TOKEN — cannot poll Slack or DM Shoaib.")
         return 1
 
     since    = datetime.now() - timedelta(hours=4)
@@ -550,7 +550,7 @@ def _main_body() -> int:
             if summary:
                 result = slack_post(dm_token, "chat.postMessage",
                                     {"channel": dm_channel, "text": summary})
-                log("Summary DM sent to Kamal.")
+                log("Summary DM sent to Shoaib.")
                 msg_ts = result.get("ts", "") if result.get("ok") else ""
                 eval_poller_summary(summary=summary, new_items=len(new_items),
                                     channel=dm_channel, ts=msg_ts)

@@ -153,7 +153,7 @@ MY SELF-GAPS (avoid repeating these mistakes):
 
 YOUR OUTPUT MUST BE A JSON OBJECT:
 {{
-  "real_intent": "one sentence: what is Kamal/team actually trying to achieve?",
+  "real_intent": "one sentence: what is Shoaib/team actually trying to achieve?",
   "chosen_agent": "agent-name from the available list (or null if gap)",
   "delegation_brief": "full brief for the worker: task, context, definition of done, constraints",
   "slack_plan_message": "message to post in the Slack thread — plan + who is handling it",

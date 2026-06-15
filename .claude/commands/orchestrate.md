@@ -6,7 +6,7 @@ description: Run one orchestrator tick — poll Notion/Slack/GitHub, dispatch su
 
 Runs a single tick of Varys's team orchestrator. Use with `/loop 270` for continuous operation.
 
-**Never change the 270s interval without asking Kamal.**
+**Never change the 270s interval without asking Shoaib.**
 
 ## Tick Sequence
 

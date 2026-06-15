@@ -24,13 +24,13 @@ Minimum fields to populate on first save:
 - `Current Mood` — default `Unknown`
 - `Interaction Count` — 1 on first save
 - `Recurring Topics` — what they talked about / were mentioned for
-- `Kamil Notes` — one line: date, what happened, channel/context
+- `Varys Notes` — one line: date, what happened, channel/context
 - `date:Last Seen:start` — today's date
 
 On subsequent saves (person already exists):
 - Increment `Interaction Count`
 - Update `Last Seen`, `Current Mood`, `Active Needs`, `Recurring Topics`
-- Append to `Kamil Notes` (don't overwrite — add a new dated line)
+- Append to `Varys Notes` (don't overwrite — add a new dated line)
 
 ## Do NOT block on this
 

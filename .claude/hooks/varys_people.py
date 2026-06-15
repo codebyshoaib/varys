@@ -89,7 +89,7 @@ def update_profile_after_conversation(
     Runs in a background thread — never blocks the reply.
     """
     if not is_third_party and sender_id == _cfg_people("USER_SLACK_ID", ""):
-        # Kamal himself — skip (he has his own memory system)
+        # Shoaib himself — skip (he has his own memory system)
         return
 
     threading.Thread(

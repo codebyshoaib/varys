@@ -3,10 +3,10 @@ varys_eval.py — Eval harness sync layer.
 
 After every conversation:
 1. Auto-creates a row in Notion Eval Log DB (Rating = Unreviewed)
-2. Kamal reviews: sets Rating + optionally adds a note
+2. Shoaib reviews: sets Rating + optionally adds a note
 3. varys-learn.sh reads ❌ Wrong / ⚠️ Partial rows nightly
-4. Classifies failure type, proposes exact prompt fix, DMs Kamal
-5. Kamal approves → Varys applies fix → marks Fix Applied
+4. Classifies failure type, proposes exact prompt fix, DMs Shoaib
+5. Shoaib approves → Varys applies fix → marks Fix Applied
 
 Eval Log DB: collection://2e46d119-159e-4634-9195-a7343e590dbe
 """

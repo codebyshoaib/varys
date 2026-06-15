@@ -3,7 +3,7 @@
 varys_health.py — Write health events to Notion Health Log DB.
 
 DB ID: 27e287b7-a3d1-46c6-b5e8-eb0d862d746f
-Parent: 🧠 Kamal's Agent Brain
+Parent: 🧠 Shoaib's Agent Brain
 
 Usage:
     from varys_health import log_health, log_error, log_healed, log_critique

@@ -107,4 +107,4 @@ Options:
 
 - For taleemabad-core PRs: always run `/gh-pr-review <pr_number>` before marking Notion ticket Done.
 - After review fixes: update Notion ticket `Last Agent Update` field.
-- If review uncovers blocking issues: set ticket Status=Blocked, DM Kamal on Slack.
+- If review uncovers blocking issues: set ticket Status=Blocked, DM Shoaib on Slack.

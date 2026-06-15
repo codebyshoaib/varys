@@ -1,12 +1,12 @@
 # Harness Evolution
 
 > How to improve the system itself. Read when detecting a recurring pattern.
-> Propose improvements to Kamal — never apply without approval.
+> Propose improvements to Shoaib — never apply without approval.
 
 ## Core Rules
 - Detect patterns before proposing. 3+ occurrences = propose a fix.
-- Never apply changes to the harness without Kamal's explicit approval.
-- Every proposal goes to Kamal via Slack DM: what / why / what changes.
+- Never apply changes to the harness without Shoaib's explicit approval.
+- Every proposal goes to Shoaib via Slack DM: what / why / what changes.
 - Log all proposals in the "Proposed Improvements Log" section below.
 
 ## CLAUDE.md Improvement Patterns
@@ -34,7 +34,7 @@
 - Hook fires on wrong events → add guard condition
 - Same fix applied manually 2+ times → automate as hook
 
-## What NOT to Touch Without Asking Kamal
+## What NOT to Touch Without Asking Shoaib
 - harness.db schema changes
 - settings.json hook wiring
 - Any file affecting the tick loop
@@ -63,7 +63,7 @@ curl -s "https://raw.githubusercontent.com/<owner>/<repo>/main/<path>" \
 
 3. **If nothing good exists:** build it using `skill-creator` skill, then publish to GitHub so it appears on SkillHound.
 
-4. **DM Kamal** with: "Found skill `<name>` on SkillHound (★X). Installed. Gap closed."
+4. **DM Shoaib** with: "Found skill `<name>` on SkillHound (★X). Installed. Gap closed."
 
 **SkillHound URL:** https://www.skillhound.ai
 **Already installed from SkillHound:**

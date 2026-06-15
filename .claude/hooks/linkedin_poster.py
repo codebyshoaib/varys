@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-linkedin_poster.py — Post text + image to LinkedIn on Kamal's behalf.
+linkedin_poster.py — Post text + image to LinkedIn on Shoaib's behalf.
 
 Uses LinkedIn UGC Posts API with w_member_social scope.
 Token valid 2 months — stored in ~/.claude/hooks/.linkedin

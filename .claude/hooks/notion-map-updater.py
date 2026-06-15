@@ -45,7 +45,7 @@ KNOWN_DBS = {
     "68792d2dfff84691a4f646f5a8126149": "Content Calendar",
     "630d86afb17746f9ad6f9bc78afefa02": "Content Log",
     # Page IDs
-    "364d8747b3b1813d8ac8c248800f0a4d": "Kamal's Agent Brain (page)",
+    "364d8747b3b1813d8ac8c248800f0a4d": "Shoaib's Agent Brain (page)",
     "365d8747b3b181b281b8ef5820e15881": "Varys Self-Questions (page)",
     "369d8747b3b181d59775dcb4297d7dbd": "Master Plan / Freelance (page)",
     # Data source IDs

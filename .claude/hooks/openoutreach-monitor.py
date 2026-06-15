@@ -10,11 +10,11 @@ Called by job-finder.py every 30 min. Detects:
 On new inbound reply:
   1. Pauses automation for that deal (sets state → Completed, outcome → bad_timing)
      so the bot stops firing automated messages at someone who replied
-  2. DMs Kamal with: profile, full conversation thread, drafted value-first reply
+  2. DMs Shoaib with: profile, full conversation thread, drafted value-first reply
   3. Saves message ID to state — no duplicate alerts
 
 On new accepted connection:
-  → DM Kamal, save to Notion Job Tracker
+  → DM Shoaib, save to Notion Job Tracker
 
 DB path: /home/oye/.openoutreach/data/db.sqlite3
   = Docker volume mount of /app/data/db.sqlite3 inside the container
@@ -211,7 +211,7 @@ def handle_inbound_replies(conn, token: str, seen_reply_ids: set) -> tuple[list[
     Detect new inbound messages on Connected/Qualified deals.
     For each new reply:
       - Pause automation (set deal Completed/bad_timing)
-      - DM Kamal with full context + drafted reply
+      - DM Shoaib with full context + drafted reply
     Returns (updated seen_ids_list, new_event_count).
     """
     cur = conn.cursor()
@@ -261,11 +261,11 @@ def handle_inbound_replies(conn, token: str, seen_reply_ids: set) -> tuple[list[
         # Draft value-first reply
         draft = _draft_value_first_reply(profile_summary, handle)
 
-        # 1. Pause automation BEFORE alerting Kamal
+        # 1. Pause automation BEFORE alerting Shoaib
         paused = _pause_deal_automation(handle)
         pause_note = "⏸ Automation paused." if paused else "⚠️ Could not pause automation — pause manually."
 
-        # 2. DM Kamal
+        # 2. DM Shoaib
         lines = [
             f"🔥 *{handle} just replied on LinkedIn*",
             "",
@@ -355,7 +355,7 @@ def save_linkedin_lead_to_notion(name: str, title: str, company: str,
 
 
 def handle_new_connections(conn, token: str, seen_connected_ids: set) -> tuple[list[str], int]:
-    """Detect new Connected/Qualified deals and DM Kamal."""
+    """Detect new Connected/Qualified deals and DM Shoaib."""
     cur = conn.cursor()
     cur.execute("""
         SELECT d.id, d.state, d.profile_summary, l.linkedin_url, l.public_identifier

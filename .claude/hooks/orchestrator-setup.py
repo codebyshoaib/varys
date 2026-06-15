@@ -11,7 +11,7 @@ Checks:
   4. Required Notion DB properties exist
   5. Test tick (dry run) to verify pollers can connect
 
-Outputs a setup report and DMs Kamal with what's missing.
+Outputs a setup report and DMs Shoaib with what's missing.
 """
 
 import json

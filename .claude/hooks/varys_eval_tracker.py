@@ -6,27 +6,27 @@ Every action Varys takes gets logged with:
   - action_id:    unique ID so the reaction watcher can find it later
   - action_type:  conversation | proactive-dm | self-question | pr-review |
                   notion-write | self-heal | book-coach | poller-summary
-  - initial_score: Varys's self-score before seeing Kamal's reaction
+  - initial_score: Varys's self-score before seeing Shoaib's reaction
   - kamal_reacted: pending → yes/no (updated by reaction watcher)
   - evidence:     what Varys actually did (request, answer, action)
 
 Scoring rubric (0-100):
   conversation:
-    100 — answered with tools, no clarification asked, Kamal acted on it
-    70  — good answer, Kamal read it
+    100 — answered with tools, no clarification asked, Shoaib acted on it
+    70  — good answer, Shoaib read it
     30  — asked a clarifying question a tool could have answered
-    0   — Kamal had to repeat himself or correct Varys
+    0   — Shoaib had to repeat himself or correct Varys
 
   proactive-dm / poller-summary:
-    100 — Kamal replied, reacted, or acted on it
-    50  — Kamal read it (no reply but no complaint)
-    0   — Kamal ignored or said "already knew"
+    100 — Shoaib replied, reacted, or acted on it
+    50  — Shoaib read it (no reply but no complaint)
+    0   — Shoaib ignored or said "already knew"
 
   self-question:
     100 — answer sourced from real tool (Notion/GitHub/Slack), spawned useful follow-up
     60  — answer sourced from real tool, no follow-up
     20  — answer was a guess / no tool used
-    0   — answer was wrong (corrected by Kamal later)
+    0   — answer was wrong (corrected by Shoaib later)
 
   self-heal:
     100 — fix applied, service stable after 24h
@@ -34,15 +34,15 @@ Scoring rubric (0-100):
     0   — fix was wrong, broke again
 
   pr-review:
-    100 — Kamal agreed with all points, no issues missed
-    60  — Kamal agreed with most points
-    20  — Kamal found issues Varys missed
+    100 — Shoaib agreed with all points, no issues missed
+    60  — Shoaib agreed with most points
+    20  — Shoaib found issues Varys missed
     0   — Varys's review was wrong
 
   book-coach:
-    100 — Kamal replied, referenced the challenge, or asked follow-up
+    100 — Shoaib replied, referenced the challenge, or asked follow-up
     50  — DM delivered, no engagement
-    0   — Kamal said not useful
+    0   — Shoaib said not useful
 
   notion-write:
     100 — entry complete, all fields filled, still accurate after 7 days
@@ -50,9 +50,9 @@ Scoring rubric (0-100):
     0   — entry wrong or stale within 24h
 
 Reaction watcher (passive):
-  - After every Varys proactive DM, listener watches the next message Kamal sends
-  - If Kamal replies within 5 min → reacted=yes, score boosted to 100
-  - If Kamal reacts with emoji → reacted=yes
+  - After every Varys proactive DM, listener watches the next message Shoaib sends
+  - If Shoaib replies within 5 min → reacted=yes, score boosted to 100
+  - If Shoaib reacts with emoji → reacted=yes
   - If no reply within 30 min → reacted=no, score stays as-is
   - Updates the Notion Health Log entry via Action ID
 """
@@ -82,7 +82,7 @@ INITIAL_SCORES = {
     ("conversation",    "no_clarification"):  80,
     ("conversation",    "clarification_asked"): 30,
     ("conversation",    "tool_used"):          90,
-    ("proactive-dm",    "sent"):               50,  # bumped to 100 if Kamal reacts
+    ("proactive-dm",    "sent"):               50,  # bumped to 100 if Shoaib reacts
     ("poller-summary",  "sent"):               50,
     ("self-question",   "tool_sourced"):       70,
     ("self-question",   "guessed"):            20,
@@ -109,7 +109,7 @@ def _run_notion_write(action_id: str, action_type: str, event: str,
         "Action Type":  action_type,
         "Action ID":    action_id,
         "Eval Score":   score,
-        "Kamal Reacted": "pending",
+        "Shoaib Reacted": "pending",
         "Evidence":     evidence[:500],
         "Service":      service,
         "Severity":     "info",
@@ -136,12 +136,12 @@ Reply only "ok"."""
 
 
 def _run_notion_update(action_id: str, reacted: str, final_score: int):
-    """Update an existing Health Log entry's Kamal Reacted + Eval Score by Action ID."""
+    """Update an existing Health Log entry's Shoaib Reacted + Eval Score by Action ID."""
     prompt = f"""Use mcp__claude_ai_Notion__notion-search to find a page in the Varys Health Log DB
 where "Action ID" = "{action_id}".
 
 Then use mcp__claude_ai_Notion__notion-update-page with command update_properties to set:
-  "Kamal Reacted": "{reacted}"
+  "Shoaib Reacted": "{reacted}"
   "Eval Score": {final_score}
 
 Reply only "ok"."""
@@ -206,7 +206,7 @@ def log_action(action_type: str, event: str, evidence: str,
            service=service,
            session_id=sid)
 
-    # Save to pending file if this action expects a Kamal reaction
+    # Save to pending file if this action expects a Shoaib reaction
     if action_type in ("conversation", "proactive-dm", "poller-summary",
                        "book-coach", "pr-review") and channel and ts:
         _save_pending(action_id, action_type, score, channel, ts)
@@ -216,8 +216,8 @@ def log_action(action_type: str, event: str, evidence: str,
 
 def record_reaction(action_id: str, reacted: bool, boost: int = 30):
     """
-    Call when Kamal replies to or reacts to a Varys message.
-    Boosts the eval score and marks Kamal Reacted = yes/no.
+    Call when Shoaib replies to or reacts to a Varys message.
+    Boosts the eval score and marks Shoaib Reacted = yes/no.
     """
     # Load pending to find current score
     current_score = 50

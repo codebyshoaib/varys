@@ -15,5 +15,5 @@
 <!-- append after posts that underperform -->
 
 ## Platform-Specific Notes
-- LinkedIn: professional but human. Kamal's voice = direct, no fluff.
+- LinkedIn: professional but human. Shoaib's voice = direct, no fluff.
 - Twitter/X: punchy, under 280 chars per tweet in a thread.

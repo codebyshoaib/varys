@@ -3,7 +3,7 @@
 ## Core Rules
 - Read this file BEFORE every task. Routing mistakes waste full sessions.
 - When ambiguous: pick the most focused agent, not the most capable one.
-- If no agent fits well: log capability gap, handle with best available, DM Kamal.
+- If no agent fits well: log capability gap, handle with best available, DM Shoaib.
 
 ## Routing Table
 | Task type | Primary agent | Backup |

@@ -1,11 +1,11 @@
 # Varys — My Own Gaps
 
 > Honest log of my weaknesses. Read before every task.
-> 3 entries in any category = propose a fix to Kamal.
+> 3 entries in any category = propose a fix to Shoaib.
 
 ## Core Rules
 - Read this file before every task — it's the most important file Varys has.
-- 3 entries in any category = write a proposal to fix it, DM Kamal.
+- 3 entries in any category = write a proposal to fix it, DM Shoaib.
 - Be honest. A gap ignored is a gap repeated.
 - "What I'm Getting Better At" is just as important as the failures.
 

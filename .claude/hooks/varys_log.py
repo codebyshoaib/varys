@@ -6,7 +6,7 @@ Design principles:
 - Events are typed — no null pollution from unrelated fields
 - Conversation events have conv_id for grouping threads
 - Queryable as a harness: "show me slow calls", "show me failed intents",
-  "show me all messages Kamal had to repeat"
+  "show me all messages Shoaib had to repeat"
 
 Event types:
   conversation     — full request/reply log (the main one you read)
@@ -23,7 +23,7 @@ Event types:
 Usage:
     from varys_log import klog, klog_error, klog_conversation
     klog("socket_stale", stale_minutes=8.2)
-    klog_conversation(sender_name="Kamal", request="send a joke", reply="Sent!", ...)
+    klog_conversation(sender_name="Shoaib", request="send a joke", reply="Sent!", ...)
     klog_error("handle_message", exc)
 """
 

@@ -17,6 +17,6 @@
 
 ## Person Preferences
 <!-- append as you learn, e.g.: -->
-<!-- - Kamal: wants the answer first, then reasoning if asked -->
+<!-- - Shoaib: wants the answer first, then reasoning if asked -->
 <!-- - Mahnoor: prefers async, hates interruptions mid-task -->
 

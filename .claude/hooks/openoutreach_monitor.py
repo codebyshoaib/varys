@@ -7,8 +7,8 @@ Called by job-finder.py every 30 min. Detects:
   - New replies from leads (conversation activity)
   - Campaign stats (sent, accepted rate)
 
-On new accepted connection → DM Kamal → save to Notion Job Tracker as LinkedIn lead.
-On new reply → DM Kamal → update Job Tracker entry.
+On new accepted connection → DM Shoaib → save to Notion Job Tracker as LinkedIn lead.
+On new reply → DM Shoaib → update Job Tracker entry.
 
 DB path: ~/.openoutreach/data/db.sqlite3
 """

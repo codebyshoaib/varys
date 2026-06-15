@@ -38,7 +38,7 @@ EXTRACT_PROMPT = """You are Varys's brain indexer. Read the session log below an
 2. BOOKS/RESOURCES — any book, article, video, tool, or resource mentioned
 3. DECISIONS — anything decided, approved, or agreed upon
 4. NEW_HARNESS_ITEMS — new skills, agents, hooks, or workflows added to Varys
-5. PREFERENCES — any preference expressed by Kamal or a team member
+5. PREFERENCES — any preference expressed by Shoaib or a team member
 6. FACTS — any other important fact that should be remembered
 
 Return ONLY a JSON object:

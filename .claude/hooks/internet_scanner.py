@@ -53,7 +53,7 @@ PAID_SIGNALS = [
     "need developer", "need engineer", "looking for developer",
 ]
 
-# Keywords that signal it matches Kamal's stack
+# Keywords that signal it matches Shoaib's stack
 STACK_SIGNALS = [
     "django", "python", "react", "typescript", "aws", "terraform",
     "postgres", "postgresql", "redis", "celery", "docker",
