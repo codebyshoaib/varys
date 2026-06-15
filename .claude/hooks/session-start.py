@@ -43,50 +43,118 @@ def load_slack_inbox() -> list:
         return []
 
 
-def _fetch_auto_tickets() -> list[dict]:
-    """Fetch pending [Auto] Harness tickets. Returns list of {title, phase} dicts."""
+def _notion_query(token: str, db_id: str, body: dict) -> list:
+    """Shared Notion DB query helper. Returns raw results list."""
     import urllib.request as _ur
+    data = json.dumps(body).encode()
+    req = _ur.Request(
+        f"https://api.notion.com/v1/databases/{db_id}/query",
+        data=data,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+            "Notion-Version": "2022-06-28",
+        },
+    )
+    with _ur.urlopen(req, timeout=8) as r:
+        return json.loads(r.read()).get("results", [])
+
+
+def _get_notion_token() -> str:
     notion_cfg = Path.home() / ".claude" / "hooks" / ".notion"
-    token = ""
     if notion_cfg.exists():
         for line in notion_cfg.read_text().splitlines():
             if line.startswith("NOTION_API_KEY="):
-                token = line.split("=", 1)[1].strip()
+                return line.split("=", 1)[1].strip()
+    return ""
+
+
+def _fetch_work_log() -> list[dict]:
+    """Fetch last 2 Work Log entries."""
+    token = _get_notion_token()
     if not token:
         return []
-
-    data = json.dumps({
-        "filter": {
-            "and": [
-                {"property": "Feature", "title":  {"contains": "[Auto]"}},
-                {"property": "Phase",   "select": {"does_not_equal": "Done"}},
-            ]
-        },
-        "page_size": 10,
-    }).encode()
-
     try:
-        req = _ur.Request(
-            f"https://api.notion.com/v1/databases/{DB_PAGE_HARNESS}/query",
-            data=data,
-            headers={
-                "Authorization":  f"Bearer {token}",
-                "Content-Type":   "application/json",
-                "Notion-Version": "2022-06-28",
+        pages = _notion_query(token, DB_PAGE_WORK_LOG, {
+            "sorts": [{"timestamp": "created_time", "direction": "descending"}],
+            "page_size": 2,
+        })
+        results = []
+        for page in pages:
+            props = page["properties"]
+            def txt(p): return (props.get(p, {}).get("rich_text") or [{}])[0].get("plain_text", "") if props.get(p) else ""
+            def ttl(p): return (props.get(p, {}).get("title") or [{}])[0].get("plain_text", "") if props.get(p) else ""
+            def dt(p):  return (props.get(p, {}).get("date") or {}).get("start", "")
+            results.append({
+                "session": ttl("Session"),
+                "date": dt("Date"),
+                "done": txt("What Was Done"),
+                "prs": txt("PRs Worked On"),
+                "next": txt("Next Steps"),
+            })
+        return results
+    except Exception:
+        return []
+
+
+def _fetch_open_prs() -> list[dict]:
+    """Fetch open/in-review PRs."""
+    token = _get_notion_token()
+    if not token:
+        return []
+    try:
+        pages = _notion_query(token, DB_PAGE_MY_PRS, {
+            "filter": {"or": [
+                {"property": "Status", "select": {"equals": "Open"}},
+                {"property": "Status", "select": {"equals": "Needs Review"}},
+                {"property": "Status", "select": {"equals": "CI Failing"}},
+                {"property": "Status", "select": {"equals": "Draft"}},
+            ]},
+            "page_size": 10,
+        })
+        results = []
+        for page in pages:
+            props = page["properties"]
+            def ttl(p): return (props.get(p, {}).get("title") or [{}])[0].get("plain_text", "") if props.get(p) else ""
+            def sel(p): return (props.get(p, {}).get("select") or {}).get("name", "")
+            def num(p): return props.get(p, {}).get("number")
+            def url(p): return props.get(p, {}).get("url", "")
+            results.append({
+                "title": ttl("PR Title"),
+                "status": sel("Status"),
+                "ci": sel("CI Status"),
+                "number": num("PR Number"),
+                "url": url("userDefined:URL"),
+            })
+        return results
+    except Exception:
+        return []
+
+
+def _fetch_auto_tickets() -> list[dict]:
+    """Fetch pending [Auto] Harness tickets. Returns list of {title, phase} dicts."""
+    token = _get_notion_token()
+    if not token:
+        return []
+    try:
+        pages = _notion_query(token, DB_PAGE_HARNESS, {
+            "filter": {
+                "and": [
+                    {"property": "Feature", "title":  {"contains": "[Auto]"}},
+                    {"property": "Phase",   "select": {"does_not_equal": "Done"}},
+                ]
             },
-        )
-        # TODO: migrate to varys_notion.notion_request() (orchestrator.md Hard Rule #3)
-        with _ur.urlopen(req, timeout=8) as r:
-            result = json.loads(r.read())
-            tickets = []
-            for page in result.get("results", []):
-                title = page["properties"].get("Feature", {}).get("title", [])
-                phase = page["properties"].get("Phase",   {}).get("select") or {}
-                tickets.append({
-                    "title": title[0]["plain_text"] if title else "?",
-                    "phase": phase.get("name", "Backlog"),
-                })
-            return tickets
+            "page_size": 10,
+        })
+        tickets = []
+        for page in pages:
+            title = page["properties"].get("Feature", {}).get("title", [])
+            phase = (page["properties"].get("Phase", {}).get("select") or {})
+            tickets.append({
+                "title": title[0]["plain_text"] if title else "?",
+                "phase": phase.get("name", "Backlog"),
+            })
+        return tickets
     except Exception:
         return []
 
@@ -121,6 +189,33 @@ def build_system_message() -> str:
         lines.append("")
     else:
         lines.append("## 📬 Slack Inbox — Nothing new since last session\n")
+
+    # Pre-fetch live Notion context (reliable in --print mode; MCP instruction alone is not)
+    try:
+        work_log = _fetch_work_log()
+        open_prs = _fetch_open_prs()
+        lines.append("## 📋 Live Notion Context (pre-fetched)")
+        if work_log:
+            lines.append("### Recent Work Log")
+            for entry in work_log:
+                lines.append(f"**{entry['date'] or 'recent'} — {entry['session']}**")
+                if entry["done"]:  lines.append(f"  Done: {entry['done'][:200]}")
+                if entry["prs"]:   lines.append(f"  PRs: {entry['prs'][:150]}")
+                if entry["next"]:  lines.append(f"  Next: {entry['next'][:150]}")
+        else:
+            lines.append("  Work Log: no recent entries found")
+        if open_prs:
+            lines.append("### Open PRs")
+            for pr in open_prs:
+                num = f"#{pr['number']}" if pr["number"] else ""
+                ci  = f" CI:{pr['ci']}" if pr["ci"] and pr["ci"] != "N/A" else ""
+                url = f" {pr['url']}" if pr["url"] else ""
+                lines.append(f"  - {pr['status']} {num} {pr['title']}{ci}{url}")
+        else:
+            lines.append("  Open PRs: none")
+        lines.append("")
+    except Exception:
+        pass  # live context is best-effort
 
     # Surface recent learnings from brain.db
     try:
