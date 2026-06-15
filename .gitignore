@@ -7,6 +7,7 @@
 # User session data — personal to each install
 vault/logs/*
 !vault/logs/.gitkeep
+vault/notion-map.md
 .beads/failures.jsonl
 
 # Python
