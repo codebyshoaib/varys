@@ -1,108 +1,97 @@
 #!/usr/bin/env python3
 """
-stop-notion hook: Runs at session end.
-Writes a Work Log entry to Notion via MCP (claude -p), no API token needed.
+stop-notion hook: writes a Work Log entry to Notion via direct REST at session end.
+Requires NOTION_API_KEY and NOTION_WORK_LOG_DB_ID in ~/.agent-config.json.
 """
-import json, os, subprocess, sys
+import json, os, sys, urllib.request, urllib.error
 from datetime import datetime
 from pathlib import Path
-import sys as _sys, time as _time
+import time as _time
 
-_sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent))
 try:
     import varys_log as _k
 except Exception:
     _k = None
+from agent_config import cfg
 
 VARYS_DIR = Path(__file__).parent.parent.parent
-CORE      = Path.home() / "Taleemabad" / "taleemabad-core"
-NVM       = 'export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"'
+NOTION_VERSION = "2022-06-28"
 
 
-def git(args, cwd=CORE):
-    r = subprocess.run(args, capture_output=True, text=True, timeout=8, cwd=str(cwd))
-    return r.stdout.strip() if r.returncode == 0 else ""
-
-
-def detect_session() -> dict:
-    branch  = git(["git", "branch", "--show-current"])
-    commits = git(["git", "log", "--since=midnight", "--oneline", "--no-merges", "--max-count=10"])
-    prs = ""
-    try:
-        r = subprocess.run(
-            ["gh", "pr", "list", "--author", "@me", "--state", "open",
-             "--json", "number,title", "--limit", "5"],
-            capture_output=True, text=True, timeout=10, cwd=str(CORE)
-        )
-        if r.returncode == 0 and r.stdout.strip():
-            data = json.loads(r.stdout)
-            prs = "; ".join(f"#{p['number']} {p['title']}" for p in data)
-    except Exception:
-        pass
-
-    project = "taleemabad-core"
-    cwd = os.getcwd()
-    if "taleemabad-cms" in cwd:   project = "taleemabad-cms"
-    elif "/varys" in cwd and "taleemabad" not in cwd: project = "personal-agent"
-
-    what_done = ""
-    if branch:
-        what_done += f"Branch: {branch}\n"
-    if commits:
-        what_done += "Commits today:\n" + "\n".join(f"  {l}" for l in commits.splitlines())
-    if not what_done:
-        what_done = "Session ended — no commits detected."
-
-    return {
-        "date":      datetime.now().strftime("%Y-%m-%d"),
-        "project":   project,
-        "branch":    branch,
-        "what_done": what_done.strip(),
-        "prs":       prs,
-    }
-
-
-def write_via_mcp(info: dict):
-    prompt = f"""Write a Work Log entry to Notion for today's session using the notion MCP.
-
-DB: 0b71db855f914d18ac6d97c0f77fc21e (Work Log)
-
-Properties to set:
-- Session: "{info['date']} — {info['project']} session"
-- Date: {info['date']}
-- Project: {info['project']}
-- Phase: Feature
-- What Was Done: {info['what_done'][:500]}
-{f"- PRs Worked On: {info['prs']}" if info['prs'] else ""}
-
-Use mcp__claude_ai_Notion__notion-create-pages to create the entry. Output only "OK" when done."""
-
-    env = os.environ.copy()
-    env["VARYS_PROMPT"] = prompt
-    result = subprocess.run(
-        ["bash", "-c", f'{NVM} && claude --dangerously-skip-permissions --print -p "$VARYS_PROMPT"'],
-        capture_output=True, text=True,
-        cwd=str(VARYS_DIR), timeout=90, env=env,
+def notion_post(endpoint: str, body: dict) -> dict:
+    key = cfg("NOTION_API_KEY")
+    req = urllib.request.Request(
+        f"https://api.notion.com/v1/{endpoint}",
+        data=json.dumps(body).encode(),
+        headers={
+            "Authorization": f"Bearer {key}",
+            "Notion-Version": NOTION_VERSION,
+            "Content-Type": "application/json",
+        },
+        method="POST",
     )
-    return result.returncode == 0 and result.stdout.strip()
+    with urllib.request.urlopen(req, timeout=15) as r:
+        return json.loads(r.read())
+
+
+def session_summary() -> str:
+    today = datetime.now().strftime("%Y-%m-%d")
+    log_file = VARYS_DIR / "vault" / "logs" / f"{today}.md"
+    if not log_file.exists():
+        return "Session ended — no log file."
+    lines = [l.strip() for l in log_file.read_text().splitlines() if l.strip().startswith("-")]
+    return "\n".join(lines[-10:]) if lines else "Session ended."
 
 
 def main():
-    info = detect_session()
-    ok   = write_via_mcp(info)
-    msg  = f"✅ Work Log written via MCP: {info['date']} — {info['project']}" if ok \
-           else f"⚠️ Work Log MCP write failed for {info['date']}"
+    t0 = _time.time()
+    key = cfg("NOTION_API_KEY")
+    db_id = cfg("NOTION_WORK_LOG_DB_ID")
+
+    if not key or not db_id:
+        msg = "⚠️ stop-notion: NOTION_API_KEY or NOTION_WORK_LOG_DB_ID not configured"
+        print(msg, file=sys.stderr)
+        print(json.dumps({"systemMessage": msg}))
+        return 0
+
+    today = datetime.now().strftime("%Y-%m-%d")
+    summary = session_summary()
+
+    # Detect project from cwd
+    cwd = os.getcwd()
+    if "taleemabad-cms" in cwd:
+        project = "taleemabad-cms"
+    elif "taleemabad-core" in cwd:
+        project = "taleemabad-core"
+    else:
+        project = "personal-agent"
+
+    try:
+        notion_post("pages", {
+            "parent": {"database_id": db_id},
+            "properties": {
+                "Session": {"title": [{"text": {"content": f"{today} — {project}"}}]},
+                "Date": {"date": {"start": today}},
+                "Project": {"select": {"name": project}},
+                "Phase": {"select": {"name": "Feature"}},
+                "What Was Done": {"rich_text": [{"text": {"content": summary[:2000]}}]},
+            },
+        })
+        msg = f"✅ Work Log written: {today} — {project}"
+    except urllib.error.HTTPError as e:
+        body = e.read().decode()
+        msg = f"⚠️ stop-notion HTTP {e.code}: {body[:200]}"
+    except Exception as e:
+        msg = f"⚠️ stop-notion failed: {e}"
+
     print(msg, file=sys.stderr)
     print(json.dumps({"systemMessage": msg}))
+    if _k:
+        status = "ok" if "✅" in msg else "error"
+        _k.klog_cron("stop-notion", status=status, duration_ms=(_time.time()-t0)*1000)
     return 0
 
 
 if __name__ == "__main__":
-    t0 = _time.time()
-    try:
-        rc = main()
-        if _k: _k.klog_cron("stop-notion", status="ok", duration_ms=(_time.time()-t0)*1000)
-        sys.exit(rc)
-    except Exception as e:
-        if _k: _k.klog_error("stop-notion-main", e, component="stop-notion", severity="ERROR")
-        raise
+    sys.exit(main())
