@@ -312,6 +312,38 @@ def build_system_message() -> str:
     except Exception:
         pass
 
+    # Channel context from daily digest
+    context_file = Path.home() / "varys-inbox" / "channel-context.json"
+    if context_file.exists():
+        try:
+            history = json.loads(context_file.read_text())
+            if history:
+                latest = history[-1]
+                lines.append(f"## 📡 Team Context — {latest.get('date', 'recent')} (from daily digest)")
+                att = latest.get("attendance", {})
+                if att.get("on_leave"):
+                    lines.append(f"🏥 On leave: {', '.join(att['on_leave'])}")
+                if att.get("working_remote"):
+                    lines.append(f"🏠 Remote: {', '.join(att['working_remote'])}")
+                channels = latest.get("channels", {})
+                blocked_people = []
+                shipped_people = []
+                for ch, s in channels.items():
+                    for p in s.get("people", []):
+                        if p.get("blocked_on"):
+                            blocked_people.append(f"{p['name']} ({ch}): {p['blocked_on']}")
+                        if p.get("shipped"):
+                            shipped_people.append(f"{p['name']} ({ch}): {p['shipped']}")
+                if blocked_people:
+                    lines.append("⚠️ Blocked: " + " | ".join(blocked_people[:3]))
+                if shipped_people:
+                    lines.append("✅ Shipped: " + " | ".join(shipped_people[:3]))
+                for ch, s in channels.items():
+                    lines.append(f"  • {ch}: {s.get('summary', '')}")
+                lines.append("")
+        except Exception:
+            pass
+
     # Tell Claude what to fetch via MCP
     lines += [
         "## 🔌 Notion MCP — Fetch These Now",
