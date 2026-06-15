@@ -12,7 +12,9 @@ VARYS_DIR = Path(__file__).parent.parent.parent
 FLAG_DIR  = Path.home() / ".varys"
 FLAG_DIR.mkdir(exist_ok=True)
 
-WORK_LOG_DS = "0610f143-433b-499c-bc7a-6060249cabf2"  # data_source_id for Work Log
+import sys as _sys
+_sys.path.insert(0, str(Path(__file__).parent))
+from agent_config import cfg as _cfg
 
 
 def session_summary() -> str:
@@ -44,9 +46,10 @@ def main():
 
     summary = session_summary()
 
+    db_id = _cfg('NOTION_WORK_LOG_DB_ID', '37f902248f3d817890d2c70c1635bad9')
     instruction = (
         f"Write a Notion Work Log entry using the notion MCP tool notion-create-pages. "
-        f"Use parent data_source_id '{WORK_LOG_DS}'. "
+        f"Use parent database_id '{db_id}'. "
         f"Set these properties: "
         f"Session='{today} — {project}', "
         f"date:Date:start='{today}', "
