@@ -21,6 +21,7 @@ owner: varys
 | before claiming "done / fixed / works" | `superpowers:verification-before-completion` |
 | planning a multi-step task | `superpowers:brainstorming` → `superpowers:writing-plans` |
 | slides / deck / presentation | `slides` (vendored, `.claude/skills/slides/`) |
+| LinkedIn post / "post on linkedin" / "write a linkedin post" / `/linkedin-post` | `linkedin-post` |
 | design / post / carousel / thumbnail / banner / "make a graphic" / "create an image" | `canva` |
 | marketing / SEO / ads / email / content strategy | `marketing-skills/*` |
 | Obsidian vault / wikilinks / bases | `obsidian-skills/*` |
