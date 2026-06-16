@@ -253,7 +253,7 @@ def make_steps(title: str, steps: list[str], handle: str,
             ty += lh
 
         # Connector
-        if i < n:
+        if i < n and step_h > 2 * cr:
             draw.rectangle([cx-4, mid_y+cr, cx+4, mid_y+step_h-cr],
                            fill=palette["divider"])
         y += step_h
