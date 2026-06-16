@@ -43,10 +43,10 @@ SessionStart hook→ surfaces unsynced Slack items + tells Claude to fetch Notio
 Stop hook        → writes Work Log to Notion + commits vault/logs
 Job Hunter       → job-finder.py cron; internet-scanner; auto-apply (score≥75); OpenOutreach monitor
 NotebookLM       → nlm CLI; trigger with "nlm ..." on Slack (list/ask/research/podcast/slides/mindmap/quiz)
-Team Orchestrator→ /loop 270s — see .claude/rules/orchestrator.md for full rules
+Team Orchestrator→ varys-orchestrator-loop.sh (270s, agent-free daemon @reboot) — see .claude/rules/orchestrator.md
 ```
 
-## Team Orchestrator (/loop — 270s tick, never change interval without asking Shoaib Ud Din)
+## Team Orchestrator (varys-orchestrator-loop.sh — 270s agent-free tick, never change interval without asking Shoaib Ud Din)
 
 ```
 1. varys_harness_db: acquire tick lock → read last_sync_at

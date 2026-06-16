@@ -119,46 +119,13 @@ def _slack(token, endpoint, params=None):
 # ── scrapers ─────────────────────────────────────────────────────────────────
 
 def scrape_github(db, session_id):
-    seen = {}  # login → person_id (dedup across repos)
+    """Scrape GitHub for project entities only — no person creation (Slack is the person source)."""
     for repo in GITHUB_REPOS:
         repo_slug = repo.split("/")[1]
         proj_id = f"project-{_slug(repo_slug)}"
         upsert_entity(db, proj_id, "project", repo_slug)
-        print(f"[brain-scrape] github: {repo}", file=sys.stderr)
-
-        prs = _gh(["pr", "list", "--repo", repo, "--limit", "200",
-                    "--state", "all", "--json", "author,reviews"])
-        if not prs:
-            print(f"[brain-scrape]   gh failed — skipping", file=sys.stderr)
-            continue
-
-        repo_people = set()
-        for pr in prs:
-            candidates = []
-            author = pr.get("author", {})
-            if author and not author.get("is_bot") and author.get("login"):
-                candidates.append((author, "contributed_to"))
-            for review in pr.get("reviews", []):
-                rv = review.get("author", {})
-                if rv and not rv.get("is_bot") and rv.get("login"):
-                    candidates.append((rv, "reviewed_prs_in"))
-
-            for person, predicate in candidates:
-                login = person["login"]
-                name = person.get("name") or login
-                pid = seen.get(login)
-                if not pid:
-                    pid = f"person-{_slug(login)}"
-                    seen[login] = pid
-                    upsert_entity(db, pid, "person", name, aliases=[login])
-                    _add_fact(db, pid, "github_login", object_val=login, session_id=session_id)
-                    _add_fact(db, pid, "role", object_val="engineer", session_id=session_id)
-                _add_fact(db, pid, predicate, object_id=proj_id, session_id=session_id)
-                repo_people.add(login)
-
-        print(f"[brain-scrape]   {len(repo_people)} people", file=sys.stderr)
-
-    return len(seen)
+        print(f"[brain-scrape] github: {repo} (projects only)", file=sys.stderr)
+    return 0
 
 
 def scrape_slack(db, session_id):
@@ -231,6 +198,139 @@ def scrape_slack(db, session_id):
     return count
 
 
+# ── notion sync ───────────────────────────────────────────────────────────────
+
+def _notion_req(api_key, method, path, body=None):
+    import time
+    url = f"https://api.notion.com/v1{path}"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Notion-Version": "2022-06-28",
+        "Content-Type": "application/json",
+    }
+    data = json.dumps(body).encode() if body else None
+    req = urllib.request.Request(url, data=data, headers=headers, method=method)
+    try:
+        with urllib.request.urlopen(req, timeout=15) as r:
+            return json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        print(f"[brain-scrape] notion {method} {path}: {e.code} {e.read()[:200]}", file=sys.stderr)
+        return None
+    finally:
+        time.sleep(0.35)  # Notion rate limit
+
+
+def sync_to_notion(db):
+    try:
+        cfg = json.loads((Path.home() / ".agent-config.json").read_text())
+    except Exception:
+        print("[brain-scrape] no agent-config — skipping Notion sync", file=sys.stderr)
+        return 0
+
+    api_key  = cfg.get("NOTION_API_KEY", "")
+    db_id    = cfg.get("NOTION_PEOPLE_DB_ID", "")
+    if not api_key or not db_id:
+        print("[brain-scrape] missing Notion creds — skipping", file=sys.stderr)
+        return 0
+
+    # Fetch existing names from Notion (to avoid duplicates)
+    print("[brain-scrape] notion: fetching existing people...", file=sys.stderr)
+    existing_names = set()
+    cursor = None
+    while True:
+        body = {"page_size": 100}
+        if cursor:
+            body["start_cursor"] = cursor
+        result = _notion_req(api_key, "POST", f"/databases/{db_id}/query", body)
+        if not result:
+            break
+        for page in result.get("results", []):
+            title_prop = page.get("properties", {}).get("Name", {})
+            title_parts = title_prop.get("title", [])
+            if title_parts:
+                existing_names.add(title_parts[0].get("plain_text", "").lower().strip())
+        if not result.get("has_more"):
+            break
+        cursor = result.get("next_cursor")
+
+    print(f"[brain-scrape]   {len(existing_names)} already in Notion", file=sys.stderr)
+
+    # Pull engineering-channel members from brain.db (relevant people only)
+    eng_members = set(row[0] for row in db.execute("""
+        SELECT DISTINCT f.subject_id FROM facts f
+        JOIN entities ch ON ch.id = f.object_id
+        WHERE f.predicate = 'member_of' AND ch.type = 'concept' AND ch.name LIKE '#engineering%'
+        AND f.valid_until IS NULL
+    """).fetchall())
+
+    # Also include GitHub contributors
+    gh_contributors = set(row[0] for row in db.execute("""
+        SELECT DISTINCT subject_id FROM facts
+        WHERE predicate IN ('contributed_to', 'reviewed_prs_in') AND valid_until IS NULL
+    """).fetchall())
+
+    candidate_ids = eng_members | gh_contributors
+
+    # Build person → facts map
+    created = 0
+    for pid in candidate_ids:
+        person = db.execute("SELECT name FROM entities WHERE id=? AND type='person'", (pid,)).fetchone()
+        if not person:
+            continue
+        name = person["name"]
+        if name.lower().strip() in existing_names:
+            continue  # already in Notion
+
+        facts = {row["predicate"]: row["object_val"]
+                 for row in db.execute(
+                     "SELECT predicate, object_val FROM facts WHERE subject_id=? AND valid_until IS NULL AND object_val IS NOT NULL",
+                     (pid,)
+                 ).fetchall()}
+
+        channels = [row[0] for row in db.execute("""
+            SELECT ch.name FROM facts f
+            JOIN entities ch ON ch.id = f.object_id
+            WHERE f.subject_id=? AND f.predicate='member_of' AND f.valid_until IS NULL
+        """, (pid,)).fetchall()]
+
+        repos = [row[0] for row in db.execute("""
+            SELECT p.name FROM facts f
+            JOIN entities p ON p.id = f.object_id
+            WHERE f.subject_id=? AND f.predicate IN ('contributed_to','reviewed_prs_in') AND f.valid_until IS NULL
+        """, (pid,)).fetchall()]
+
+        sources = []
+        if facts.get("github_login"):
+            sources.append(f"github:{facts['github_login']}")
+        if facts.get("slack_id"):
+            sources.append(f"slack:{facts['slack_id']}")
+        notes = f"scraped {_now()[:10]} | {', '.join(sources)}"
+        if repos:
+            notes += f" | repos: {', '.join(set(repos))}"
+
+        page = {
+            "parent": {"database_id": db_id},
+            "properties": {
+                "Name":             {"title": [{"text": {"content": name}}]},
+                "Slack ID":         {"rich_text": [{"text": {"content": facts.get("slack_id", "")}}]},
+                "Role":             {"rich_text": [{"text": {"content": facts.get("title") or facts.get("role", "")}}]},
+                "Team":             {"rich_text": [{"text": {"content": "Engineering" if (eng_members & {pid}) else ""}}]},
+                "Interaction Count":{"number": 0},
+                "Varys Notes":      {"rich_text": [{"text": {"content": notes[:2000]}}]},
+            }
+        }
+
+        result = _notion_req(api_key, "POST", "/pages", page)
+        if result:
+            existing_names.add(name.lower().strip())
+            created += 1
+            if created % 10 == 0:
+                print(f"[brain-scrape]   created {created}...", file=sys.stderr)
+
+    print(f"[brain-scrape] notion: created {created} new people", file=sys.stderr)
+    return created
+
+
 # ── main ─────────────────────────────────────────────────────────────────────
 
 def main():
@@ -240,16 +340,17 @@ def main():
 
     gh_count = scrape_github(db, session_id)
     sl_count = scrape_slack(db, session_id)
+    notion_count = sync_to_notion(db)
 
     total = db.execute("SELECT COUNT(*) FROM entities").fetchone()[0]
     people = db.execute("SELECT COUNT(*) FROM entities WHERE type='person'").fetchone()[0]
     facts  = db.execute("SELECT COUNT(*) FROM facts").fetchone()[0]
     db.close()
 
-    print(f"[brain-scrape] done. github={gh_count} slack={sl_count} "
+    print(f"[brain-scrape] done. github={gh_count} slack={sl_count} notion_created={notion_count} "
           f"people={people} total_entities={total} facts={facts}", file=sys.stderr)
     klog("brain-scrape-complete", component="brain-scrape",
-         github_people=gh_count, slack_people=sl_count,
+         github_people=gh_count, slack_people=sl_count, notion_created=notion_count,
          people=people, total_entities=total, facts=facts)
     return 0
 

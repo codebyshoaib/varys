@@ -34,6 +34,11 @@
         "hooks": [
           {
             "type": "command",
+            "command": "python3 .claude/hooks/session-logger.py",
+            "timeout": 3
+          },
+          {
+            "type": "command",
             "command": "python3 .claude/hooks/varys-task-interceptor.py",
             "timeout": 5
           }
@@ -48,6 +53,11 @@
             "type": "command",
             "command": "python3 .claude/hooks/post-tool-use.py",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "python3 .claude/hooks/session-logger.py",
+            "timeout": 3
           }
         ]
       }
@@ -69,9 +79,9 @@
           },
           {
             "type": "command",
-            "command": "python3 .claude/hooks/varys-brain-watcher.py",
-            "timeout": 90,
-            "statusMessage": "Indexing session into Brain..."
+            "command": "true",
+            "timeout": 5,
+            "statusMessage": "Brain indexer disabled (run manually: python3 .claude/hooks/varys-brain-watcher.py)"
           }
         ]
       }

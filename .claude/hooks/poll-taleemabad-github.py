@@ -39,6 +39,14 @@ SLACK_CFG   = Path.home() / ".claude" / "hooks" / ".slack"
 
 def _load_config() -> dict:
     cfg = {"GITHUB_REPO": "{{YOUR_GITHUB_ORG}}/{{YOUR_REPO}}"}
+    # Central config (~/.agent-config.json) — same source the rest of the daemon
+    # reads. Lets the cron daemon find GITHUB_* without an interactive session env.
+    agent_cfg = Path.home() / ".agent-config.json"
+    if agent_cfg.exists():
+        try:
+            cfg.update(json.loads(agent_cfg.read_text()))
+        except Exception:
+            pass
     if HARNESS_CFG.exists():
         cfg.update(json.loads(HARNESS_CFG.read_text()))
     if SLACK_CFG.exists():
@@ -90,9 +98,12 @@ def main() -> int:
     repo  = cfg.get("GITHUB_REPO", "{{YOUR_GITHUB_ORG}}/{{YOUR_REPO}}")
     agent_login = cfg.get("GITHUB_AGENT_LOGIN", "")
 
-    if not token:
-        print("[poll-github] ERROR: GITHUB_TOKEN required", file=sys.stderr)
-        return 1
+    if not token or "{{" in repo:
+        # Exit 2 = "not configured" sentinel: non-fatal, the tick skips this source
+        # rather than aborting (which would block Notion/Slack dispatch too).
+        print("[poll-github] SKIP: GitHub not configured "
+              "(set GITHUB_TOKEN/GITHUB_REPO in ~/.agent-config.json)", file=sys.stderr)
+        return 2
 
     db = get_db()
     last_sync_at = db.execute(
@@ -111,6 +122,14 @@ def main() -> int:
     except Exception as e:
         print(f"[poll-github] ERROR fetching PRs: {e}", file=sys.stderr)
         klog_error("poll-github-fetch", e, component="orchestrator")
+        # 401/403 = bad/expired/unauthorized token: a config problem, not transient.
+        # Skip (exit 2) so the tick still dispatches Notion/Slack instead of aborting.
+        code = getattr(e, "code", None)
+        if code in (401, 403):
+            print("[poll-github] -> treating auth failure as SKIP (fix GITHUB_TOKEN "
+                  "in ~/.agent-config.json; needs repo scope + Orenda-Project SSO)",
+                  file=sys.stderr)
+            return 2
         return 1
 
     new_events = 0

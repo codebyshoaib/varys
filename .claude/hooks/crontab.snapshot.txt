@@ -16,6 +16,11 @@ REPO_PATH=/path/to/your/personal-agent
 # Slack listener — on reboot
 @reboot python3 $REPO_PATH/.claude/hooks/varys-slack-listener.py >> /tmp/agent-slack-listener.log 2>&1
 
+# Team Orchestrator — agent-free 270s heartbeat (replaces `/loop 270s`). Pure-Python
+# tick; `claude` is spawned only when events are pending. Needs GITHUB_TOKEN/REPO in
+# ~/.agent-config.json (cron has no session env).
+@reboot cd $REPO_PATH && ./varys-orchestrator-loop.sh >> /tmp/varys-orchestrator-tick.log 2>&1
+
 # Learning loop — 2am daily
 0 2 * * * $REPO_PATH/.claude/hooks/cron-wrap.sh learn $REPO_PATH/varys-learn.sh
 
