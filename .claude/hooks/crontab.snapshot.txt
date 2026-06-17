@@ -16,6 +16,9 @@ REPO_PATH=/path/to/your/personal-agent
 # Slack listener — on reboot
 @reboot python3 $REPO_PATH/.claude/hooks/varys-slack-listener.py >> /tmp/agent-slack-listener.log 2>&1
 
+# Slack queue drain — every 60s (independent of 270s orchestrator tick)
+@reboot cd $REPO_PATH && ./varys-slack-drain-loop.sh >> /tmp/varys-slack-drain.log 2>&1
+
 # Team Orchestrator — agent-free 270s heartbeat (replaces `/loop 270s`). Pure-Python
 # tick; `claude` is spawned only when events are pending. Needs GITHUB_TOKEN/REPO in
 # ~/.agent-config.json (cron has no session env).

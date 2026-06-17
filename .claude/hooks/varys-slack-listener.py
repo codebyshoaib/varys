@@ -65,7 +65,10 @@ except ImportError:
 
 from linkedin_poster import post_to_linkedin
 try:
-    from varys_harness_db import get_db as _get_harness_db
+    from varys_harness_db import (
+        get_db as _get_harness_db,
+        enqueue_slack_mention,
+    )
     _harness_db_available = True
 except Exception:
     _harness_db_available = False
@@ -83,6 +86,16 @@ except Exception:
     _context_available = False
 
 # ── Config ────────────────────────────────────────────────────────────────────
+import glob as _glob, shutil as _shutil
+def _find_claude() -> str:
+    c = _shutil.which("claude")
+    if c:
+        return c
+    # ponytail: daemon runs without nvm in PATH; fall back to glob nvm installs
+    hits = sorted(_glob.glob(os.path.expanduser("~/.nvm/versions/node/*/bin/claude")))
+    return hits[-1] if hits else "claude"
+CLAUDE_BIN = _find_claude()
+
 SLACK_CONFIG = Path.home() / ".claude" / "hooks" / ".slack"
 VARYS_DIR    = Path(__file__).parent.parent.parent
 LOG_FILE     = Path("/tmp/varys-slack-listener.log")
@@ -228,8 +241,12 @@ def auto_answer_engineering_question(
         klog_error(context="auto_answer_engineering_question", exc=e)
         return False
 
-# Limits concurrent Claude invocations from message handling to 2
+# Limits concurrent Claude invocations to auto_answer_engineering_question only
+# (handle_message goes through the sequential slack_queue drainer instead)
 _MSG_EXECUTOR = ThreadPoolExecutor(max_workers=2)
+
+# Shared web client ref — updated on reconnect so the drainer always has the live client
+_web_client_ref: list = [None]
 
 # Track last activity time for idle detection
 last_activity_time = time.time()
@@ -309,13 +326,12 @@ def log(msg: str):
 
 def run_claude(prompt: str, cwd: str = None, timeout: int = 240,
                event_context: str = "unknown") -> str:
-    nvm = 'export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"'
     env = os.environ.copy()
     env["VARYS_PROMPT"] = prompt
     t0 = time.time()
     try:
         result = subprocess.run(
-            ["bash", "-c", f'{nvm} && claude --dangerously-skip-permissions --print -p "$VARYS_PROMPT"'],
+            [CLAUDE_BIN, "--dangerously-skip-permissions", "--print", "-p", prompt],
             capture_output=True, text=True,
             cwd=cwd or str(VARYS_DIR),
             timeout=timeout, env=env,
@@ -961,26 +977,32 @@ def dispatch(text: str, web: WebClient, channel: str, thread_ts: str, source: st
             ).start()
         return
 
-    # ── Visual request fast-path ──────────────────────────────────────────────
-    if sender_id == KAMAL_USER_ID and is_visual_request(clean) and _infographic_available:
-        cfg           = load_config()
-        bot_token_cfg = cfg.get("BOT_TOKEN")
+    # Visual/infographic fast-path REMOVED 2026-06-17: loose substring matching on
+    # "infographic" misfired on natural-language messages (e.g. sarcasm mentioning
+    # the word). All non-nlm messages now flow through the queue → slack-worker.py,
+    # where the LLM judges intent properly instead of dumb keyword matching.
+
+    if _harness_db_available and _listener_db is not None:
+        import uuid as _uuid
+        row_id = f"slack-{channel}-{thread_ts}-{_uuid.uuid4().hex[:8]}"
+        enqueued = enqueue_slack_mention(
+            _listener_db, row_id, source, channel, thread_ts,
+            sender_id or "", sender_name or "", clean,
+            thread_history or "", is_dm, is_third_party, job_id or "",
+        )
+        if enqueued:
+            log(f"[queue] enqueued {row_id}")
+        else:
+            log(f"[queue] dedup hit for {channel}/{thread_ts}, skipped")
+    else:
+        # Fallback: process immediately if DB unavailable
         if _context_available and job_id:
             mark_job_processing(job_id)
-        threading.Thread(
-            target=infographic_handle,
-            args=(clean, channel, thread_ts, web, bot_token_cfg, sender_id),
-            daemon=True,
-        ).start()
-        return
-
-    if _context_available and job_id:
-        mark_job_processing(job_id)
-    _MSG_EXECUTOR.submit(
-        handle_message,
-        clean, thread_history, web, channel, thread_ts, source,
-        sender_id, sender_name, is_third_party, is_dm, job_id,
-    )
+        _MSG_EXECUTOR.submit(
+            handle_message,
+            clean, thread_history, web, channel, thread_ts, source,
+            sender_id, sender_name, is_third_party, is_dm, job_id,
+        )
 
 
 _content_ran_today = Path("/tmp/varys-content-ran.txt")
@@ -1052,7 +1074,6 @@ def _maybe_run_daily_content():
             fit_topic  = FITNESS_TOPICS[day % 10]
             tech_topic = TECH_TOPICS[day % 10]
 
-            nvm = 'export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"'
             env = os.environ.copy()
             varys_dir = str(VARYS_DIR)
 
@@ -1079,7 +1100,7 @@ BOT_TOKEN is in ~/.claude/hooks/.slack"""
             if _context_available and pipeline_job_id:
                 log_milestone(pipeline_job_id, 'content_generation_spawn', 2, 8, 'completed')
             subprocess.Popen(
-                ["bash", "-c", f'{nvm} && claude --dangerously-skip-permissions --print -p "$VARYS_CONTENT_PROMPT"'],
+                [CLAUDE_BIN, "--dangerously-skip-permissions", "--print", "-p", prompt],
                 cwd=varys_dir, env=env,
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                 start_new_session=True,
@@ -1216,6 +1237,7 @@ def main():
     _init_event_dedup()
 
     web = WebClient(token=bot_token)
+    _web_client_ref[0] = web
 
     # Open DM with Shoaib for proactive messages
     try:
@@ -1234,7 +1256,8 @@ def main():
         import threading as _threading
         _threading.Thread(target=run_sync_loop, args=(60,), daemon=True).start()
         log("[varys_context] sync loop started")
-        pass
+
+    # Queue draining moved to varys-tick.py (slack-queue-drain.py step)
 
     klog_system_start("listener")
     log(f"{AGENT_NAME} listener starting (Socket Mode)...")
@@ -1311,6 +1334,7 @@ def main():
                 # after a stale socket, causing IncompleteRead on next API call.
                 web = WebClient(token=bot_token)
                 web_ref[0] = web
+                _web_client_ref[0] = web
                 # Dedup is now persistent in harness.db — no clear needed on reconnect
                 socket_client = SocketModeClient(app_token=app_token, web_client=web)
                 socket_client.socket_mode_request_listeners.clear()

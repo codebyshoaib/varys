@@ -16,6 +16,7 @@ Step 7: On failure → revert session to 'cancelled', events back to 'pending'
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import uuid
@@ -78,6 +79,21 @@ def _fetch_notion_ticket(api_key: str, external_id: str) -> dict:
     return json.loads(body)
 
 
+def _fetch_bead(bead_id: str) -> dict:
+    """Fetch a single bead by ID. Returns flat dict with title/status keys, or {}."""
+    bd_bin = shutil.which("bd") or str(Path.home() / ".local" / "bin" / "bd")
+    try:
+        r = subprocess.run(
+            [bd_bin, "show", bead_id, "--json"],
+            capture_output=True, text=True,
+            cwd=str(VARYS_DIR), timeout=10,
+        )
+        items = json.loads(r.stdout) if r.returncode == 0 else []
+        return items[0] if items else {}
+    except Exception:
+        return {}
+
+
 def _fetch_slack_thread(bot_token: str, channel: str, thread_ts: str,
                         limit: int = 10) -> list[dict]:
     """Fetch last N messages from a Slack thread."""
@@ -119,6 +135,10 @@ def _available_skills() -> list[str]:
 
 
 def _page_title(page: dict) -> str:
+    # Bead format: flat dict with "title" key
+    if "properties" not in page and "title" in page:
+        return page["title"] or "Untitled"
+    # Notion format: nested properties
     props = page.get("properties", {})
     for prop in props.values():
         if prop.get("type") == "title":
@@ -127,8 +147,11 @@ def _page_title(page: dict) -> str:
 
 
 def _page_status(page: dict) -> str:
+    # Bead format: flat dict with "status" key
+    if "properties" not in page and "status" in page:
+        return page["status"] or "Unknown"
+    # Notion format: nested properties — Harness DB uses "Phase" (select), not "Status"
     props = page.get("properties", {})
-    # Harness DB uses "Phase" (select), not "Status"
     for name in ("Phase", "Status"):
         prop = props.get(name, {})
         if prop.get("type") == "select":
@@ -336,17 +359,32 @@ def main() -> int:
         slack_messages = []
         github_pr     = None
 
-        # Find Notion entity for this context_key
-        notion_row = db.execute(
-            "SELECT external_id, url FROM entities WHERE id=? AND source='notion'",
+        # Find beads entity for this context_key (preferred source)
+        beads_row = db.execute(
+            "SELECT external_id, url FROM entities WHERE id=? AND source='beads'",
             (context_key,),
         ).fetchone()
 
-        if notion_row and api_key:
+        if beads_row:
+            bead_id = beads_row[0]
             try:
-                notion_page = _fetch_notion_ticket(api_key, notion_row[0])
+                bead_data = _fetch_bead(bead_id)
+                if bead_data:
+                    # Pass as notion_page arg so _spawn_manager signature stays unchanged
+                    notion_page = bead_data
             except Exception as e:
-                print(f"[dispatch] WARNING: could not fetch Notion page: {e}")
+                print(f"[dispatch] WARNING: could not fetch bead {bead_id}: {e}")
+        else:
+            # Backward compat: fall back to Notion entity for pre-migration events
+            notion_row = db.execute(
+                "SELECT external_id, url FROM entities WHERE id=? AND source='notion'",
+                (context_key,),
+            ).fetchone()
+            if notion_row and api_key:
+                try:
+                    notion_page = _fetch_notion_ticket(api_key, notion_row[0])
+                except Exception as e:
+                    print(f"[dispatch] WARNING: could not fetch Notion page: {e}")
 
         # Find linked entities
         linked = get_linked_entities(db, context_key)

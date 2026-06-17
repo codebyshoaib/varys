@@ -29,7 +29,7 @@ from varys_harness_db import (  # noqa: E402
     set_last_sync_at,
 )
 
-POLLERS = ["poll-harness-notion.py", "poll-eng-slack.py", "poll-taleemabad-github.py"]
+POLLERS = ["poll-beads.py", "poll-eng-slack.py", "poll-taleemabad-github.py"]
 
 # Poller exit-code contract:
 #   0       → ran OK

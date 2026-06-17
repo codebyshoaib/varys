@@ -13,6 +13,8 @@ Run: weekly via cron (cron-wrap.sh)
 
 import json
 import os
+import shutil
+import subprocess
 import sys
 import urllib.request
 from pathlib import Path
@@ -27,9 +29,7 @@ except Exception:
 VARYS_DIR       = Path(__file__).parent.parent.parent
 CAPABILITIES_MD = VARYS_DIR / ".claude" / "rules" / "CAPABILITIES.md"
 SLACK_CFG       = Path.home() / ".claude" / "hooks" / ".slack"
-KAMAL_SLACK_ID  = cfg("USER_SLACK_ID",        "")
-HARNESS_DB_ID   = cfg("NOTION_HARNESS_DB_ID", "de10157da3e34ef58a74ea240f31fe98")
-NOTION_API      = "https://api.notion.com/v1"
+KAMAL_SLACK_ID  = cfg("USER_SLACK_ID", "")
 
 
 def _load_bot_token() -> str:
@@ -91,42 +91,19 @@ def _append_to_capabilities(gap_type: str, sample_requests: list[str]) -> None:
 
 
 def _create_notion_ticket(gap_type: str, count: int, samples: list[str]) -> bool:
-    token = os.environ.get("NOTION_API_KEY", "")
-    if not token:
-        return False
+    """Create a beads issue to build the missing capability."""
+    bd_bin = shutil.which("bd") or str(Path.home() / ".local" / "bin" / "bd")
+    desc = f"Auto-detected gap ({count} hits). Samples: {'; '.join(samples[:2])}"
     try:
-        sample_text = "\n".join(f"- {s}" for s in samples[:3])
-        page = {
-            "parent": {"type": "database_id",
-                       "database_id": HARNESS_DB_ID.replace("-", "")},
-            "properties": {
-                "Name": {"title": [{"text": {"content": f"Build capability: {gap_type}"}}]},
-                "Status": {"status": {"name": "Not started"}},
-            },
-            "children": [{
-                "object": "block", "type": "paragraph",
-                "paragraph": {"rich_text": [{"type": "text", "text": {
-                    "content": (
-                        f"Auto-detected capability gap: {gap_type}\n"
-                        f"Hit {count} times in the last 7 days.\n\n"
-                        f"Sample requests:\n{sample_text}\n\n"
-                        f"Suggested: build a handler in infographic_handler.py or a new module."
-                    )
-                }}]},
-            }],
-        }
-        data = json.dumps(page).encode()
-        req  = urllib.request.Request(
-            f"{NOTION_API}/pages", data=data,
-            headers={"Authorization": f"Bearer {token}",
-                     "Content-Type": "application/json",
-                     "Notion-Version": "2022-06-28"},
+        r = subprocess.run(
+            [bd_bin, "create", f"Build capability: {gap_type}",
+             "-t", "task", "-d", desc, "-p", "1"],
+            capture_output=True, text=True,
+            cwd=str(Path(__file__).parent.parent.parent), timeout=10,
         )
-        with urllib.request.urlopen(req, timeout=10) as r:
-            result = json.loads(r.read())
-        return bool(result.get("id"))
+        return r.returncode == 0
     except Exception as e:
-        klog_error("gap_watcher_notion_fail", component="gap-watcher", error=str(e))
+        klog_error("gap_watcher_bd_fail", component="gap-watcher", error=str(e))
         return False
 
 

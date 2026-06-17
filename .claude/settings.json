@@ -1,108 +1,140 @@
 {
-  "model": "sonnet",
   "hooks": {
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "python3 .claude/hooks/post-tool-use.py",
+            "timeout": 10,
+            "type": "command"
+          },
+          {
+            "command": "python3 .claude/hooks/session-logger.py",
+            "timeout": 3,
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "command": "bd prime",
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      }
+    ],
     "PreToolUse": [
       {
-        "matcher": "Bash",
         "hooks": [
-          { "type": "command", "command": "python3 .claude/hooks/block-bad-commands.py", "timeout": 5 }
-        ]
+          {
+            "command": "python3 .claude/hooks/block-bad-commands.py",
+            "timeout": 5,
+            "type": "command"
+          }
+        ],
+        "matcher": "Bash"
       },
       {
-        "matcher": "Write|Edit",
         "hooks": [
-          { "type": "command", "command": "python3 .claude/hooks/guard-file-writes.py", "timeout": 5 }
-        ]
+          {
+            "command": "python3 .claude/hooks/guard-file-writes.py",
+            "timeout": 5,
+            "type": "command"
+          }
+        ],
+        "matcher": "Write|Edit"
       }
     ],
     "SessionStart": [
       {
-        "matcher": "",
         "hooks": [
           {
-            "type": "command",
             "command": "python3 .claude/hooks/session-start.py",
+            "statusMessage": "Loading Notion brain...",
             "timeout": 15,
-            "statusMessage": "Loading Notion brain..."
+            "type": "command"
           }
-        ]
-      }
-    ],
-    "UserPromptSubmit": [
+        ],
+        "matcher": ""
+      },
       {
-        "matcher": "",
         "hooks": [
           {
-            "type": "command",
-            "command": "python3 .claude/hooks/session-logger.py",
-            "timeout": 3
-          },
-          {
-            "type": "command",
-            "command": "python3 .claude/hooks/varys-task-interceptor.py",
-            "timeout": 5
+            "command": "bd prime",
+            "type": "command"
           }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 .claude/hooks/post-tool-use.py",
-            "timeout": 10
-          },
-          {
-            "type": "command",
-            "command": "python3 .claude/hooks/session-logger.py",
-            "timeout": 3
-          }
-        ]
+        ],
+        "matcher": ""
       }
     ],
     "Stop": [
       {
-        "matcher": "",
         "hooks": [
           {
-            "type": "command",
             "command": "python3 .claude/hooks/stop-notion.py",
+            "statusMessage": "Writing Work Log to Notion...",
             "timeout": 30,
-            "statusMessage": "Writing Work Log to Notion..."
+            "type": "command"
           },
           {
-            "type": "command",
             "command": "python3 .claude/hooks/stop.py",
-            "timeout": 30
+            "timeout": 30,
+            "type": "command"
           },
           {
-            "type": "command",
             "command": "true",
+            "statusMessage": "Brain indexer disabled (run manually: python3 .claude/hooks/varys-brain-watcher.py)",
             "timeout": 5,
-            "statusMessage": "Brain indexer disabled (run manually: python3 .claude/hooks/varys-brain-watcher.py)"
+            "type": "command"
           }
-        ]
+        ],
+        "matcher": ""
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "command": "python3 .claude/hooks/session-logger.py",
+            "timeout": 3,
+            "type": "command"
+          },
+          {
+            "command": "python3 .claude/hooks/varys-task-interceptor.py",
+            "timeout": 5,
+            "type": "command"
+          }
+        ],
+        "matcher": ""
       }
     ]
   },
   "mcpServers": {
+    "canva": {
+      "description": "Canva Pro design creation via OAuth",
+      "type": "http",
+      "url": "https://mcp.canva.com/mcp"
+    },
+    "mempalace": {
+      "args": [
+        "serve",
+        "--palace",
+        "mempalace"
+      ],
+      "command": "mempalace",
+      "description": "Semantic memory — kept as fallback"
+    },
     "notion": {
       "command": "/home/shoaib/.nvm/versions/node/v24.14.0/bin/notion-mcp-server",
       "env": {
         "OPENAPI_MCP_HEADERS": "{\"Authorization\": \"Bearer ${NOTION_API_KEY}\", \"Notion-Version\": \"2022-06-28\"}"
       }
-    },
-    "mempalace": {
-      "command": "mempalace",
-      "args": ["serve", "--palace", "mempalace"],
-      "description": "Semantic memory — kept as fallback"
-    },
-    "canva": {
-      "type": "http",
-      "url": "https://mcp.canva.com/mcp",
-      "description": "Canva Pro design creation via OAuth"
     }
-  }
+  },
+  "model": "sonnet"
 }

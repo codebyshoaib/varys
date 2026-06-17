@@ -26,13 +26,34 @@ Design rules (from orchestration-harness-v2):
 """
 
 import os
+import shutil
 import sqlite3
+import subprocess
 import threading
 from datetime import datetime
 from pathlib import Path
 
 HARNESS_DIR = Path.home() / ".varys-harness"
 HARNESS_DB  = HARNESS_DIR / "harness.db"
+_BEADS_REPO = Path(__file__).resolve().parent.parent.parent  # varys repo root
+
+
+def _bd(*args) -> str:
+    """Run bd in the varys repo. Returns the bead ID line. Never raises."""
+    bd_bin = shutil.which("bd") or str(Path.home() / ".local" / "bin" / "bd")
+    try:
+        r = subprocess.run(
+            [bd_bin, *args],
+            capture_output=True, text=True,
+            cwd=str(_BEADS_REPO), timeout=10,
+        )
+        for line in r.stdout.splitlines():
+            line = line.strip()
+            if line and " " not in line and not line.startswith("Warning"):
+                return line
+        return ""
+    except Exception:
+        return ""
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS sync_state (
@@ -98,6 +119,28 @@ CREATE TABLE IF NOT EXISTS capability_gaps (
     session_id    TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_gaps_type_ts ON capability_gaps(gap_type, ts);
+
+CREATE TABLE IF NOT EXISTS slack_queue (
+    id             TEXT PRIMARY KEY,
+    source         TEXT NOT NULL,
+    channel        TEXT NOT NULL,
+    thread_ts      TEXT NOT NULL,
+    sender_id      TEXT NOT NULL DEFAULT '',
+    sender_name    TEXT NOT NULL DEFAULT '',
+    text           TEXT NOT NULL,
+    thread_history TEXT NOT NULL DEFAULT '',
+    is_dm          INTEGER NOT NULL DEFAULT 0,
+    is_third_party INTEGER NOT NULL DEFAULT 0,
+    job_id         TEXT NOT NULL DEFAULT '',
+    status         TEXT NOT NULL DEFAULT 'pending',
+    retry_count    INTEGER NOT NULL DEFAULT 0,
+    enqueued_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    processed_at   TEXT,
+    priority        INTEGER NOT NULL DEFAULT 0,
+    failure_context TEXT,
+    bead_id         TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_slack_queue_status_enq ON slack_queue(status, enqueued_at);
 """
 
 _db_lock = threading.Lock()
@@ -116,11 +159,31 @@ def get_db() -> sqlite3.Connection:
 def migrate_db(db: sqlite3.Connection) -> None:
     """Apply incremental migrations. Safe to run on every startup."""
     with _db_lock:
-        # Migration 001: sessions.phase column for two-phase manager flow
         cols = [row[1] for row in db.execute("PRAGMA table_info(sessions)").fetchall()]
+        # Migration 001: sessions.phase column for two-phase manager flow
         if "phase" not in cols:
             db.execute("ALTER TABLE sessions ADD COLUMN phase TEXT DEFAULT 'manager'")
-            db.commit()
+        # Migration 002: session completion tracking (pr_url, completed_at)
+        if "completed_at" not in cols:
+            db.execute("ALTER TABLE sessions ADD COLUMN completed_at TEXT")
+        if "pr_url" not in cols:
+            db.execute("ALTER TABLE sessions ADD COLUMN pr_url TEXT")
+        # Migration 003: slack_queue table (schema already has CREATE IF NOT EXISTS)
+        # Reset any items stuck in 'processing' from a crashed daemon
+        db.execute(
+            "UPDATE slack_queue SET status='pending' "
+            "WHERE status='processing' "
+            "AND enqueued_at < datetime('now', '-15 minutes')"
+        )
+        # Migration 004: priority + failure_context columns for slack_queue
+        sq_cols = [row[1] for row in db.execute("PRAGMA table_info(slack_queue)").fetchall()]
+        if "priority" not in sq_cols:
+            db.execute("ALTER TABLE slack_queue ADD COLUMN priority INTEGER NOT NULL DEFAULT 0")
+        if "failure_context" not in sq_cols:
+            db.execute("ALTER TABLE slack_queue ADD COLUMN failure_context TEXT")
+        if "bead_id" not in sq_cols:
+            db.execute("ALTER TABLE slack_queue ADD COLUMN bead_id TEXT NOT NULL DEFAULT ''")
+        db.commit()
 
 
 
@@ -320,6 +383,107 @@ def update_gap_reaction(
             (reaction, gap_type, gap_type),
         )
         db.commit()
+
+
+# ── Slack mention queue ───────────────────────────────────────────────────────
+
+def enqueue_slack_mention(
+    db: sqlite3.Connection,
+    row_id: str,
+    source: str,
+    channel: str,
+    thread_ts: str,
+    sender_id: str,
+    sender_name: str,
+    text: str,
+    thread_history: str,
+    is_dm: bool,
+    is_third_party: bool,
+    job_id: str = "",
+    priority: int = 0,
+) -> bool:
+    """Insert a mention into the queue. Returns True if new, False if already queued (dedup)."""
+    with _db_lock:
+        db.execute(
+            "INSERT OR IGNORE INTO slack_queue "
+            "(id, source, channel, thread_ts, sender_id, sender_name, text, "
+            " thread_history, is_dm, is_third_party, job_id, priority) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (row_id, source, channel, thread_ts, sender_id or "", sender_name or "",
+             text, thread_history or "", int(is_dm), int(is_third_party), job_id or "",
+             priority),
+        )
+        db.commit()
+        is_new = db.execute("SELECT changes()").fetchone()[0] > 0
+    if is_new:
+        title = f"Slack: {sender_name or sender_id or 'unknown'}: {text[:60]}"
+        bead_id = _bd("q", title, "-t", "task")
+        if bead_id:
+            with _db_lock:
+                db.execute("UPDATE slack_queue SET bead_id=? WHERE id=?", (bead_id, row_id))
+                db.commit()
+    return is_new
+
+
+def dequeue_pending_slack(db: sqlite3.Connection, limit: int = 50) -> list:
+    """Return pending rows ordered by priority DESC, FIFO within same priority. Does NOT mark them processing."""
+    return db.execute(
+        "SELECT id, source, channel, thread_ts, sender_id, sender_name, text, "
+        "thread_history, is_dm, is_third_party, job_id, retry_count, priority, failure_context "
+        "FROM slack_queue WHERE status='pending' ORDER BY priority DESC, enqueued_at ASC LIMIT ?",
+        (limit,),
+    ).fetchall()
+
+
+def mark_slack_processing(db: sqlite3.Connection, row_id: str) -> None:
+    with _db_lock:
+        db.execute("UPDATE slack_queue SET status='processing' WHERE id=?", (row_id,))
+        db.commit()
+        bead_id = db.execute("SELECT bead_id FROM slack_queue WHERE id=?", (row_id,)).fetchone()
+    if bead_id and bead_id[0]:
+        _bd("update", bead_id[0], "--claim")
+
+
+def mark_slack_done(db: sqlite3.Connection, row_id: str) -> None:
+    with _db_lock:
+        db.execute(
+            "UPDATE slack_queue SET status='done', processed_at=datetime('now') WHERE id=?",
+            (row_id,),
+        )
+        db.commit()
+        bead_id = db.execute("SELECT bead_id FROM slack_queue WHERE id=?", (row_id,)).fetchone()
+    if bead_id and bead_id[0]:
+        _bd("close", bead_id[0])
+
+
+def mark_slack_retry(
+    db: sqlite3.Connection, row_id: str, max_retries: int = 3, failure_context: str = None
+) -> None:
+    """On error: store failure context, retry up to max_retries, then mark failed."""
+    with _db_lock:
+        row = db.execute(
+            "SELECT retry_count, bead_id FROM slack_queue WHERE id=?", (row_id,)
+        ).fetchone()
+        exhausted = row and row[0] >= max_retries
+        if exhausted:
+            db.execute(
+                "UPDATE slack_queue SET status='failed', processed_at=datetime('now'), "
+                "failure_context=? WHERE id=?",
+                (failure_context, row_id),
+            )
+        else:
+            db.execute(
+                "UPDATE slack_queue SET status='pending', retry_count=retry_count+1, "
+                "failure_context=? WHERE id=?",
+                (failure_context, row_id),
+            )
+        db.commit()
+        bead_id = row[1] if row else ""
+    if bead_id:
+        note = f"Failed (retry): {failure_context[:200]}" if not exhausted else f"Failed (exhausted): {failure_context[:200]}"
+        _bd("note", bead_id, note)
+        if exhausted:
+            _bd("label", bead_id, "add", "status:failed")
 
 
 if __name__ == "__main__":

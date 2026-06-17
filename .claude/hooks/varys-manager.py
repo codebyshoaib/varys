@@ -16,11 +16,13 @@ Usage:
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
+import time
 import urllib.request
 import urllib.parse
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -117,13 +119,25 @@ def run_manager_phase(context_key: str, session_id: str, events: list, notion_pa
                 slack_channel, slack_thread_ts = parts
 
     event_types = ", ".join(set(ev["type"] for ev in events))
-    notion_title = "Unknown"
+
+    # Resolve ticket title and reference from either bead (flat) or Notion (nested) format
+    ticket_title = "Unknown"
+    ticket_ref   = ""
     if notion_page:
-        props = notion_page.get("properties", {})
-        for prop in props.values():
-            if prop.get("type") == "title":
-                notion_title = "".join(p.get("plain_text", "") for p in prop.get("title", []))
-                break
+        if "properties" not in notion_page and "title" in notion_page:
+            # Bead format: flat dict
+            ticket_title = notion_page.get("title") or "Unknown"
+            ticket_ref   = f"beads:{notion_page.get('id', '')}"
+        else:
+            # Notion format: nested properties
+            props = notion_page.get("properties", {})
+            for prop in props.values():
+                if prop.get("type") == "title":
+                    ticket_title = "".join(
+                        p.get("plain_text", "") for p in prop.get("title", [])
+                    )
+                    break
+            ticket_ref = notion_page.get("url", "")
 
     manager_prompt = f"""You are Varys, manager-orchestrator. You are running Phase 1.
 
@@ -133,8 +147,8 @@ Write a delegation brief. Post the plan to Slack. DO NOT execute the work yourse
 CONTEXT KEY: {context_key}
 SESSION ID: {session_id}
 EVENTS: {event_types}
-NOTION TICKET: {notion_title}
-NOTION URL: {notion_page.get('url', '') if notion_page else ''}
+TICKET: {ticket_title}
+REF: {ticket_ref}
 
 SLACK THREAD CONTEXT:
 {chr(10).join(f"  [{m.get('user','?')}]: {m.get('text','')[:200]}" for m in (slack_messages or [])[-10:])}
@@ -155,11 +169,17 @@ YOUR OUTPUT MUST BE A JSON OBJECT:
 {{
   "real_intent": "one sentence: what is Shoaib/team actually trying to achieve?",
   "chosen_agent": "agent-name from the available list (or null if gap)",
+  "repo": "repo key from registry (taleemabad-core / compliancetracker / etc) or null if not code work",
   "delegation_brief": "full brief for the worker: task, context, definition of done, constraints",
   "slack_plan_message": "message to post in the Slack thread — plan + who is handling it",
   "confidence": 85,
   "capability_gap": null
 }}
+
+ROUTING RULES:
+- For ANY feature / bug / implementation / code task: chosen_agent = "product-lead", repo = the target repo
+- product-lead runs the full pipeline: engineer → QA → code review → security. It handles all sub-delegation.
+- For non-code tasks (content, research, Slack, Notion updates): use the specialist agent, repo = null.
 
 confidence: 0-100. Your honest estimate of routing quality. If < 40, escalation-broker will be notified.
 If no agent fits: set chosen_agent to null, explain in capability_gap.
@@ -225,7 +245,7 @@ Return ONLY the JSON object. No prose before or after."""
     # Post Phase 1 plan to Slack
     if bot_token and slack_channel:
         plan_msg = (
-            f"*Plan for: {notion_title}*\n"
+            f"*Plan for: {ticket_title}*\n"
             f"{decision.get('slack_plan_message', '')}\n\n"
             f"_Delegating to: `{decision.get('chosen_agent')}`_\n"
             f"Reply `@Varys go` to proceed. \U0001f916 Varys"
@@ -248,6 +268,7 @@ def run_worker_phase(context_key: str, session_id: str, cfg: dict) -> None:
     """Phase 2: spawn chosen worker agent, synthesise result, update skills."""
     db = get_db()
     bot_token = cfg.get("SLACK_BOT_TOKEN") or cfg.get("BOT_TOKEN")
+    started_at = time.time()
 
     row = db.execute(
         "SELECT intent FROM sessions WHERE id=?", (session_id,)
@@ -261,6 +282,18 @@ def run_worker_phase(context_key: str, session_id: str, cfg: dict) -> None:
     chosen_agent = decision.get("chosen_agent")
     brief        = decision.get("delegation_brief", "")
     real_intent  = decision.get("real_intent", "")
+    repo_key     = decision.get("repo")
+
+
+    # Resolve working directory
+    registry = _load_registry()
+    repo_info = registry.get(repo_key) if repo_key else None
+    if repo_info and Path(repo_info["abs_path"]).exists():
+        work_cwd = repo_info["abs_path"]
+    elif WORKSPACE.exists():
+        work_cwd = str(WORKSPACE)
+    else:
+        work_cwd = str(VARYS_DIR)
 
     agent_def = _read_agent(chosen_agent) if chosen_agent else ""
     slack_channel, slack_thread_ts = None, None
@@ -271,7 +304,42 @@ def run_worker_phase(context_key: str, session_id: str, cfg: dict) -> None:
             if len(parts) == 2:
                 slack_channel, slack_thread_ts = parts
 
-    worker_prompt = f"""You are Varys's {chosen_agent}. Execute the delegation brief below.
+    # For product-lead: create a fresh branch in the target repo before running
+    branch = None
+    if chosen_agent == "product-lead" and repo_info:
+        base   = repo_info.get("branch", "main")
+        branch = f"varys/{_slugify(real_intent)}-{session_id[-6:]}"
+        _git(work_cwd, "fetch", "origin", timeout=120)
+        _git(work_cwd, "checkout", base)
+        _git(work_cwd, "reset", "--hard", f"origin/{base}")
+        co = _git(work_cwd, "checkout", "-b", branch)
+        if co.returncode != 0:
+            if bot_token and slack_channel:
+                slack_post(bot_token, slack_channel,
+                           f"⛔ Branch setup failed: {co.stderr[:200]}\n🤖 Varys", slack_thread_ts)
+            db.execute("UPDATE sessions SET status='cancelled', updated_at=datetime('now') WHERE id=?",
+                       (session_id,))
+            db.execute("UPDATE events SET status='pending' WHERE context_key=? AND status='processing'",
+                       (context_key,))
+            db.commit(); db.close()
+            klog("manager-branch-fail", component="manager", session_id=session_id, branch=branch)
+            return
+
+    # product-lead gets the pipeline invocation; all other agents get the standard brief
+    if chosen_agent == "product-lead":
+        worker_prompt = (
+            "Invoke the product-lead skill and run the full pipeline for this task. "
+            "The scope is pre-captured — skip Phase 1 scope dialogue. "
+            "Use specialist subagents (senior-software-engineer, code-reviewer, qa-engineer, "
+            "solutions-architect, ui-ux-designer, security-engineer) as the brief warrants. "
+            "Do NOT commit or push — leave the diff unstaged.\n\n"
+            f"TASK: {real_intent}\n\nBRIEF:\n{brief}\n\n"
+            f"SESSION ID: {session_id}\nCONTEXT KEY: {context_key}\n\n"
+            "When complete, return JSON: "
+            '{"status":"done","summary":"...","pr_url":null,"files_changed":[],"phases_run":[]}'
+        )
+    else:
+        worker_prompt = f"""You are Varys's {chosen_agent}. Execute the delegation brief below.
 
 AGENT DEFINITION:
 {agent_def[:2000]}
@@ -282,7 +350,7 @@ DELEGATION BRIEF:
 REAL INTENT: {real_intent}
 
 HARNESS DB: {Path.home() / '.varys-harness' / 'harness.db'}
-WORKSPACE: {WORKSPACE}
+WORKSPACE: {work_cwd}
 SESSION ID: {session_id}
 CONTEXT KEY: {context_key}
 
@@ -290,15 +358,17 @@ Return a JSON object with your result. Structure depends on your agent type.
 Every result must include: {{"status": "done|blocked", "summary": "what happened"}}"""
 
     nvm = 'export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"'
+    model_flag = f"--model {repo_info['model']} " if repo_info and repo_info.get("model") else ""
     prompt_file = Path(f"/tmp/varys-worker-{session_id}.txt")
     prompt_file.write_text(worker_prompt)
 
     worker_result = {}
     try:
         result = subprocess.run(
-            ["bash", "-c", f'{nvm} && claude --dangerously-skip-permissions --print -p "$(cat {prompt_file})"'],
-            capture_output=True, text=True, timeout=600,
-            cwd=str(WORKSPACE) if WORKSPACE.exists() else str(VARYS_DIR),
+            ["bash", "-c",
+             f'{nvm} && claude --dangerously-skip-permissions {model_flag}--print -p "$(cat {prompt_file})"'],
+            capture_output=True, text=True, timeout=1800,
+            cwd=work_cwd,
         )
         raw = result.stdout.strip()
         start = raw.find("{")
@@ -314,8 +384,47 @@ Every result must include: {{"status": "done|blocked", "summary": "what happened
         if prompt_file.exists():
             prompt_file.unlink()
 
+    # For product-lead: commit changes, push, open PR
+    if chosen_agent == "product-lead" and repo_info and branch and worker_result.get("status") == "done":
+        if not _git(work_cwd, "status", "--porcelain").stdout.strip():
+            worker_result = {"status": "blocked",
+                             "summary": "product-lead produced no file changes — nothing to commit"}
+        else:
+            base = repo_info.get("branch", "main")
+            _git(work_cwd, "add", "-A")
+            _git(work_cwd, "commit", "-m",
+                 f"feat: {real_intent[:60]}\n\nProduct-lead pipeline delivery. Session {session_id}.")
+            ps = _git(work_cwd, "push", "-u", "origin", branch, timeout=180)
+            if ps.returncode == 0:
+                gh_env = {**os.environ,
+                          "GH_TOKEN": cfg.get("GITHUB_TOKEN", os.environ.get("GH_TOKEN", ""))}
+                pr_body = (
+                    f"Autonomous delivery by Varys (product-lead pipeline).\n\n"
+                    f"**Intent:** {real_intent}\n\n"
+                    f"**Phases run:** {', '.join(worker_result.get('phases_run', []))}\n\n"
+                    f"**Summary:**\n{worker_result.get('summary', '')[:800]}\n\n"
+                    f"Review before merge."
+                )
+                pr = subprocess.run(
+                    ["gh", "pr", "create", "--base", base, "--head", branch,
+                     "--title", f"feat: {real_intent[:60]}", "--body", pr_body],
+                    capture_output=True, text=True, timeout=120, cwd=work_cwd, env=gh_env,
+                )
+                if pr.returncode == 0 and pr.stdout.strip():
+                    worker_result["pr_url"] = pr.stdout.strip().splitlines()[-1]
+                else:
+                    klog("manager-pr-fail", component="manager",
+                         session_id=session_id, err=pr.stderr[:200])
+            else:
+                worker_result["summary"] = (
+                    worker_result.get("summary", "") + f"\n[push failed: {ps.stderr[:100]}]"
+                )
+
+    duration_s = int(time.time() - started_at)
+    success    = worker_result.get("status") == "done"
+    pr_url     = worker_result.get("pr_url") or worker_result.get("deliverable")
+
     # Synthesis pass — quality check + skill update
-    success = worker_result.get("status") == "done"
     skill_name = _agent_to_skill(chosen_agent)
     if skill_name:
         if success:
@@ -325,13 +434,14 @@ Every result must include: {{"status": "done|blocked", "summary": "what happened
             _append_skill(skill_name, "What to Avoid",
                 f"Agent {chosen_agent} blocked on '{real_intent[:80]}': {worker_result.get('summary','')[:100]}")
 
-    # Post synthesis to Slack
+    # Post result to Slack thread
     if bot_token and slack_channel:
         if success:
+            pr_line = f"\nPR: {pr_url}" if pr_url else ""
             msg = (
-                f"✅ *Done: {real_intent[:100]}*\n"
+                f"✅ *Done: {real_intent[:100]}*{pr_line}\n"
                 f"{worker_result.get('summary', '')[:400]}\n"
-                f"\U0001f916 Varys"
+                f"_Session `{session_id}` · {duration_s}s_\n\U0001f916 Varys"
             )
         else:
             msg = (
@@ -343,8 +453,9 @@ Every result must include: {{"status": "done|blocked", "summary": "what happened
 
     final_status = "completed" if success else "cancelled"
     db.execute(
-        "UPDATE sessions SET status=?, phase='synthesis', updated_at=datetime('now') WHERE id=?",
-        (final_status, session_id),
+        "UPDATE sessions SET status=?, phase='synthesis', updated_at=datetime('now'), "
+        "completed_at=datetime('now'), pr_url=? WHERE id=?",
+        (final_status, pr_url, session_id),
     )
     db.execute(
         "UPDATE events SET status='done', processed_at=datetime('now') "
@@ -352,9 +463,14 @@ Every result must include: {{"status": "done|blocked", "summary": "what happened
         (context_key,),
     )
     db.commit()
+
+    # Notion: update harness ticket + create work log entry
+    if success:
+        _notion_log_session(db, context_key, session_id, real_intent, pr_url, duration_s, cfg)
+
     db.close()
     klog("manager-synthesis-complete", component="manager",
-         session_id=session_id, success=success)
+         session_id=session_id, success=success, pr=pr_url, duration_s=duration_s)
 
 
 def _agent_to_skill(agent):
@@ -365,8 +481,64 @@ def _agent_to_skill(agent):
         "slack-agent": "slack-replies",
         "notion-agent": None,
         "people-agent": "helping-team",
+        "product-lead": None,
     }
     return mapping.get(agent)
+
+
+def _slugify(text: str) -> str:
+    s = re.sub(r"[^\w\s-]", "", text.lower())
+    return re.sub(r"[\s_-]+", "-", s).strip("-")[:40]
+
+
+def _git(cwd: str, *args, timeout: int = 60) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["git", *args], capture_output=True, text=True, timeout=timeout, cwd=cwd
+    )
+
+
+def _load_registry() -> dict:
+    """Return repos-registry.json as {key: {abs_path, branch, model, ...}}."""
+    reg_path = RULES_DIR / "repos-registry.json"
+    if not reg_path.exists():
+        return {}
+    data = json.loads(reg_path.read_text())
+    return data.get("repos", data) if isinstance(data, dict) else {}
+
+
+def _notion_log_session(
+    db, context_key: str, session_id: str,
+    real_intent: str, pr_url: str | None,
+    duration_s: int, cfg: dict,
+) -> None:
+    """Write a Work Log entry to Notion. Notion is log-only — no ticket management."""
+    api_key = cfg.get("NOTION_API_KEY", "")
+    if not api_key:
+        return
+    work_log_db_id = cfg.get("NOTION_WORK_LOG_DB_ID", "37f902248f3d817890d2c70c1635bad9")
+    today = datetime.now().strftime("%Y-%m-%d")
+    pr_note = f"\nPR: {pr_url}" if pr_url else ""
+    summary = f"{real_intent[:200]}{pr_note}\nDuration: {duration_s}s  Session: {session_id[-8:]}"
+    body = {
+        "parent": {"database_id": work_log_db_id},
+        "properties": {
+            "Date":       {"title": [{"text": {"content": f"{today} — {real_intent[:80]}"}}]},
+            "Session ID": {"rich_text": [{"text": {"content": session_id}}]},
+            "Summary":    {"rich_text": [{"text": {"content": summary[:2000]}}]},
+        },
+    }
+    req = urllib.request.Request(
+        "https://api.notion.com/v1/pages",
+        data=json.dumps(body).encode(),
+        headers={"Authorization": f"Bearer {api_key}", "Notion-Version": "2022-06-28",
+                 "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        notion_request(req)
+    except Exception as exc:
+        klog("notion-worklog-fail", component="manager",
+             session_id=session_id, error=str(exc)[:120])
 
 
 def main() -> int:

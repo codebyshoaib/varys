@@ -10,6 +10,10 @@ Every action Varys takes gets logged with:
   - kamal_reacted: pending → yes/no (updated by reaction watcher)
   - evidence:     what Varys actually did (request, answer, action)
 
+Previously wrote to Notion Health Log DB via Claude MCP subprocess.
+Now local-only: all events go to Axiom + /tmp fallback via klog.
+Pending-reaction tracking continues via the local JSONL file.
+
 Scoring rubric (0-100):
   conversation:
     100 — answered with tools, no clarification asked, Shoaib acted on it
@@ -54,13 +58,10 @@ Reaction watcher (passive):
   - If Shoaib replies within 5 min → reacted=yes, score boosted to 100
   - If Shoaib reacts with emoji → reacted=yes
   - If no reply within 30 min → reacted=no, score stays as-is
-  - Updates the Notion Health Log entry via Action ID
+  - Updates the local pending file (no Notion write)
 """
 
 import json
-import os
-import subprocess
-import threading
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -68,8 +69,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent))
 from varys_log import klog
 
-HEALTH_DB  = "27e287b7-a3d1-46c6-b5e8-eb0d862d746f"
-VARYS_DIR  = Path(__file__).parent.parent.parent
+VARYS_DIR    = Path(__file__).parent.parent.parent
 PENDING_FILE = Path("/tmp/varys-eval-pending.jsonl")  # actions waiting for reaction
 
 _SESSION_ID = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
@@ -99,65 +99,6 @@ def _make_id() -> str:
     return str(uuid.uuid4())[:8]
 
 
-def _run_notion_write(action_id: str, action_type: str, event: str,
-                      score: int, evidence: str, service: str,
-                      session_id: str):
-    """Fire-and-forget: write eval entry to Notion Health Log."""
-    today = datetime.utcnow().strftime("%Y-%m-%d")
-    props = {
-        "Event":        event[:200],
-        "Action Type":  action_type,
-        "Action ID":    action_id,
-        "Eval Score":   score,
-        "Shoaib Reacted": "pending",
-        "Evidence":     evidence[:500],
-        "Service":      service,
-        "Severity":     "info",
-        "Status":       "detected",
-        "Session ID":   session_id,
-        "date:Date:start": today,
-    }
-
-    prompt = f"""Use mcp__claude_ai_Notion__notion-create-pages to add ONE page to DB {HEALTH_DB}.
-Properties:
-{json.dumps(props, indent=2)}
-Reply only "ok"."""
-
-    env = os.environ.copy()
-    env["VARYS_EVAL_PROMPT"] = prompt
-    nvm = 'export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"'
-
-    subprocess.Popen(
-        ["bash", "-c", f'{nvm} && claude --dangerously-skip-permissions --print -p "$VARYS_EVAL_PROMPT"'],
-        cwd=str(VARYS_DIR), env=env,
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        start_new_session=True,
-    )
-
-
-def _run_notion_update(action_id: str, reacted: str, final_score: int):
-    """Update an existing Health Log entry's Shoaib Reacted + Eval Score by Action ID."""
-    prompt = f"""Use mcp__claude_ai_Notion__notion-search to find a page in the Varys Health Log DB
-where "Action ID" = "{action_id}".
-
-Then use mcp__claude_ai_Notion__notion-update-page with command update_properties to set:
-  "Shoaib Reacted": "{reacted}"
-  "Eval Score": {final_score}
-
-Reply only "ok"."""
-
-    env = os.environ.copy()
-    env["VARYS_EVAL_UPDATE"] = prompt
-    nvm = 'export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"'
-
-    subprocess.Popen(
-        ["bash", "-c", f'{nvm} && claude --dangerously-skip-permissions --print -p "$VARYS_EVAL_UPDATE"'],
-        cwd=str(VARYS_DIR), env=env,
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        start_new_session=True,
-    )
-
-
 def _save_pending(action_id: str, action_type: str, score: int,
                   channel: str, ts: str):
     """Save to local file so reaction watcher can pick it up."""
@@ -171,10 +112,6 @@ def _save_pending(action_id: str, action_type: str, score: int,
     })
     with open(PENDING_FILE, "a") as f:
         f.write(entry + "\n")
-
-
-def _async(fn, *args, **kwargs):
-    threading.Thread(target=fn, args=args, kwargs=kwargs, daemon=True).start()
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
@@ -195,16 +132,8 @@ def log_action(action_type: str, event: str, evidence: str,
     # Log to Axiom synchronously — fast, always works
     klog("eval_action", component=service, action_type=action_type,
          action_id=action_id, score=score, signal=signal,
-         summary=event[:100], evidence=evidence[:150])
-
-    _async(_run_notion_write,
-           action_id=action_id,
-           action_type=action_type,
-           event=event,
-           score=score,
-           evidence=evidence,
-           service=service,
-           session_id=sid)
+         summary=event[:100], evidence=evidence[:150],
+         session_id=sid)
 
     # Save to pending file if this action expects a Shoaib reaction
     if action_type in ("conversation", "proactive-dm", "poller-summary",
@@ -217,7 +146,7 @@ def log_action(action_type: str, event: str, evidence: str,
 def record_reaction(action_id: str, reacted: bool, boost: int = 30):
     """
     Call when Shoaib replies to or reacts to a Varys message.
-    Boosts the eval score and marks Shoaib Reacted = yes/no.
+    Boosts the eval score and logs the reaction locally.
     """
     # Load pending to find current score
     current_score = 50
@@ -238,11 +167,6 @@ def record_reaction(action_id: str, reacted: bool, boost: int = 30):
          action_id=action_id, reacted=reacted_str,
          score_before=current_score, score_after=final_score)
 
-    _async(_run_notion_update,
-           action_id=action_id,
-           reacted=reacted_str,
-           final_score=final_score)
-
     # Remove from pending
     _remove_pending(action_id)
 
@@ -250,7 +174,7 @@ def record_reaction(action_id: str, reacted: bool, boost: int = 30):
 def expire_pending(max_age_minutes: int = 35):
     """
     Called by the reaction watcher loop. Any pending action older than
-    max_age_minutes with no reaction gets marked reacted=no.
+    max_age_minutes with no reaction gets marked reacted=no and logged.
     """
     if not PENDING_FILE.exists():
         return
@@ -274,10 +198,9 @@ def expire_pending(max_age_minutes: int = 35):
     PENDING_FILE.write_text("\n".join(kept) + ("\n" if kept else ""))
 
     for entry in expired:
-        _async(_run_notion_update,
-               action_id=entry["action_id"],
-               reacted="no",
-               final_score=entry.get("score", 50))
+        klog("eval_reaction", component="eval-tracker",
+             action_id=entry["action_id"], reacted="no",
+             score_before=entry.get("score", 50), score_after=entry.get("score", 50))
 
 
 def _remove_pending(action_id: str):
@@ -338,7 +261,6 @@ def eval_poller_summary(summary: str, new_items: int,
 def eval_self_question(question: str, answer: str, tool_used: bool,
                        spawned_followup: bool, session_id: str = None) -> str:
     signal = "tool_sourced" if tool_used else "guessed"
-    score_boost = 10 if spawned_followup else 0
     action_id = log_action(
         action_type = "self-question",
         event       = f"Self-question: {question[:60]}",
