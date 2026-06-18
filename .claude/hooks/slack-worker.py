@@ -33,6 +33,18 @@ WORKSPACE     = cfg("SLACK_WORKSPACE", "")
 DB_PAGE_HARNESS = cfg("NOTION_HARNESS_DB_ID", "")
 
 
+def _repo_cwd(text: str) -> str:
+    registry_path = REPO / ".claude" / "rules" / "repos-registry.json"
+    try:
+        registry = json.loads(registry_path.read_text())
+        for name, info in registry.get("repos", {}).items():
+            if name.lower() in text.lower():
+                return info["abs_path"]
+    except Exception:
+        pass
+    return str(REPO)
+
+
 def _claude_bin() -> str:
     c = shutil.which("claude")
     if c:
@@ -223,7 +235,7 @@ def main() -> int:
     result = subprocess.run(
         [_claude_bin(), "--dangerously-skip-permissions", "--print", "-p", prompt],
         capture_output=True, text=True,
-        cwd=str(REPO), timeout=300,
+        cwd=_repo_cwd(text), timeout=300,
         # Rumi principle: this agent writes text only. The harness (_slack_post below)
         # delivers it. VARYS_CONTENT_AGENT=1 lets block-agent-slack-drift.py hard-deny
         # any Slack send the agent tries, so it can't pick its own channel.
