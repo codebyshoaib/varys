@@ -34,7 +34,7 @@ VARYS_DIR    = Path(__file__).parent.parent.parent
 RULES_DIR    = VARYS_DIR / ".claude" / "rules"
 CHANNELS_CFG = RULES_DIR / "proactive-channels.md"
 SLACK_CFG    = Path.home() / ".claude" / "hooks" / ".slack"
-KAMAL_SLACK_ID = cfg("USER_SLACK_ID", "")
+SHOAIB_SLACK_ID = cfg("USER_SLACK_ID", "")
 
 
 def _load_token():
@@ -170,7 +170,7 @@ def main():
                 if not _message_matches(text, ch_cfg["keywords"]):
                     continue
                 # Skip if already handled as @Varys mention
-                if f"<@{KAMAL_SLACK_ID}>" in text or "varys" in text.lower():
+                if f"<@{SHOAIB_SLACK_ID}>" in text or "varys" in text.lower():
                     continue
 
                 event_id = f"slack-{ch_id}-{ts}"

@@ -101,7 +101,7 @@ VARYS_DIR    = Path(__file__).parent.parent.parent
 LOG_FILE     = Path("/tmp/varys-slack-listener.log")
 STATE_FILE   = Path("/tmp/varys-listener-state.json")
 
-KAMAL_USER_ID   = cfg("USER_SLACK_ID",        "")  # set USER_SLACK_ID in ~/.agent-config.json
+SHOAIB_USER_ID   = cfg("USER_SLACK_ID",        "")  # set USER_SLACK_ID in ~/.agent-config.json
 VARYS_BOT_USER  = cfg("BOT_SLACK_USER_ID",   "")  # set BOT_SLACK_USER_ID in ~/.agent-config.json
 DB_PAGE_HARNESS = cfg("NOTION_HARNESS_DB_ID", "")  # set NOTION_HARNESS_DB_ID in ~/.agent-config.json
 WORKSPACE       = cfg("SLACK_WORKSPACE",      "")  # set SLACK_WORKSPACE in ~/.agent-config.json
@@ -392,7 +392,7 @@ def fetch_thread_history(web: WebClient, channel: str, thread_ts: str,
             bot_id = m.get("bot_id", "")
             if bot_id:
                 who = AGENT_NAME
-            elif uid == KAMAL_USER_ID:
+            elif uid == SHOAIB_USER_ID:
                 who = USER_NAME
             else:
                 who = f"<@{uid}>"
@@ -712,9 +712,9 @@ When {USER_NAME} asks about a person ("how is Fatima?", "what does Haroon need?"
 → Read their Current Mood, Active Needs, Recurring Topics, What Works, {AGENT_NAME} Notes
 → Answer from the profile + check Notion Slack Inbox for recent messages from them
 
-## KAMAL'S CONTEXT
+## SHOAIB'S CONTEXT
 - Taleemabad, Pakistan — EdTech, Django + React, multi-tenant LMS
-- Slack workspace: {WORKSPACE} | User Slack ID: {KAMAL_USER_ID}
+- Slack workspace: {WORKSPACE} | User Slack ID: {SHOAIB_USER_ID}
 - Harness DB: {DB_PAGE_HARNESS}
 
 ## THREAD HISTORY
@@ -771,7 +771,7 @@ Reply now. Do NOT output any mode label, header, or internal reasoning — just 
     klog_conversation(
         conv_id        = conv_id,
         sender_name    = sender_name or USER_NAME,
-        sender_id      = sender_id or KAMAL_USER_ID,
+        sender_id      = sender_id or SHOAIB_USER_ID,
         is_third_party = is_third_party,
         channel        = channel,
         source         = source,
@@ -933,7 +933,7 @@ def dispatch(text: str, web: WebClient, channel: str, thread_ts: str, source: st
         thread_history = fetch_thread_history(web, channel, thread_ts, is_dm=is_dm, bot_token=bot_token)
 
     # Resolve sender identity
-    is_third_party = sender_id is not None and sender_id != KAMAL_USER_ID
+    is_third_party = sender_id is not None and sender_id != SHOAIB_USER_ID
     sender_name    = None
     if sender_id:
         try:
@@ -947,7 +947,7 @@ def dispatch(text: str, web: WebClient, channel: str, thread_ts: str, source: st
         save_conversation_to_notion(sender_name or "Unknown", channel, thread_history, clean)
 
     # Reaction watcher: if Shoaib is replying, check if this is a reaction to a pending Varys action
-    if sender_id == KAMAL_USER_ID and not is_third_party:
+    if sender_id == SHOAIB_USER_ID and not is_third_party:
         _check_pending_reactions(channel, thread_ts)
 
     # Expire old pending evals (no reaction within 35 min = reacted:no)
@@ -959,11 +959,11 @@ def dispatch(text: str, web: WebClient, channel: str, thread_ts: str, source: st
     # first Slack message each day. LinkedIn posting is manual-only for this user
     # to avoid spam/ban risk. Re-enable only with an explicit opt-in + per-post
     # approval. See memory: content-linkedin-pipeline-setup / user-linkedin-identity.
-    # if sender_id == KAMAL_USER_ID and not is_third_party:
+    # if sender_id == SHOAIB_USER_ID and not is_third_party:
     #     _maybe_run_daily_content()
 
     # ── NotebookLM fast-path — bypass Claude for nlm commands ────────────────
-    if sender_id == KAMAL_USER_ID and is_notebooklm_command(clean):
+    if sender_id == SHOAIB_USER_ID and is_notebooklm_command(clean):
         cfg       = load_config()
         bot_token_cfg = cfg.get("BOT_TOKEN")
         if _context_available and job_id:
@@ -1241,7 +1241,7 @@ def main():
 
     # Open DM with Shoaib for proactive messages
     try:
-        dm_resp    = web.conversations_open(users=KAMAL_USER_ID)
+        dm_resp    = web.conversations_open(users=SHOAIB_USER_ID)
         dm_channel = dm_resp["channel"]["id"]
         log(f"DM channel with {USER_NAME}: {dm_channel}")
     except Exception as e:

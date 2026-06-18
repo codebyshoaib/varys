@@ -38,7 +38,7 @@ from datetime import datetime, timezone
 
 UA = "Mozilla/5.0 (X11; Linux x86_64) varys-trendscanner/1.0 (content-pipeline)"
 
-# Subreddits chosen for view/follower potential per channel (see @oykamal playbook).
+# Subreddits chosen for view/follower potential per channel (see @shoaib playbook).
 TRACK_SUBREDDITS = {
     "fitness": ["bodyweightfitness", "calisthenics", "Fitness", "running", "swimming", "hiking"],
     "tech":    ["Python", "django", "programming", "ClaudeAI", "ChatGPTCoding", "webdev"],

@@ -32,7 +32,7 @@ from agent_config import cfg
 AGENT_NAME = cfg("AGENT_NAME", "Varys")
 
 VARYS_DIR  = Path(__file__).parent.parent.parent
-KAMAL_DM   = os.environ.get("USER_SLACK_DM", "")  # set USER_SLACK_DM in ~/.agent-config.json
+SHOAIB_DM   = os.environ.get("USER_SLACK_DM", "")  # set USER_SLACK_DM in ~/.agent-config.json
 SLACK_CFG  = Path.home() / ".claude" / "hooks" / ".slack"
 
 # Default notebook fallback
@@ -40,7 +40,7 @@ DEFAULT_NOTEBOOK = os.environ.get("NLM_DEFAULT_NOTEBOOK", "")  # set in ~/.agent
 
 # Notion NLM Registry — single source of truth for all notebooks
 # Replace with your own Notion NLM Registry database ID (created by /setup)
-NLM_REGISTRY_DS = "{{YOUR_NLM_REGISTRY_DB_ID}}"
+NLM_REGISTRY_DS = "383902248f3d811d8cade9015921dc5d"
 NOTION_API       = "https://api.notion.com/v1"
 
 # Hardcoded fallback aliases (used only if Notion registry unreachable)
@@ -170,7 +170,7 @@ def load_token() -> str:
 
 
 def slack_dm(token: str, text: str) -> str:
-    data = json.dumps({"channel": KAMAL_DM, "text": text}).encode()
+    data = json.dumps({"channel": SHOAIB_DM, "text": text}).encode()
     req  = urllib.request.Request(
         "https://slack.com/api/chat.postMessage", data=data,
         headers={"Authorization": f"Bearer {token}",
@@ -653,7 +653,7 @@ def _create_artifact(artifact_cmd: list, artifact_type: str, label: str,
         # give the poller 15min so it doesn't time out before the artifact lands.
         threading.Thread(
             target=poll_and_post_artifact,
-            args=(nb_id, artifact_type, token, KAMAL_DM, f"{label}: {topic}"),
+            args=(nb_id, artifact_type, token, SHOAIB_DM, f"{label}: {topic}"),
             kwargs={"max_wait": 900},
             daemon=True,
         ).start()
@@ -833,8 +833,8 @@ def is_notebooklm_command(text: str) -> bool:
 
 
 def _resolve_post_channel(token: str) -> str:
-    """Where NLM artifacts post: explicit NLM_POST_CHANNEL env, else KAMAL_DM, else open user's DM."""
-    ch = os.environ.get("NLM_POST_CHANNEL", "") or KAMAL_DM
+    """Where NLM artifacts post: explicit NLM_POST_CHANNEL env, else SHOAIB_DM, else open user's DM."""
+    ch = os.environ.get("NLM_POST_CHANNEL", "") or SHOAIB_DM
     if ch:
         return ch
     uid = os.environ.get("USER_SLACK_ID", "")
@@ -864,7 +864,7 @@ if __name__ == "__main__":
     if len(sys.argv) >= 3 and sys.argv[1] == "--handle":
         import threading
         token = load_token()
-        KAMAL_DM = _resolve_post_channel(token)  # rebind global used by slack_dm + pollers
+        SHOAIB_DM = _resolve_post_channel(token)  # rebind global used by slack_dm + pollers
         handle(sys.argv[2], token)
         # handle() spawns daemon poller threads (2–5 min). Keep this process alive
         # until they finish — otherwise sys.exit kills them before the artifact posts.

@@ -1,7 +1,7 @@
 id: eval-002
 description: "How to send a Slack DM"
 category: explicit
-input: "How do I send Kamal a Slack DM?"
+input: "How do I send Shoaib a Slack DM?"
 expected:
   route: ".claude/rules/slack.md"
   must_load: ["slack.md"]

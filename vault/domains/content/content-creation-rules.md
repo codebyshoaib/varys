@@ -6,7 +6,7 @@
 
 ## Step 1: Before picking a topic
 
-1. Check what Kamal is **actually doing this week** (Slack / Notion Work Log)
+1. Check what Shoaib is **actually doing this week** (Slack / Notion Work Log)
 2. **WebSearch what's trending on Reels/Shorts RIGHT NOW** for the track
 3. Match to **his personal story** — not just a topic category
 4. Read brand playbook: https://www.notion.so/36ed8747b3b1812490ccd69993663243
@@ -19,10 +19,10 @@
 
 | Handle | Niche | Voice | Priority |
 |---|---|---|---|
-| `@kamalkecoding` | Claude/AI builds, dev tools | Confident, no-fluff, concrete numbers | 1 — money |
-| `@oykamal` | Islamabad daily life, multi-passion, raw vlog | Raw, real, Urdu for relatability | 2 — anchor |
-| `@kamalkeexercies` | Calisthenics + run + hike + swim | Practitioner, honest, show real fails | 3 |
-| `@kamalkepainting` | Art process, ASMR, technique | Quiet, visual, let visuals speak | 4 |
+| `@shoaibcodes` | Claude/AI builds, dev tools | Confident, no-fluff, concrete numbers | 1 — money |
+| `@shoaib` | Islamabad daily life, multi-passion, raw vlog | Raw, real, Urdu for relatability | 2 — anchor |
+| `@shoaibfitness` | Calisthenics + run + hike + swim | Practitioner, honest, show real fails | 3 |
+| `@shoaibpaints` | Art process, ASMR, technique | Quiet, visual, let visuals speak | 4 |
 
 **Location: Islamabad** (never Karachi)
 **All Reels → ALL platforms:** TikTok + Instagram + YouTube Shorts + Facebook
@@ -67,9 +67,9 @@ Open curiosity gap early, close it only in final 10 seconds.
 
 ## Odyssey Rules (run every script through these)
 
-**1. Find the vulnerability** — 3am bug, debug rage, failed set, struggle. This outperforms polished content. Kamal's 1.1M view came from an extreme experiment.
+**1. Find the vulnerability** — 3am bug, debug rage, failed set, struggle. This outperforms polished content. Shoaib's 1.1M view came from an extreme experiment.
 
-**2. Humanize every build** — every `@kamalkecoding` post → find the human moment for `@oykamal`. "The coffee that fueled this build." Channels cross-feed. @oykamal is connective tissue.
+**2. Humanize every build** — every `@shoaibcodes` post → find the human moment for `@shoaib`. "The coffee that fueled this build." Channels cross-feed. @shoaib is connective tissue.
 
 **3. Concrete numbers always**
 - Never: "revolutionary," "game-changer," "this will change your life"
@@ -111,11 +111,11 @@ Last:     3–5 hashtags only
 
 ## What NOT To Do
 
-- ❌ Generic listicle with no Kamal in it
-- ❌ Topic from queue without checking trends or what Kamal is doing this week
+- ❌ Generic listicle with no Shoaib in it
+- ❌ Topic from queue without checking trends or what Shoaib is doing this week
 - ❌ Starting with "Hi guys" or logo/intro screen
 - ❌ Hype words: revolutionary, game-changer, this will change your life
 - ❌ Cross-posting with platform watermark on
 - ❌ Invented personal facts — write `[VERIFY: variable_name]` instead
 - ❌ "5 Claude Prompts" style generic content
-- ❌ Location Kamal isn't actually visiting
+- ❌ Location Shoaib isn't actually visiting

@@ -23,7 +23,7 @@
 | book | Any book, article, or resource mentioned | book-atomic-habits |
 | tool | Any tool, framework, or technology | tool-django |
 | concept | Any abstract idea worth remembering | concept-systems-thinking |
-| fact | Standalone fact with no better type | fact-kamal-timezone |
+| fact | Standalone fact with no better type | fact-shoaib-timezone |
 
 ## Connection Patterns (what links to what)
 
@@ -43,13 +43,13 @@ skill-X → reads → skill-Z (skill files it depends on)
 
 ### When Shoaib expresses a preference
 ```
-person-kamal → prefers → X
-person-kamal → mentioned_with → context-Y (when/why)
+person-shoaib → prefers → X
+person-shoaib → mentioned_with → context-Y (when/why)
 ```
 
 ### When a decision is made
 ```
-person-kamal → decided → fact-X
+person-shoaib → decided → fact-X
 fact-X → about → project-Y (if project-related)
 fact-X → on_date → YYYY-MM-DD
 ```

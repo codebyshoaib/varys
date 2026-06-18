@@ -39,7 +39,7 @@ SLACK_CFG   = Path.home() / ".claude" / "hooks" / ".slack"
 HEAL_LOG    = Path("/tmp/varys-self-healer.log")
 HEAL_STATE  = Path("/tmp/varys-healer-state.json")
 HANDLED_LEDGER = Path("/tmp/varys-healer-handled.txt")  # dedup: errors already escalated
-KAMAL_DM    = os.environ.get("USER_SLACK_DM", "")  # set USER_SLACK_DM in ~/.agent-config.json
+SHOAIB_DM    = os.environ.get("USER_SLACK_DM", "")  # set USER_SLACK_DM in ~/.agent-config.json
 
 SERVICES = [
     {
@@ -109,7 +109,7 @@ def slack_dm(token: str, text: str):
         "https://slack.com/api/chat.postMessage",
         "-H", f"Authorization: Bearer {token}",
         "-H", "Content-Type: application/json",
-        "-d", json.dumps({"channel": KAMAL_DM, "text": text}),
+        "-d", json.dumps({"channel": SHOAIB_DM, "text": text}),
     ], capture_output=True)
 
 

@@ -99,7 +99,7 @@ CONTENT STRUCTURE (top to bottom):
 
 3. FOOTER BAND (bottom ~8% of canvas)
    - Same dark background as header
-   - Small white text: "@oykamal"
+   - Small white text: "@shoaib"
    - Minimal — just the handle, nothing else
 
 DESIGN RULES (non-negotiable):

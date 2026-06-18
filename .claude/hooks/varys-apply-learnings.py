@@ -34,7 +34,7 @@ from varys_notion import notion_request
 BRAIN_DB        = Path.home() / ".varys-harness" / "brain.db"
 HARNESS_DB_ID   = cfg("NOTION_HARNESS_DB_ID", "de10157da3e34ef58a74ea240f31fe98")
 NOTION_API      = "https://api.notion.com/v1"
-KAMAL_DM        = os.environ.get("USER_SLACK_DM", "")  # set USER_SLACK_DM in ~/.agent-config.json
+SHOAIB_DM        = os.environ.get("USER_SLACK_DM", "")  # set USER_SLACK_DM in ~/.agent-config.json
 SLACK_CFG       = Path.home() / ".claude" / "hooks" / ".slack"
 
 
@@ -274,7 +274,7 @@ def _format_slack_message(created: list[dict], learning_names: list[str]) -> str
 def slack_dm(token: str, text: str):
     if not token:
         return
-    data = json.dumps({"channel": KAMAL_DM, "text": text}).encode()
+    data = json.dumps({"channel": SHOAIB_DM, "text": text}).encode()
     req  = urllib.request.Request(
         "https://slack.com/api/chat.postMessage", data=data,
         headers={"Authorization": f"Bearer {token}",

@@ -28,7 +28,7 @@ from agent_config import cfg
 
 AGENT_NAME    = cfg("AGENT_NAME", "Varys")
 USER_NAME     = cfg("USER_NAME", "Shoaib")
-KAMAL_USER_ID = cfg("USER_SLACK_ID", "")
+SHOAIB_USER_ID = cfg("USER_SLACK_ID", "")
 WORKSPACE     = cfg("SLACK_WORKSPACE", "")
 DB_PAGE_HARNESS = cfg("NOTION_HARNESS_DB_ID", "")
 
@@ -218,7 +218,7 @@ def main() -> int:
         subprocess.Popen(
             ["python3", str(HOOKS / "notebooklm_handler.py"), "--handle", f"nlm {nlm_directive}"],
             env={**os.environ, "SLACK_BOT_TOKEN": bot_token,
-                 "NLM_POST_CHANNEL": channel, "USER_SLACK_ID": KAMAL_USER_ID},
+                 "NLM_POST_CHANNEL": channel, "USER_SLACK_ID": SHOAIB_USER_ID},
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             start_new_session=True, cwd=str(REPO),
         )

@@ -7,7 +7,7 @@ Every action Varys takes gets logged with:
   - action_type:  conversation | proactive-dm | self-question | pr-review |
                   notion-write | self-heal | book-coach | poller-summary
   - initial_score: Varys's self-score before seeing Shoaib's reaction
-  - kamal_reacted: pending → yes/no (updated by reaction watcher)
+  - shoaib_reacted: pending → yes/no (updated by reaction watcher)
   - evidence:     what Varys actually did (request, answer, action)
 
 Previously wrote to Notion Health Log DB via Claude MCP subprocess.

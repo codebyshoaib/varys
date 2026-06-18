@@ -8,7 +8,7 @@
 - Never post without reading this file first.
 
 ## What Works
-- [2026-06-04] Agent content-agent handled 'Create a LinkedIn post about a tech topic for the @oykamal content channel, date' successfully
+- [2026-06-04] Agent content-agent handled 'Create a LinkedIn post about a tech topic for the @shoaib content channel, date' successfully
 <!-- append after posts that perform well -->
 
 ## What to Avoid

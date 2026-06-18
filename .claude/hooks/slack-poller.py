@@ -42,7 +42,7 @@ STATE_FILE      = Path("/tmp/varys-poller-state.json")
 VARYS_INBOX_DIR = Path.home() / "varys-inbox"
 WORKSPACE       = cfg("SLACK_WORKSPACE", "taleemabad-talk.slack.com")
 
-KAMAL_USER_ID = cfg("USER_SLACK_ID", "")
+SHOAIB_USER_ID = cfg("USER_SLACK_ID", "")
 VARYS_TRIGGER_KEYWORDS = ["@shoaib_s_pr_beacon", "<@u0b0cq34bst>", "pr beacon", "@shoaib's pr beacon"]
 
 LEARNING_CHANNELS = {
@@ -122,7 +122,7 @@ def slack_post(token: str, endpoint: str, payload: dict) -> dict:
 
 def open_dm(token: str) -> str | None:
     """Open a DM channel with Shoaib, return channel ID."""
-    resp = slack_post(token, "conversations.open", {"users": KAMAL_USER_ID})
+    resp = slack_post(token, "conversations.open", {"users": SHOAIB_USER_ID})
     if resp.get("ok"):
         return resp.get("channel", {}).get("id")
     log(f"Could not open DM: {resp.get('error')}")
@@ -168,7 +168,7 @@ def classify_message(text: str, from_id: str, channel_name: str = "") -> tuple:
     text_lower = text.lower()
     if "github.com" in text_lower and "pull" in text_lower:
         return "PR Review Request", "Needs Action"
-    if KAMAL_USER_ID in text:
+    if SHOAIB_USER_ID in text:
         return "Mention", "Unread"
     if channel_name in LEARNING_CHANNELS and "http" in text_lower:
         return "FYI", "FYI"
@@ -176,7 +176,7 @@ def classify_message(text: str, from_id: str, channel_name: str = "") -> tuple:
         return "FYI", "FYI"
     if any(w in text_lower for w in ["bug", "crash", "oom", "error", "failing", "broken"]):
         return "Bug Report", "FYI"
-    if "?" in text and KAMAL_USER_ID in text:
+    if "?" in text and SHOAIB_USER_ID in text:
         return "Question", "Needs Action"
     return "FYI", "FYI"
 
@@ -212,9 +212,9 @@ def poll_channel(token: str, channel_id: str, channel_name: str,
             continue
 
         is_relevant = (
-            KAMAL_USER_ID in text
+            SHOAIB_USER_ID in text
             or "github.com" in text.lower()
-            or from_id == KAMAL_USER_ID
+            or from_id == SHOAIB_USER_ID
             or "<!channel>" in text
             or "<!subteam" in text
             or from_id == "U0B1XDPP8JC"
@@ -238,7 +238,7 @@ def poll_channel(token: str, channel_id: str, channel_name: str,
             iso_date = datetime.now().strftime("%Y-%m-%d")
 
         from_label = f"<@{from_id}>" if from_id else "Unknown"
-        if from_id == KAMAL_USER_ID:
+        if from_id == SHOAIB_USER_ID:
             from_label = "You (Shoaib)"
 
         new_items.append({
@@ -278,7 +278,7 @@ def poll_dms(token: str, existing_permalinks: set, since_ts: str) -> list:
             from_id = msg.get("user", "")
             ts      = msg.get("ts", "")
 
-            if from_id == KAMAL_USER_ID:
+            if from_id == SHOAIB_USER_ID:
                 continue
 
             permalink = f"https://{WORKSPACE}/archives/{ch_id}/p{ts.replace('.', '')}"

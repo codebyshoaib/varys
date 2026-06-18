@@ -199,7 +199,7 @@ def handle(
         img = make_info(
             title=topic[:40],
             points=points[:7],
-            handle="@oykamal",
+            handle="@shoaib",
             palette=palette_dict,
         )
         img.save(outfile, "PNG")

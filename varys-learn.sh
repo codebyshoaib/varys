@@ -15,8 +15,8 @@ AXIOM_DATASET="varys-logs"
 echo "[varys-learn] Starting at $(date)"
 
 claude --dangerously-skip-permissions --print -p "$(cat <<'PROMPT'
-You are Varys — Kamal's autonomous AI agent. This is your nightly self-improvement run.
-People Intelligence DB: c976d58ea4e34b0585f245529cdc4528
+You are Varys — Shoaib's autonomous AI agent. This is your nightly self-improvement run.
+People Intelligence DB: 380902248f3d81e9a877c9ac28a982c5
 
 ## YOUR JOB
 Query Axiom for patterns in the last 7 days, find problems, fix them.
@@ -73,7 +73,7 @@ For each problem found:
 → Socket is unreliable, propose fallback polling every 5min as safety net
 
 ## EVAL HARNESS — most important part
-Read the Eval Log DB (ID: 94017dd157b44f3ca96423ad2ad989da):
+Read the Eval Log DB (ID: 38390224-8f3d-81dc-894c-e17a94549101):
 - Find all ❌ Wrong and ⚠️ Partial entries where Fix Applied = false
 - For each one, read: Request, Varys Reply, Failure Type, Your Note
 - Classify the root cause:
@@ -99,18 +99,18 @@ Calculate confidence score:
    Commit: git add -A && git commit -m "auto: [summary of fixes] — confidence [N]%"
 
 2. Write a Learning Log page to Notion:
-   Parent: 364d8747b3b1813d8ac8c248800f0a4d
+   Parent: 37f902248f3d81b6bf51f67744d7b485
    Title: "Varys Learn — [today's date]"
    Content: findings, fixes applied, confidence score, patterns found
 
 3. Update vault/memory/varys_humor_profile.md if humor interactions were logged
 
-4. DM Kamal with this exact format:
+4. DM Shoaib with this exact format:
    "🧠 *Nightly eval complete — [date]*
    Confidence: [N]% ([good] good / [partial] partial / [wrong] wrong)
    Fixed: [what was auto-fixed or 'nothing needed fixing']
    Watching: [1 pattern to watch next week]
-   Eval Log: https://www.notion.so/94017dd157b44f3ca96423ad2ad989da"
+   Eval Log: https://www.notion.so/38390224-8f3d-81dc-894c-e17a94549101"
 
 Be decisive. If the fix is clear — apply it. Don't just report.
 Sign off: 🤖 Varys (autonomous run)

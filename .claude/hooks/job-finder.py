@@ -37,8 +37,8 @@ STATE_FILE    = Path("/tmp/varys-jobs-state.json")
 LOG_FILE      = Path("/tmp/varys-jobs.log")
 VARYS_DIR     = Path(__file__).parent.parent.parent
 
-KAMAL_USER_ID = cfg("USER_SLACK_ID", "")
-KAMAL_DM      = os.environ.get("USER_SLACK_DM", "")  # set USER_SLACK_DM in ~/.agent-config.json
+SHOAIB_USER_ID = cfg("USER_SLACK_ID", "")
+SHOAIB_DM      = os.environ.get("USER_SLACK_DM", "")  # set USER_SLACK_DM in ~/.agent-config.json
 JOBS_DB       = "0d69c6ff-83d8-44c7-94c2-d341c4ded8d7"
 
 # Only DM jobs with score >= this
@@ -809,7 +809,7 @@ def main():
     if not dm_jobs:
         # Still tell Shoaib what we explored
         if slot_name:
-            slack_post(bot_token, {"channel": KAMAL_DM,
+            slack_post(bot_token, {"channel": SHOAIB_DM,
                 "text": f"🔍 *Explored:* {slot_name}\n_No new qualifying work found this pass. Back in 30 min._\n🤖 Varys"})
         log("No new qualifying jobs this run — skipping DM.")
         return 0
@@ -841,7 +841,7 @@ def main():
     lines.append("🤖 Varys")
 
     msg    = "\n".join(lines)
-    result = slack_post(bot_token, {"channel": KAMAL_DM, "text": msg})
+    result = slack_post(bot_token, {"channel": SHOAIB_DM, "text": msg})
 
     if result.get("ok"):
         msg_ts = result.get("ts", "")
@@ -853,7 +853,7 @@ def main():
             evidence    = f"Top job: {dm_jobs[0]['title']} | Score: {dm_jobs[0]['score']}",
             signal      = "sent",
             service     = "job-finder",
-            channel     = KAMAL_DM,
+            channel     = SHOAIB_DM,
             ts          = msg_ts,
         )
     else:

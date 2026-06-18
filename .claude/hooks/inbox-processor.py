@@ -34,7 +34,7 @@ VARYS_DIR = Path(__file__).parent.parent.parent  # personal-agent-v2/
 LOG_FILE = Path("/tmp/varys-inbox-processor.log")
 
 NOTION_BRAIN_PAGE_ID = "364d8747b3b1813d8ac8c248800f0a4d"
-KAMAL_SLACK_ID = cfg("USER_SLACK_ID", "")
+SHOAIB_SLACK_ID = cfg("USER_SLACK_ID", "")
 SLACK_BOT_TOKEN = cfg("SLACK_BOT_TOKEN", "")
 
 # Known project paths → project name
@@ -99,7 +99,7 @@ Your job:
 1. Answer using your Notion brain (page ID: {NOTION_BRAIN_PAGE_ID}).
    Read the relevant Notion databases: Work Log, Slack Inbox, Team People, My PRs.
    If the question is about a specific project ({project or 'check the context'}), read that project's harness too.
-2. Send your response as a Slack DM to Shoaib (Slack user ID: {KAMAL_SLACK_ID}).
+2. Send your response as a Slack DM to Shoaib (Slack user ID: {SHOAIB_SLACK_ID}).
    Keep the response direct and specific — show you actually checked Notion data, not just guessing.
    Sign off as: Varys 🤖
 3. Log this conversation to Notion Work Log with title: "Shoaib asked: {text[:60]}"

@@ -35,7 +35,7 @@ from varys_log import klog, klog_error
 from varys_eval_tracker import log_action
 
 VARYS_DIR   = Path(__file__).parent.parent.parent
-KAMAL_DM    = os.environ.get("USER_SLACK_DM", "")  # set USER_SLACK_DM in ~/.agent-config.json
+SHOAIB_DM    = os.environ.get("USER_SLACK_DM", "")  # set USER_SLACK_DM in ~/.agent-config.json
 JOBS_DB     = "0d69c6ff-83d8-44c7-94c2-d341c4ded8d7"
 SLACK_CFG   = Path.home() / ".claude" / "hooks" / ".slack"
 APPLIED_FILE = Path("/tmp/varys-applied.jsonl")  # dedup — never apply twice
@@ -61,7 +61,7 @@ def load_token() -> str:
 
 
 def slack_dm(token: str, text: str) -> str:
-    data = json.dumps({"channel": KAMAL_DM, "text": text}).encode()
+    data = json.dumps({"channel": SHOAIB_DM, "text": text}).encode()
     req  = urllib.request.Request(
         "https://slack.com/api/chat.postMessage", data=data,
         headers={"Authorization": f"Bearer {token}",
@@ -132,7 +132,7 @@ Description: {description[:600]}
 Source: {source}
 Rate mentioned: {rate}
 
-KAMAL'S BACKGROUND:
+SHOAIB'S BACKGROUND:
 {USER_BIO}
 
 Write a SHORT, tailored proposal (max 150 words). Rules:
@@ -174,7 +174,7 @@ Reply only "sent" when done."""
              job_title=job["title"][:80], email=email, score=job.get("score", 0))
         log_action("conversation", event=f"Applied via email: {job['title'][:60]}",
                    evidence=f"Sent to {email}", signal="sent", service="auto-apply",
-                   channel=KAMAL_DM)
+                   channel=SHOAIB_DM)
         slack_dm(token,
             f"✉️ *Applied (email):* {job['title'][:70]}\n"
             f"Sent to: `{email}`\n"

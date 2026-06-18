@@ -34,7 +34,7 @@ from canva_designer import CanvaDesigner, ALL_FORMATS
 
 NOTION_CONFIG    = Path.home() / ".claude" / "hooks" / ".notion"
 SLACK_CONFIG     = Path.home() / ".claude" / "hooks" / ".slack"
-KAMAL_DM         = os.environ.get("USER_SLACK_DM", "")  # set USER_SLACK_DM in ~/.agent-config.json
+SHOAIB_DM         = os.environ.get("USER_SLACK_DM", "")  # set USER_SLACK_DM in ~/.agent-config.json
 NOTION_DESIGN_DB = os.environ.get("NOTION_DESIGN_DB", "076960e8f8a84c618e23a4a74a950b48")
 EVAL_PASS        = 7
 MAX_RETRIES      = 2
@@ -130,7 +130,7 @@ def slack_dm(message: str):
     token = _load_slack_token()
     if not token:
         return
-    payload = json.dumps({"channel": KAMAL_DM, "text": message}).encode()
+    payload = json.dumps({"channel": SHOAIB_DM, "text": message}).encode()
     try:
         req = urllib.request.Request(
             "https://slack.com/api/chat.postMessage",
@@ -197,7 +197,7 @@ def run_design_with_eval(
         passed = eval_passed(scores)
 
         if passed or retries >= MAX_RETRIES:
-            status = "draft" if passed else "Needs-Kamal"
+            status = "draft" if passed else "Needs-Shoaib"
             notion_create_design_entry(
                 topic=topic, channel=channel, fmt=fmt,
                 canva_id=asset.get("canva_id", ""),

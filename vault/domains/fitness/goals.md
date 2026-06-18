@@ -10,4 +10,4 @@ Personal fitness and health targets.
 
 ## Current Goals
 
-TBD — update as Kamal shares fitness goals
+TBD — update as Shoaib shares fitness goals

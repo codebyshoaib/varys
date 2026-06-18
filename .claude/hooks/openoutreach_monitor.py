@@ -27,7 +27,7 @@ from varys_log import klog, klog_error
 OPENOUTREACH_DB  = Path.home() / ".openoutreach" / "data" / "db.sqlite3"
 STATE_FILE       = Path("/tmp/varys-openoutreach-state.json")
 VARYS_DIR        = Path(__file__).parent.parent.parent
-KAMAL_DM         = os.environ.get("USER_SLACK_DM", "")  # set USER_SLACK_DM in ~/.agent-config.json
+SHOAIB_DM         = os.environ.get("USER_SLACK_DM", "")  # set USER_SLACK_DM in ~/.agent-config.json
 JOBS_DB          = "0d69c6ff-83d8-44c7-94c2-d341c4ded8d7"
 
 SLACK_CONFIG     = Path.home() / ".claude" / "hooks" / ".slack"
@@ -43,7 +43,7 @@ def load_token() -> str:
 
 def slack_dm(token: str, text: str) -> str:
     """Send DM, return message ts."""
-    data = json.dumps({"channel": KAMAL_DM, "text": text}).encode()
+    data = json.dumps({"channel": SHOAIB_DM, "text": text}).encode()
     req  = urllib.request.Request(
         "https://slack.com/api/chat.postMessage", data=data,
         headers={"Authorization": f"Bearer {token}",

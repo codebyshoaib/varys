@@ -60,7 +60,7 @@ CONTENT RULES (Emotional Content Playbook):
 HOOKS_DIR         = Path(__file__).parent
 VARYS_DIR         = HOOKS_DIR.parent.parent
 SLACK_CFG         = Path.home() / ".claude" / "hooks" / ".slack"
-KAMAL_DM          = os.environ.get("USER_SLACK_DM", "")  # set USER_SLACK_DM env var or ~/.agent-config.json
+SHOAIB_DM          = os.environ.get("USER_SLACK_DM", "")  # set USER_SLACK_DM env var or ~/.agent-config.json
 # Resolve the nlm binary robustly: explicit env var → PATH lookup → common install
 # locations. notebooklm-mcp-cli installs to ~/.local/bin/nlm (uv/pip --user); the old
 # hardcoded /usr/local/bin/nlm only existed on the original author's box. cron PATH is
@@ -78,7 +78,7 @@ CANVA_BRAND_KIT_ID = os.environ.get("CANVA_BRAND_KIT_ID", "")
 CANVA_AGENT        = VARYS_DIR / "agents" / "canva_agent.py"
 
 # Set your social handles — used when posting content
-HANDLES = {"fitness": "@{{YOUR_HANDLE}}", "tech": "@{{YOUR_HANDLE}}", "vlog": "@{{YOUR_HANDLE}}"}
+HANDLES = {"fitness": "@shoaib", "tech": "@shoaib", "vlog": "@shoaib"}
 
 # NLM artifact pollers run in non-daemon threads that outlive their track function.
 # They register here so run() can join() them before the process exits — otherwise
@@ -88,10 +88,10 @@ ARTIFACT_POLLERS: list = []
 _POLLERS_LOCK = threading.Lock()
 
 TRACK_CHANNEL = {
-    "fitness": "kamalkeexercies",
-    "tech":    "kamalkecoding",
-    "vlog":    "oykamal",
-    "painting":"kamalkepainting",
+    "fitness": "shoaibfitness",
+    "tech":    "shoaibcodes",
+    "vlog":    "shoaib",
+    "painting":"shoaibpaints",
 }
 
 # ─── Curated Topic Bank ───────────────────────────────────────────────────────
@@ -193,7 +193,7 @@ def slack_dm(token: str, text: str):
     if not token:
         print(f"[scheduler] No token, would DM: {text[:80]}")
         return
-    data = json.dumps({"channel": KAMAL_DM, "text": text}).encode()
+    data = json.dumps({"channel": SHOAIB_DM, "text": text}).encode()
     req  = urllib.request.Request(
         "https://slack.com/api/chat.postMessage", data=data,
         headers={"Authorization": f"Bearer {token}",
@@ -236,7 +236,7 @@ def slack_upload(token: str, filepath: str, title: str, comment: str = ""):
 
         payload = json.dumps({
             "files":           [{"id": file_id, "title": title}],
-            "channel_id":      KAMAL_DM,
+            "channel_id":      SHOAIB_DM,
             "initial_comment": comment,
         }).encode()
         req3 = urllib.request.Request(
@@ -371,7 +371,7 @@ def log_to_content_log(topic: str, track: str, score: int, reason: str,
                         nlm_insights: str = "", nlm_artifacts: dict = None,
                         calendar_page_id: str = "") -> str:
     """Write a row to the Notion Content Log DB. Returns the created page ID."""
-    channel = TRACK_CHANNEL.get(track, "oykamal")
+    channel = TRACK_CHANNEL.get(track, "shoaib")
     artifacts_json = json.dumps(nlm_artifacts) if nlm_artifacts else ""
     props = {
         "Topic":                  {"title":     [{"text": {"content": topic}}]},
@@ -751,7 +751,7 @@ def nlm_poll_and_send(nb_id: str, artifact_type: str, topic: str,
 def generate_image(topic: str, track: str) -> str | None:
     outfile = f"/tmp/varys-content-{datetime.now().strftime('%Y%m%d-%H%M%S')}.png"
     palette = "fitness" if track == "fitness" else "tech"
-    handle  = HANDLES.get(track, "@oykamal")
+    handle  = HANDLES.get(track, "@shoaib")
     gen     = str(HOOKS_DIR / "image_generator.py")
     cmd     = ["python3", gen, "--type", "tip",
                "--tip", topic.upper()[:40], "--context", f"#{track}",

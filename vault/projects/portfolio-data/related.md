@@ -16,7 +16,7 @@ description: Links to portfolio-website and auto-publishing workflow
 
 ### When Claude Publishes a Blog Post
 
-1. **Session achievement**: Kamal solves something notable, ships a feature, learns a lesson
+1. **Session achievement**: Shoaib solves something notable, ships a feature, learns a lesson
 2. **Claude creates entry** in `blogs.json` with metadata
 3. **Commit and push** to portfolio-data: `git commit -m "blog: <slug>" && git push`
 4. **Website rebuilds** (manually triggered or auto on CI):
@@ -27,7 +27,7 @@ description: Links to portfolio-website and auto-publishing workflow
 
 ### When Claude Updates Portfolio
 
-1. **Kamal mentions** new project, skill, experience
+1. **Shoaib mentions** new project, skill, experience
 2. **Claude updates** `portfolio.json` with new entry
 3. **Commit and push**: `git commit -m "update: <type>" && git push`
 4. **Website rebuilds**:

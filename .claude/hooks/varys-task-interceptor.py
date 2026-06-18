@@ -26,7 +26,7 @@ TRIGGER = f"{_agent_name}, work on taleemabad-core"
 TALEEMABAD_CORE = _cfg("TALEEMABAD_CORE_PATH", "/home/oye/Documents/taleemabad-core")
 HARNESS_DB = f"https://www.notion.so/{_cfg('NOTION_HARNESS_DB_ID', 'de10157da3e34ef58a74ea240f31fe98')}"
 HARNESS_DATA_SOURCE = "a173fd5a-b953-4a53-a020-4545db41ccb5"
-KAMAL_SLACK_ID = _cfg("USER_SLACK_ID", "")
+SHOAIB_SLACK_ID = _cfg("USER_SLACK_ID", "")
 
 def get_notion_token():
     path = os.path.expanduser("~/.claude/hooks/.notion")
@@ -125,7 +125,7 @@ def send_slack_dm(message, token):
     if not token:
         return False
     url = "https://slack.com/api/chat.postMessage"
-    payload = {"channel": KAMAL_SLACK_ID, "text": message}
+    payload = {"channel": SHOAIB_SLACK_ID, "text": message}
     data = json.dumps(payload).encode()
     req = urllib.request.Request(
         url,

@@ -52,13 +52,13 @@ description: JSON data and blog posts for portfolio website
 ## When Claude Auto-Updates
 
 ### Update portfolio.json
-When Kamal mentions:
+When Shoaib mentions:
 - A new project shipped or milestone reached
 - A new skill mastered or role taken on
 - A new certification or qualification
 
 ### Create Blog Post
-When Kamal:
+When Shoaib:
 - Solves a notable problem
 - Implements a new pattern or technique
 - Learns a lesson worth sharing

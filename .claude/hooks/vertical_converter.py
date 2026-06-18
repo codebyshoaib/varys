@@ -11,7 +11,7 @@ Usage:
         --input /tmp/nlm-fitness-infographic.png \
         --output /tmp/vertical-post.png \
         --title "PULL-UP ROADMAP" \
-        --handle "@oykamal" \
+        --handle "@shoaib" \
         --palette fitness
 """
 
@@ -229,7 +229,7 @@ if __name__ == "__main__":
     p.add_argument("--output",   default="/tmp/vertical-nlm.png")
     p.add_argument("--title",    default="ROADMAP")
     p.add_argument("--subtitle", default="")
-    p.add_argument("--handle",   default="@oykamal")
+    p.add_argument("--handle",   default="@shoaib")
     p.add_argument("--palette",  default="fitness",
                    choices=["fitness", "tech"])
     args = p.parse_args()

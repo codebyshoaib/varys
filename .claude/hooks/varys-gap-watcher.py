@@ -29,7 +29,7 @@ except Exception:
 VARYS_DIR       = Path(__file__).parent.parent.parent
 CAPABILITIES_MD = VARYS_DIR / ".claude" / "rules" / "CAPABILITIES.md"
 SLACK_CFG       = Path.home() / ".claude" / "hooks" / ".slack"
-KAMAL_SLACK_ID  = cfg("USER_SLACK_ID", "")
+SHOAIB_SLACK_ID  = cfg("USER_SLACK_ID", "")
 
 
 def _load_bot_token() -> str:
@@ -46,9 +46,9 @@ def _load_bot_token() -> str:
     return ""
 
 
-def _dm_kamal(bot_token: str, text: str) -> None:
+def _dm_shoaib(bot_token: str, text: str) -> None:
     try:
-        data = json.dumps({"users": KAMAL_SLACK_ID}).encode()
+        data = json.dumps({"users": SHOAIB_SLACK_ID}).encode()
         req  = urllib.request.Request(
             "https://slack.com/api/conversations.open", data=data,
             headers={"Authorization": f"Bearer {bot_token}",
@@ -140,7 +140,7 @@ def run() -> None:
         if bot_token:
             ticket_line = " Created a Harness ticket to build it." if ticket_created else ""
             try:
-                _dm_kamal(bot_token,
+                _dm_shoaib(bot_token,
                     f"📚 *Capability gap learned:* `{gap_type}`\n"
                     f"Hit {count} times this week ({rejected} rejected).\n"
                     f"Added to my limits in `CAPABILITIES.md`.{ticket_line}\n"

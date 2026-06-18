@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# varys-weekly-report.sh — Varys's weekly Slack message to Kamal
+# varys-weekly-report.sh — Varys's weekly Slack message to Shoaib summarizing what it learned and proposing next steps
 # Runs every Monday at 9am via cron
 # After 1 week of learning, proposes things it can handle
 #
@@ -23,12 +23,12 @@ if ! command -v claude &>/dev/null; then
     exit 1
 fi
 
-PROMPT="You are Varys, Kamal's autonomous personal agent. Today is $DATE — your weekly report day.
+PROMPT="You are Varys, Shoaib's autonomous personal agent. Today is $DATE — your weekly report day.
 
-Review everything you've learned this week from Notion (Work Log, Slack Inbox, Team People, My PRs, Harness) and compose a weekly message to send to Kamal on Slack.
+Review everything you've learned this week from Notion (Work Log, Slack Inbox, Team People, My PRs, Harness) and compose a weekly message to send to Shoaib on Slack.
 
 The message must:
-1. Start with: 'Hey Kamal — Varys weekly report for the week of $DATE'
+1. Start with: 'Hey Shoaib — Varys weekly report for the week of $DATE'
 2. Summarize: what you learned about the codebase this week
 3. Summarize: what each key teammate worked on (Shoaib, Hammad, Laraib, Fatima, Usman, Mah Noor)
 4. List: things you noticed that may need attention (PRs stuck, issues opened, teammates blocked)
@@ -40,13 +40,13 @@ The message must:
 IMPORTANT rules for the message:
 - Be specific, not vague. Show you actually read things.
 - Keep it under 400 words total.
-- Be direct like Kamal. No fluff.
+- Be direct like Shoaib. No fluff.
 - Sign off as 'Varys 🤖'
 
-After composing the message, send it to Kamal via Slack DM (Kamal's Slack user ID: see config USER_SLACK_ID).
+After composing the message, send it to Shoaib via Slack DM (Shoaib's Slack user ID: see config USER_SLACK_ID).
 Use the Slack MCP to send the message.
 
-Notion Brain page ID: 364d8747b3b1813d8ac8c248800f0a4d"
+Notion Brain page ID: 37f902248f3d81b6bf51f67744d7b485"
 
 echo "[$TIMESTAMP] Composing and sending weekly report..." >> "$LOG_FILE"
 
@@ -68,9 +68,9 @@ HUMOR_PROMPT="You are Varys. Review your humor performance from this week.
 Read /tmp/varys-humor-log.jsonl — it contains JSON lines: {ts, prompt, response, reaction}
 
 Analyze the patterns:
-- Which types of humor got positive reactions (Kamal laughed, said 'haha', sent 😂, or just acted on it)?
-- Which missed (Kamal re-explained, ignored, or seemed confused)?
-- What style of humor works best for Kamal?
+- Which types of humor got positive reactions (Shoaib laughed, said 'haha', sent 😂, or just acted on it)?
+- Which missed (Shoaib re-explained, ignored, or seemed confused)?
+- What style of humor works best for Shoaib?
 
 Then:
 1. Update vault/memory/varys_humor_profile.md with:
@@ -79,7 +79,7 @@ Then:
    - 2-3 rules for future humor attempts
    Format: keep it short and opinionated, like notes to yourself
 
-2. Write a one-line entry to Notion Learning Log DB (0b71db855f914d18ac6d97c0f77fc21e):
+2. Write a one-line entry to Notion Learning Log DB (37f902248f3d817890d2c70c1635bad9):
    Title: 'Humor Review — $DATE'
    Content: the updated humor rules
 

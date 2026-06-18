@@ -10,4 +10,4 @@ Capture emerging business ideas and test hypotheses.
 
 ## Ideas
 
-TBD — update as Kamal explores business opportunities
+TBD — update as Shoaib explores business opportunities

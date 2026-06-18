@@ -15,7 +15,7 @@ Post types:
 Usage:
   python3 image_generator.py --type qa \
       --question "BEST PULL EXERCISE?" --answer "DEAD HANG" \
-      --handle "@oykamal" --palette fitness --output /tmp/post.png
+      --handle "@shoaib" --palette fitness --output /tmp/post.png
 """
 
 import argparse
@@ -354,7 +354,7 @@ def make_tip(tip: str, context: str, handle: str, palette: dict) -> Image.Image:
 # ─── Entry point ──────────────────────────────────────────────────────────────
 
 def generate(post_type: str, output: str, palette_name: str = "fitness",
-             handle: str = "@oykamal", question: str = "", answer: str = "",
+             handle: str = "@shoaib", question: str = "", answer: str = "",
              title: str = "", subtitle: str = "", tip: str = "", context: str = "",
              steps: list = None, points: list = None) -> str:
     palette = PALETTES.get(palette_name, PALETTES["fitness"])
@@ -386,7 +386,7 @@ if __name__ == "__main__":
         p.add_argument("--context",  default="")
         p.add_argument("--steps",    default="")
         p.add_argument("--points",   default="")
-        p.add_argument("--handle",   default="@oykamal")
+        p.add_argument("--handle",   default="@shoaib")
         p.add_argument("--palette",  default="fitness",
                        choices=["fitness","tech","purple"])
         p.add_argument("--output",   default="/tmp/social-post.png")
