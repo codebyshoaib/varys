@@ -42,6 +42,10 @@ GAPS_LOG    = VARYS_DIR / ".beads" / "capability-gaps.jsonl"
 SLACK_CFG   = Path.home() / ".claude" / "hooks" / ".slack"
 NOTION_CFG  = Path.home() / ".claude" / "hooks" / ".notion"
 
+# ponytail: when a ticket has no linked Slack origin thread, post to Shoaib's DM —
+# never a public channel. chat.postMessage resolves a user ID to the DM channel.
+SHOAIB_DM   = "U0AU07QRYJV"
+
 
 def _load_cfg() -> dict:
     cfg = {}
@@ -117,6 +121,9 @@ def run_manager_phase(context_key: str, session_id: str, events: list, notion_pa
             parts = e["external_id"].split("/")
             if len(parts) == 2:
                 slack_channel, slack_thread_ts = parts
+    # ponytail: no origin thread → DM Shoaib, never a public channel
+    if not slack_channel:
+        slack_channel, slack_thread_ts = SHOAIB_DM, None
 
     event_types = ", ".join(set(ev["type"] for ev in events))
 
@@ -303,6 +310,9 @@ def run_worker_phase(context_key: str, session_id: str, cfg: dict) -> None:
             parts = e["external_id"].split("/")
             if len(parts) == 2:
                 slack_channel, slack_thread_ts = parts
+    # ponytail: no origin thread → DM Shoaib, never a public channel
+    if not slack_channel:
+        slack_channel, slack_thread_ts = SHOAIB_DM, None
 
     # For product-lead: create a fresh branch in the target repo before running
     branch = None
