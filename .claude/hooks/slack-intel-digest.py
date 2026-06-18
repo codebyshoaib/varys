@@ -1,0 +1,371 @@
+#!/usr/bin/env python3
+"""
+slack-intel-digest.py — STEALTH twice-daily Slack intelligence digest.
+
+Replaces slack-daily-digest.py. Runs on its own cron (twice/day), completely
+independent of the @Varys mention pipeline (listener / slack_queue / orchestrator).
+
+What it does:
+  1. Dynamically lists EVERY channel Varys (the bot) is a member of — no hardcoded list.
+  2. Reads each channel's history since the last run (bot token; read-only).
+  3. Calls Claude per active channel → structured "who's working on what / blocked / shipped".
+  4. Calls Claude once more → an executive summary across the org.
+  5. DMs Shoaib ONE message: summary at top, per-channel/per-person detail below.
+
+STEALTH — hard guarantee:
+  The ONLY Slack write this script can make is the DM to Shoaib. It never posts,
+  reacts, or replies in any channel. `_dm_shoaib()` is the single writer and it
+  posts only to a DM channel (id starts with 'D') opened against Shoaib's user id —
+  a swept channel id (C…) can never be a write target. Everything else is GET.
+
+Cron (twice daily, ~09:00 + ~18:00 PKT):
+  0 9  * * * cd ~/varys && python3 .claude/hooks/slack-intel-digest.py >> /tmp/varys-intel-digest.log 2>&1
+  0 18 * * * cd ~/varys && python3 .claude/hooks/slack-intel-digest.py >> /tmp/varys-intel-digest.log 2>&1
+To change the times: edit those two crontab lines (`crontab -e`), keep both pointed here.
+"""
+
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+import urllib.request
+import urllib.parse
+from datetime import datetime, timedelta
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent))
+from agent_config import cfg
+try:
+    from varys_log import klog, klog_error
+except Exception:
+    klog = klog_error = lambda *a, **kw: None
+
+# ── Config ────────────────────────────────────────────────────────────────────
+SLACK_CONFIG = Path.home() / ".claude" / "hooks" / ".slack"
+# Durable across reboots (unlike /tmp) — lives beside the orchestrator's harness state,
+# so last_run_ts survives and windows chain correctly instead of resetting to the 16h floor.
+STATE_FILE   = Path.home() / ".varys-harness" / "intel-digest-state.json"
+VARYS_DIR    = Path(__file__).parent.parent.parent
+MAX_MSGS_PER_CHANNEL = 300   # cap context per channel to keep Claude calls bounded
+HISTORY_FLOOR_HOURS  = 16    # first-run / state-loss ONLY: look back this far. 16h ≥ the 15h
+                             # overnight gap between the 18:00 and 09:00 runs, so a deleted
+                             # state file can't silently drop the overnight window.
+
+CHANNEL_SCHEMA_HINT = """Return a JSON object with exactly these fields:
+- summary: one sentence on what happened in this channel this window
+- mood: one of "productive", "tense", "blocked", "quiet", "mixed"
+- people: array of {name, working_on|null, blocked_on|null, shipped|null} — one per person who said something meaningful
+- key_links: array of GitHub PR URLs / important links (empty array if none)
+Return ONLY the JSON object, no other text."""
+
+
+def log(msg):
+    print(f"[intel-digest] {msg}", file=sys.stderr)
+
+
+def load_config(path: Path) -> dict:
+    config = {}
+    if path.exists():
+        for line in path.read_text().splitlines():
+            line = line.strip()
+            if "=" in line and not line.startswith("#"):
+                k, v = line.split("=", 1)
+                config[k.strip()] = v.strip()
+    return config
+
+
+def slack_get(token: str, endpoint: str, params: dict = None) -> dict:
+    base = f"https://slack.com/api/{endpoint}"
+    if params:
+        base += "?" + urllib.parse.urlencode(params)
+    req = urllib.request.Request(base, headers={"Authorization": f"Bearer {token}"})
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return json.loads(resp.read())
+    except Exception as e:
+        log(f"Slack GET error ({endpoint}): {e}")
+        return {}
+
+
+def list_member_channels(token: str):
+    """Every non-archived channel the bot is a member of → {id: name}. Mirrors the listener scan.
+    Returns None on a HARD API failure (no network / bad token) so the caller can abort WITHOUT
+    advancing the watermark — otherwise a failed catch-up run would silently burn the missed window."""
+    channels, cursor, any_ok = {}, None, False
+    while True:
+        params = {"types": "public_channel,private_channel", "exclude_archived": "true", "limit": 200}
+        if cursor:
+            params["cursor"] = cursor
+        resp = slack_get(token, "conversations.list", params)
+        if not resp.get("ok"):
+            log(f"conversations.list error: {resp.get('error', 'unknown')}")
+            return channels if any_ok else None   # first-call failure → None (don't advance)
+        any_ok = True
+        for c in resp.get("channels", []):
+            if c.get("is_member"):
+                channels[c["id"]] = f"#{c.get('name', c['id'])}"
+        cursor = (resp.get("response_metadata") or {}).get("next_cursor")
+        if not cursor:
+            break
+    return channels
+
+
+def sweep_channel(token: str, ch_id: str, ch_name: str, since_ts: str) -> list[dict]:
+    """Read-only history sweep since `since_ts`. GET only."""
+    messages, cursor = [], None
+    while True:
+        params = {"channel": ch_id, "oldest": since_ts, "limit": 200}
+        if cursor:
+            params["cursor"] = cursor
+        result = slack_get(token, "conversations.history", params)
+        if not result.get("ok"):
+            if result.get("error") not in ("", "not_in_channel"):
+                log(f"{ch_name}: {result.get('error', 'unknown')}")
+            break
+        for msg in result.get("messages", []):
+            text = msg.get("text", "")
+            ts   = msg.get("ts", "")
+            if not text:
+                continue
+            uid = msg.get("user", "")
+            if uid:
+                messages.append({"uid": uid, "text": text, "ts": ts})
+            elif msg.get("bot_id"):
+                # Keep BOT messages too — PR Beacon / GitHub / CodeRabbit "PR ready / merged"
+                # notices are the highest-signal "what shipped" data. Label with the bot name.
+                bot_name = (msg.get("bot_profile") or {}).get("name") or msg.get("username") or "bot"
+                messages.append({"uid": "", "name": bot_name, "text": text, "ts": ts})
+        if len(messages) >= MAX_MSGS_PER_CHANNEL:
+            break
+        cursor = (result.get("response_metadata") or {}).get("next_cursor")
+        if not cursor:
+            break
+    return messages[:MAX_MSGS_PER_CHANNEL]
+
+
+def resolve_names(token: str, uids: set) -> dict:
+    names = {}
+    for uid in uids:
+        resp = slack_get(token, "users.info", {"user": uid})
+        if resp.get("ok"):
+            p = resp["user"].get("profile", {})
+            names[uid] = p.get("display_name") or p.get("real_name") or uid
+        time.sleep(0.2)
+    return names
+
+
+def run_claude(prompt: str, timeout: int = 90) -> str:
+    """Synthesis only. Spawned with VARYS_CONTENT_AGENT=1 so the drift hook hard-blocks
+    any Slack send the model might attempt — synthesis can never post to a channel."""
+    nvm = 'export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"'
+    env = os.environ.copy()
+    env["VARYS_PROMPT"] = prompt
+    env["VARYS_CONTENT_AGENT"] = "1"
+    try:
+        result = subprocess.run(
+            ["bash", "-c", f'{nvm} && claude --dangerously-skip-permissions --print -p "$VARYS_PROMPT"'],
+            capture_output=True, text=True,
+            cwd=str(VARYS_DIR), timeout=timeout, env=env,
+        )
+        return result.stdout.strip() if result.returncode == 0 else ""
+    except Exception as e:
+        log(f"Claude call failed: {e}")
+        return ""
+
+
+def _extract_json(raw: str):
+    m = re.search(r"\{.*\}", raw, re.DOTALL)
+    if not m:
+        return None
+    try:
+        return json.loads(m.group())
+    except Exception:
+        return None
+
+
+def summarise_channel(ch_name: str, messages: list[dict], name_map: dict) -> dict | None:
+    lines = [f"{m.get('name') or name_map.get(m['uid'], m['uid'])}: {m['text'][:300]}" for m in messages]
+    prompt = (
+        f"You are reading recent Slack messages from {ch_name} at Taleemabad (EdTech company).\n\n"
+        f"MESSAGES:\n{chr(10).join(lines)}\n\n{CHANNEL_SCHEMA_HINT}"
+    )
+    return _extract_json(run_claude(prompt))
+
+
+def exec_summary(channel_summaries: dict) -> str:
+    """One synthesis call → tight org-wide 'who's working on what' summary for the top of the DM."""
+    if not channel_summaries:
+        return "Quiet window — no notable channel activity."
+    compact = {ch: {"summary": s.get("summary"),
+                    "people": [{k: p.get(k) for k in ("name", "working_on", "blocked_on", "shipped")}
+                               for p in s.get("people", [])]}
+               for ch, s in channel_summaries.items()}
+    prompt = (
+        "You are Shoaib's chief-of-staff. Below is structured per-channel Slack activity at "
+        "Taleemabad. Write a TIGHT executive summary (3-6 bullet lines, Slack markdown) of WHO is "
+        "working on WHAT, what shipped, and who's blocked — across the whole org. Lead with the most "
+        "important. No preamble, no header, just the bullets.\n\n"
+        f"DATA:\n{json.dumps(compact, indent=1)[:6000]}"
+    )
+    out = run_claude(prompt, timeout=120).strip()
+    return out or "Activity across channels (see details below)."
+
+
+def build_dm(now_label: str, channel_summaries: dict, top: str) -> str:
+    """Summary at top, detailed per-channel/per-person breakdown below."""
+    lines = [f"*🕵️ Stealth intel digest — {now_label}*", "", "*Summary*", top, ""]
+
+    shipped, blocked = [], []
+    for ch, s in channel_summaries.items():
+        for p in s.get("people", []):
+            if p.get("shipped"):
+                shipped.append(f"{p['name']} ({ch}): {p['shipped']}")
+            if p.get("blocked_on"):
+                blocked.append(f"{p['name']} ({ch}): {p['blocked_on']}")
+    if blocked:
+        lines += ["*⚠️ Blocked*"] + [f"  • {b}" for b in blocked[:8]] + [""]
+    if shipped:
+        lines += ["*✅ Shipped*"] + [f"  • {s}" for s in shipped[:8]] + [""]
+
+    lines.append("*Details by channel*")
+    mood_icon = {"productive": "🟢", "tense": "🟡", "blocked": "🔴", "quiet": "⚪", "mixed": "🔵"}
+    for ch, s in sorted(channel_summaries.items()):
+        icon = mood_icon.get(s.get("mood", ""), "⚪")
+        lines.append(f"{icon} *{ch}* — {s.get('summary', '')}")
+        for p in s.get("people", []):
+            bits = []
+            if p.get("working_on"): bits.append(f"working on {p['working_on']}")
+            if p.get("blocked_on"): bits.append(f"blocked on {p['blocked_on']}")
+            if p.get("shipped"):    bits.append(f"shipped {p['shipped']}")
+            if bits:
+                lines.append(f"     ◦ {p['name']}: {'; '.join(bits)}")
+
+    links = []
+    for s in channel_summaries.values():
+        links.extend(s.get("key_links", []))
+    if links:
+        lines += ["", "*PRs / links*"] + [f"  • {l}" for l in links[:10]]
+    return "\n".join(lines)
+
+
+def _dm_shoaib(bot_token: str, user_id: str, text: str) -> bool:
+    """The ONLY Slack write in this script. Target is always Shoaib's DM (a 'D' channel
+    opened against his user id) — never a swept channel id. This is the stealth guarantee."""
+    # conversations.open is a POST, but we only ever target the user's DM.
+    url  = "https://slack.com/api/conversations.open"
+    data = json.dumps({"users": user_id}).encode()
+    req  = urllib.request.Request(url, data=data,
+        headers={"Authorization": f"Bearer {bot_token}", "Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=15) as r:
+            opened = json.loads(r.read())
+    except Exception as e:
+        log(f"conversations.open failed: {e}")
+        return False
+    dm_ch = (opened.get("channel") or {}).get("id", "")
+    if not opened.get("ok") or not dm_ch.startswith("D"):
+        log(f"refusing to post: resolved channel {dm_ch!r} is not a DM")
+        return False
+    url  = "https://slack.com/api/chat.postMessage"
+    data = json.dumps({"channel": dm_ch, "text": text}).encode()
+    req  = urllib.request.Request(url, data=data,
+        headers={"Authorization": f"Bearer {bot_token}", "Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=15) as r:
+            return bool(json.loads(r.read()).get("ok"))
+    except Exception as e:
+        log(f"DM post failed: {e}")
+        return False
+
+
+def load_state() -> dict:
+    if STATE_FILE.exists():
+        try:
+            return json.loads(STATE_FILE.read_text())
+        except Exception:
+            return {}
+    return {}
+
+
+def main():
+    dry_run   = "--dry-run" in sys.argv
+    slack_cfg = load_config(SLACK_CONFIG)
+    bot_token = slack_cfg.get("BOT_TOKEN") or os.environ.get("BOT_TOKEN")
+    user_id   = cfg("USER_SLACK_ID", "")
+
+    if not bot_token:
+        log("FATAL: no BOT_TOKEN in ~/.claude/hooks/.slack")
+        return 1
+    if not user_id:
+        log("FATAL: no USER_SLACK_ID in ~/.agent-config.json")
+        return 1
+
+    STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    state    = load_state()
+    since_ts = state.get("last_run_ts") or str((datetime.now() - timedelta(hours=HISTORY_FLOOR_HOURS)).timestamp())
+    now_label = datetime.now().strftime("%a %d %b, %H:%M")
+    log(f"Sweeping since {datetime.fromtimestamp(float(since_ts)).strftime('%Y-%m-%d %H:%M')}")
+
+    channels = list_member_channels(bot_token)
+    if channels is None:
+        log("ABORT: could not list channels (no network / bad token). NOT advancing watermark — "
+            "this window will be retried on the next run (e.g. the post-listener startup catch-up).")
+        klog_error("intel-digest-no-network", None, component="intel")
+        return 1   # exit before any state write — the missed window is preserved
+    log(f"Member channels: {len(channels)} → {', '.join(channels.values())}")
+
+    channel_msgs, all_uids = {}, set()
+    for ch_id, ch_name in channels.items():
+        msgs = sweep_channel(bot_token, ch_id, ch_name, since_ts)
+        if msgs:
+            channel_msgs[ch_name] = msgs
+            all_uids |= {m["uid"] for m in msgs if m.get("uid")}
+            log(f"{ch_name}: {len(msgs)} messages")
+
+    if not channel_msgs:
+        log("No activity since last run — no digest sent.")
+        if not dry_run:
+            STATE_FILE.write_text(json.dumps({"last_run_ts": str(datetime.now().timestamp())}))
+        return 0
+
+    name_map = resolve_names(bot_token, all_uids - {user_id})
+
+    channel_summaries = {}
+    for ch_name, msgs in channel_msgs.items():
+        log(f"Summarising {ch_name} ({len(msgs)} msgs)...")
+        s = summarise_channel(ch_name, msgs, name_map)
+        if s:
+            channel_summaries[ch_name] = s
+
+    # Don't lie by omission: if channels were active but synthesis produced nothing,
+    # that's a Claude/PATH failure under cron — say so, don't send a fake "quiet window".
+    if channel_msgs and not channel_summaries:
+        log("Synthesis produced 0 summaries for active channels — likely Claude/PATH failure")
+        klog_error("intel-digest-synthesis-empty", None, component="intel",
+                   active_channels=len(channel_msgs))
+        dm = (f"*🕵️ Stealth intel digest — {now_label}*\n\n"
+              f"⚠️ {len(channel_msgs)} channels were active but synthesis failed "
+              f"(Claude returned nothing — check PATH/nvm under cron at /tmp/varys-intel-digest.log).")
+    else:
+        top = exec_summary(channel_summaries)
+        dm  = build_dm(now_label, channel_summaries, top)
+
+    if dry_run:
+        log("DRY RUN — would DM Shoaib the following (NOT sent, nothing posted anywhere):")
+        print("\n" + "─" * 60 + "\n" + dm + "\n" + "─" * 60)
+        return 0
+
+    ok = _dm_shoaib(bot_token, user_id, dm)
+    log("DM sent" if ok else "DM FAILED")
+    STATE_FILE.write_text(json.dumps({"last_run_ts": str(datetime.now().timestamp()),
+                                      "last_run_label": now_label}))
+    klog("intel-digest", component="intel", action="digest",
+         channels=len(channel_summaries), dm_ok=ok)
+    log("Done.")
+    return 0 if ok else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -24,14 +24,21 @@ _DENY = (
     "Slack MCP tool, do not invoke slack-pr-notify."
 )
 
-# Slack-send signatures in a Bash command (reads like history/list are fine).
+# Slack-WRITE signatures in a Bash command (reads like history/list/users.info are fine).
+# Catch-all on slack.com/api write verbs + named endpoints + the pr-notify token files.
+# (conversations.history/.list and users.info contain none of these verbs → still allowed.)
 _BASH_SLACK_SEND = re.compile(
-    r"chat\.postMessage|chat\.postEphemeral|hooks\.slack\.com|"
-    r"slack-pr-notify/(bot-token|webhook)\.txt",
+    r"hooks\.slack\.com|slack-pr-notify/(bot-token|webhook)\.txt|"
+    r"chat\.(postMessage|postEphemeral|update|scheduleMessage)|reactions\.add|"
+    r"conversations\.(open|invite|create|kick)|"
+    r"slack\.com/api/\S*(post|update|reaction|schedule|open|invite|create|kick)",
     re.I,
 )
-# mcp__slack__ write tools (reads are allowed: history, users, profile, list, replies-read).
-_MCP_SLACK_WRITE = re.compile(r"^mcp__slack__.*(post|reply|add_reaction|send|broadcast)", re.I)
+# mcp__slack__ write tools (reads allowed: history, users, profile, list, replies-read).
+_MCP_SLACK_WRITE = re.compile(
+    r"^mcp__slack__.*(post|reply|add_reaction|send|broadcast|update|schedule|open|invite|create|kick)",
+    re.I,
+)
 
 
 def _blocked(tool: str, ti: dict) -> bool:
