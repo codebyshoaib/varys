@@ -115,20 +115,6 @@
     ]
   },
   "mcpServers": {
-    "canva": {
-      "description": "Canva Pro design creation via OAuth",
-      "type": "http",
-      "url": "https://mcp.canva.com/mcp"
-    },
-    "mempalace": {
-      "args": [
-        "serve",
-        "--palace",
-        "mempalace"
-      ],
-      "command": "mempalace",
-      "description": "Semantic memory \u2014 kept as fallback"
-    },
     "notion": {
       "command": "/home/shoaib/.nvm/versions/node/v24.14.0/bin/notion-mcp-server",
       "env": {
@@ -137,7 +123,9 @@
     },
     "slack": {
       "command": "node",
-      "args": ["/home/shoaib/.nvm/versions/node/v24.14.0/lib/node_modules/@modelcontextprotocol/server-slack/dist/index.js"],
+      "args": [
+        "/home/shoaib/.nvm/versions/node/v24.14.0/lib/node_modules/@modelcontextprotocol/server-slack/dist/index.js"
+      ],
       "env": {
         "SLACK_BOT_TOKEN": "${SLACK_BOT_TOKEN}",
         "SLACK_TEAM_ID": "${SLACK_TEAM_ID}"
