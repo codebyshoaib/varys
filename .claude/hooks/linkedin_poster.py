@@ -40,8 +40,26 @@ def get_person_urn(token: str) -> str:
     return f"urn:li:person:{data['sub']}"
 
 
+def normalize_image(image_path: str, target_w: int = 1080, target_h: int = 1350) -> str:
+    """Fit image into target_w×target_h with background-color padding — no crop, no data loss."""
+    from PIL import Image
+    import tempfile
+    img = Image.open(image_path).convert("RGB")
+    w, h = img.size
+    scale = min(target_w / w, target_h / h)
+    new_w, new_h = int(w * scale), int(h * scale)
+    img = img.resize((new_w, new_h), Image.LANCZOS)
+    bg_color = img.getpixel((0, 0))  # sample background from corner
+    canvas = Image.new("RGB", (target_w, target_h), bg_color)
+    canvas.paste(img, ((target_w - new_w) // 2, (target_h - new_h) // 2))
+    out = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+    canvas.save(out.name, "PNG")
+    return out.name
+
+
 def upload_image(token: str, person_urn: str, image_path: str) -> str:
     """Upload image and return asset URN."""
+    image_path = normalize_image(image_path)
     headers = {
         "Authorization":  f"Bearer {token}",
         "Content-Type":   "application/json",

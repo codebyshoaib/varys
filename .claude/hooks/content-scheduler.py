@@ -808,27 +808,37 @@ def generate_caption(topic: str, track: str, score: int, reason: str,
 
 def generate_linkedin_caption(topic: str, score: int, reason: str,
                                nlm_insights: str = "") -> str:
-    """LinkedIn-specific post — professional, first-person, no Instagram tropes."""
+    """LinkedIn-specific post — senior engineer voice, prose not bullets, story-first."""
     insights_block = (
-        f"\n\nResearch insights to draw from (pick the 2-3 most surprising):\n{nlm_insights[:800]}"
+        f"\n\nResearch material — pick ONE surprising insight as your story spine, don't summarise all:\n{nlm_insights[:1000]}"
         if nlm_insights else ""
     )
     prompt = (
-        f"Write a LinkedIn post for a software engineer / tech professional audience about: {topic}\n"
-        f"Why this is relevant right now: {reason}"
+        f"You are Shoaib, a senior software engineer in Islamabad who ships AI-powered products and "
+        f"has strong opinions formed from real production experience.\n"
+        f"Write a LinkedIn post about: {topic}\n"
+        f"Context: {reason}"
         f"{insights_block}\n\n"
-        f"Hard rules — any violation means the post fails:\n"
-        f"- Write in first person, as if you just experienced or learned this\n"
-        f"- NO: 'In today's fast-paced world', 'Game changer', 'Excited to share', 'Delighted', 'Thrilled'\n"
-        f"- NO: 'Swipe to see', 'Save this', 'Drop a like' — this is not Instagram\n"
-        f"- NO bullet point lists — write in short paragraphs or punchy single-line breaks\n"
-        f"- NO emojis as decoration — one at most if it genuinely adds meaning\n"
-        f"- Opening line: a specific observation or fact, NOT a question\n"
-        f"- Under 200 words\n"
-        f"- End with a genuine question that invites professional discussion\n"
-        f"- 3-4 relevant hashtags at the very end, on their own line\n"
-        f"- Sound like a senior engineer writing a note to a colleague, not a content creator\n"
-        f"Return ONLY the post text."
+        f"VOICE — this is what separates a real post from an AI post:\n"
+        f"- Write one specific story or observation, not a summary or a list of tips\n"
+        f"- Short sentences. Max 2 sentences per paragraph. Break between paragraphs.\n"
+        f"- Concrete details: real numbers, tool names, specific failure modes\n"
+        f"  'It was slow' → '847ms per request', 'we fixed it' → 'dropped to 43ms with one index'\n"
+        f"- First person throughout: 'I noticed', 'We hit', 'The fix embarrassed me'\n"
+        f"- Opening line: a fact, admission, or surprising number. Never a question, never hype.\n\n"
+        f"BANNED (any of these = rewrite from scratch):\n"
+        f"- 'In today's fast-paced', 'game-changer', 'excited to share', 'delighted', 'thrilled'\n"
+        f"- 'Here are X things', 'Let's dive in', 'This is why', bullet lists, numbered tips\n"
+        f"- Emoji headers or emoji bullets (✅ ⚡ 🔥 used as list markers)\n"
+        f"- 'Thoughts?', 'Agree?' as the closing question\n\n"
+        f"STRUCTURE (prose, not a template):\n"
+        f"Para 1: one specific uncomfortable or surprising observation (1-2 sentences)\n"
+        f"Para 2: the actual situation — what you were dealing with, what went wrong\n"
+        f"Para 3: what changed and what happened (the payoff)\n"
+        f"Para 4 (optional): one principle — distilled, not listicle\n"
+        f"Closing: specific question that a practitioner would genuinely want answered\n"
+        f"Last line: 3 hashtags max\n\n"
+        f"Length: 900–1400 characters. Return ONLY the post text."
     )
     try:
         r = subprocess.run(

@@ -60,8 +60,10 @@ Wait for `--wait` to confirm the source is ready before moving on.
 
 ### Step 4: Generate NLM infographic
 
+The infographic should be visual-first, minimal text. Big numbers, icons, short labels — not paragraphs.
+
 ```bash
-nlm infographic create "$NB_ID" --orientation portrait --detail detailed --confirm
+nlm infographic create "$NB_ID" --orientation portrait --detail brief --confirm
 ```
 
 Capture the Artifact ID from the output line `Artifact ID: <id>`. Save as `ART_ID`.
@@ -86,21 +88,36 @@ Show the image to the user with Read so they can see it before posting.
 
 ### Step 5: Generate LinkedIn copy
 
-Write the post directly — do NOT use a template. The copy must:
+Write the post using the notebook research as your substance. The voice is Shoaib — a senior engineer who ships real things under real constraints.
 
-**Structure (4-part viral):**
-1. **Hook** — 1–2 lines. Provocative, specific, relatable. No "I'm excited to share". No "Great news". Start with a surprising claim or a direct challenge.
-2. **Problem / Insight** — 2–3 lines. Why the conventional approach fails or what most people miss.
-3. **Solution / Framework** — The core breakdown. Use short paragraphs or emoji-prefixed bullets (one per key point). Each point: bold label + 1-sentence explanation. Max 6 points.
-4. **CTA** — 1 question to drive comments. End with relevant hashtags (3–5 max, on their own line).
+**Voice rules — these override everything else:**
+- Write one specific story or observation. Not a summary. Not a list of tips.
+- Short sentences. 1–2 sentences per paragraph. Break between every paragraph.
+- Concrete: real numbers, tool names, named systems. Not "it was slow" → "847ms per request, fixed with one index".
+- First person throughout. "I noticed", "We hit", "The fix embarrassed me".
+- Opening line: a fact, surprising number, or admission. Never a question. Never hype.
 
-**Rules:**
-- Total length: 1200–1800 characters
-- Line breaks after every 2–3 sentences — LinkedIn rewards white space
-- No jargon without a one-sentence plain-language explanation
-- Beginner-friendly framing even for advanced topics
-- Closing line before CTA: one punchy sentence that crystallizes the whole post
-- Handle: do NOT include @shoaibmughal in the post text itself
+**What AI-sounding looks like — don't write this:**
+- "In today's fast-paced tech landscape, X is changing everything..."
+- "Here's why this matters → ✅ Point 1 ✅ Point 2 ✅ Point 3"
+- "🔥 Game changer alert: 5 things every engineer should know about..."
+- "Excited to share that I've been exploring..."
+
+**What senior-engineer LinkedIn actually looks like:**
+- "I wasted 3 weeks on the wrong abstraction. Here's what I should have done from day 1."
+- "We had 2000 active tenants hitting the same unindexed query. Fixing it was embarrassing in retrospect."
+- "The thing nobody tells you about Django signals: they run synchronously in the same transaction."
+
+**Structure (prose paragraphs, not a template):**
+1. Para 1: one specific, surprising, or uncomfortable observation — 1–2 sentences
+2. Para 2: what caused it / the actual situation you were dealing with
+3. Para 3: what changed and what happened — the concrete payoff
+4. Para 4 (optional): one principle distilled from it — not a listicle, one sentence
+5. Closing question: specific and professional, not "agree?" or "thoughts?"
+6. Hashtags: 3 max, last line only
+
+**Length: 900–1400 characters. No bullet lists. No emoji headers.**
+Handle: do NOT include @shoaibmughal in the post text itself.
 
 ### Step 6: Post to LinkedIn
 

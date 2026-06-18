@@ -322,6 +322,73 @@ def make_info(title: str, points: list[str], handle: str,
     return img.convert("RGB")
 
 
+def make_visual(headline: str, stats: list[dict], handle: str,
+                palette: dict, subtitle: str = "") -> Image.Image:
+    """Visual stat-card layout — big values, minimal labels. For LinkedIn infographics.
+
+    Each stat: {"value": "47ms→4ms", "label": "API speed"}
+    Max 4 stats displayed in a 2×2 grid (or 1×N if ≤2 stats).
+    """
+    img, draw = new_canvas(palette)
+    draw_accent_bar(draw, palette, "top")
+
+    # Headline
+    t_fnt = font("heavy", 88)
+    ty = draw_text(draw, headline, t_fnt, palette["text_q"],
+                   cx=W // 2, cy=110, max_w=W - 80, stroke=2,
+                   stroke_color=(0, 0, 0) if palette["text_q"][0] > 100 else (30, 30, 30))
+
+    if subtitle:
+        sf = font("bold", 44)
+        draw.text((W // 2, ty + 16), subtitle, font=sf, fill=palette["accent"], anchor="mt")
+        ty += 62
+
+    n = min(len(stats), 4)
+    if n == 0:
+        draw_handle(draw, handle, palette)
+        return img.convert("RGB")
+
+    cols = 2 if n > 2 else n
+    rows = (n + cols - 1) // cols
+    pad = 44
+    gap = 20
+    avail_w = W - pad * 2
+    avail_h = H - ty - 100 - pad
+    card_w = (avail_w - gap * (cols - 1)) // cols
+    card_h = (avail_h - gap * (rows - 1)) // rows
+
+    for i, stat in enumerate(stats[:n]):
+        col = i % cols
+        row = i // cols
+        bx = pad + col * (card_w + gap)
+        by = int(ty + 60 + row * (card_h + gap))
+        cx = bx + card_w // 2
+        cy = by + card_h // 2
+
+        # Card background
+        draw.rounded_rectangle([bx, by, bx + card_w, by + card_h],
+                                radius=28, fill=palette["tip_bg"])
+        # Accent left bar
+        draw.rounded_rectangle([bx, by, bx + 10, by + card_h],
+                                radius=5, fill=palette["accent"])
+
+        # Value — large
+        val = stat.get("value", "")
+        v_fnt = font("heavy", 82)
+        val_bottom = draw_text(draw, val, v_fnt, palette["text_a"],
+                               cx=cx + 8, cy=cy - 14, max_w=card_w - 30)
+
+        # Label — small, muted
+        label = stat.get("label", "").upper()
+        if label:
+            l_fnt = font("bold", 34)
+            draw.text((cx + 8, val_bottom + 10), label, font=l_fnt,
+                      fill=palette["accent"], anchor="mt")
+
+    draw_handle(draw, handle, palette)
+    return img.convert("RGB")
+
+
 def make_tip(tip: str, context: str, handle: str, palette: dict) -> Image.Image:
     """Single bold tip with context line. Very shareable."""
     img, draw = new_canvas(palette)
@@ -356,7 +423,7 @@ def make_tip(tip: str, context: str, handle: str, palette: dict) -> Image.Image:
 def generate(post_type: str, output: str, palette_name: str = "fitness",
              handle: str = "@shoaib", question: str = "", answer: str = "",
              title: str = "", subtitle: str = "", tip: str = "", context: str = "",
-             steps: list = None, points: list = None) -> str:
+             steps: list = None, points: list = None, stats: list = None) -> str:
     palette = PALETTES.get(palette_name, PALETTES["fitness"])
     if post_type == "qa":
         img = make_qa(question.upper(), answer.upper(), handle, palette)
@@ -366,6 +433,8 @@ def generate(post_type: str, output: str, palette_name: str = "fitness",
         img = make_info(title.upper(), points or [], handle, palette, subtitle)
     elif post_type == "tip":
         img = make_tip(tip, context, handle, palette)
+    elif post_type == "visual":
+        img = make_visual(title, stats or [], handle, palette, subtitle)
     else:
         raise ValueError(f"Unknown type: {post_type}")
     img.save(output, "PNG", quality=95, optimize=True)
@@ -377,7 +446,7 @@ if __name__ == "__main__":
     try:
         p = argparse.ArgumentParser()
         p.add_argument("--type",     default="qa",
-                       choices=["qa","steps","info","tip"])
+                       choices=["qa","steps","info","tip","visual"])
         p.add_argument("--question", default="")
         p.add_argument("--answer",   default="")
         p.add_argument("--title",    default="")
@@ -386,11 +455,24 @@ if __name__ == "__main__":
         p.add_argument("--context",  default="")
         p.add_argument("--steps",    default="")
         p.add_argument("--points",   default="")
+        p.add_argument("--stats",    default="",
+                       help="Comma-sep value:label pairs, e.g. '47ms→4ms:API speed,3hrs→12min:Deploy'")
         p.add_argument("--handle",   default="@shoaib")
         p.add_argument("--palette",  default="fitness",
                        choices=["fitness","tech","purple"])
         p.add_argument("--output",   default="/tmp/social-post.png")
         args = p.parse_args()
+
+        def _parse_stats(raw: str) -> list[dict]:
+            result = []
+            for part in raw.split(","):
+                part = part.strip()
+                if ":" in part:
+                    val, label = part.split(":", 1)
+                    result.append({"value": val.strip(), "label": label.strip()})
+                elif part:
+                    result.append({"value": part, "label": ""})
+            return result
 
         out = generate(
             post_type    = args.type,
@@ -405,6 +487,7 @@ if __name__ == "__main__":
             context      = args.context,
             steps        = [s.strip() for s in args.steps.split(",") if s.strip()],
             points       = [s.strip() for s in args.points.split(",") if s.strip()],
+            stats        = _parse_stats(args.stats),
         )
         print(f"Saved: {out}")
         if _k: _k.klog_cron("image-generator", status="ok", duration_ms=(_time.time()-_t0)*1000)
