@@ -21,7 +21,8 @@
       {
         "hooks": [
           {
-            "command": "bd prime",
+            "command": "timeout 8 bd prime || true",
+            "timeout": 10,
             "type": "command"
           }
         ],
@@ -65,7 +66,8 @@
       {
         "hooks": [
           {
-            "command": "bd prime",
+            "command": "timeout 8 bd prime || true",
+            "timeout": 10,
             "type": "command"
           }
         ],
