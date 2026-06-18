@@ -2,8 +2,8 @@
 
 **Any time a person is mentioned in conversation with Shoaib, save or update their entry in the People Intelligence DB immediately.**
 
-DB: `c976d58ea4e34b0585f245529cdc4528`  
-Data source: `collection://c00daef1-c072-4263-b23d-e1b5e2ba596c`
+DB: `{{config:NOTION_PEOPLE_DB_ID}}` (👥 People Intelligence, under Varys Brain). Data source: fetch the DB to get its `collection://…` id.
+Exact schema (no others exist): `Name`(title) · `Slack ID`(text) · `Role`(text) · `Team`(text) · `Recurring Topics`(text) · `Current Mood`(select: Unknown/Good/Stressed/Blocked) · `Interaction Count`(number) · `Last Seen`(date) · `Varys Notes`(text).
 
 ## When to trigger
 
@@ -20,8 +20,7 @@ Minimum fields to populate on first save:
 - `Name` — full name
 - `Slack ID` — if known
 - `Team` / `Role` — infer from context (channel, mention, job title)
-- `Relationship` — default `Distant` unless context says otherwise
-- `Current Mood` — default `Unknown`
+- `Current Mood` — default `Unknown` (one of Unknown/Good/Stressed/Blocked)
 - `Interaction Count` — 1 on first save
 - `Recurring Topics` — what they talked about / were mentioned for
 - `Varys Notes` — one line: date, what happened, channel/context
@@ -29,8 +28,12 @@ Minimum fields to populate on first save:
 
 On subsequent saves (person already exists):
 - Increment `Interaction Count`
-- Update `Last Seen`, `Current Mood`, `Active Needs`, `Recurring Topics`
+- Update `Last Seen`, `Current Mood`, `Recurring Topics`; set `Team`/`Role` if newly known
 - Append to `Varys Notes` (don't overwrite — add a new dated line)
+
+The twice-daily `slack-intel-digest.py` is the primary writer here — it spawns a contained
+`claude -p` (MCP) after each sweep to upsert everyone active. This rule also applies to the
+interactive agent on any person mention.
 
 ## Do NOT block on this
 

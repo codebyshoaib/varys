@@ -48,6 +48,13 @@ SLACK_CONFIG = Path.home() / ".claude" / "hooks" / ".slack"
 # so last_run_ts survives and windows chain correctly instead of resetting to the 16h floor.
 STATE_FILE   = Path.home() / ".varys-harness" / "intel-digest-state.json"
 VARYS_DIR    = Path(__file__).parent.parent.parent
+NOTION_CFG   = Path.home() / ".claude" / "hooks" / ".notion"
+CONTEXT_FILE = Path.home() / ".varys-harness" / "intel-context.json"   # durable N-run rolling context
+CONTEXT_KEEP = 14            # how many runs of structured context to retain
+# 👥 People Intelligence DB — workspace-specific, so it comes from config, NEVER hardcoded.
+# (cfg resolves ~/.agent-config.json → env → default; same key the rules use as {{config:NOTION_PEOPLE_DB_ID}}.)
+PEOPLE_DB_ID = cfg("NOTION_PEOPLE_DB_ID", "")
+MAX_PEOPLE   = 30            # cap people upserted per run
 MAX_MSGS_PER_CHANNEL = 300   # cap context per channel to keep Claude calls bounded
 HISTORY_FLOOR_HOURS  = 16    # first-run / state-loss ONLY: look back this far. 16h ≥ the 15h
                              # overnight gap between the 18:00 and 09:00 runs, so a deleted
@@ -250,6 +257,85 @@ def build_dm(now_label: str, channel_summaries: dict, top: str) -> str:
     return "\n".join(lines)
 
 
+def _persist_context(channel_summaries: dict, now_label: str):
+    """Durable N-run rolling context (~/.varys-harness/) so the digest builds memory across
+    runs instead of forgetting everything but the watermark."""
+    try:
+        hist = []
+        if CONTEXT_FILE.exists():
+            hist = json.loads(CONTEXT_FILE.read_text())
+            if not isinstance(hist, list):
+                hist = []
+        hist.append({"run": now_label, "channels": channel_summaries})
+        CONTEXT_FILE.write_text(json.dumps(hist[-CONTEXT_KEEP:], indent=1))
+        log(f"context persisted ({min(len(hist), CONTEXT_KEEP)}-run rolling)")
+    except Exception as e:
+        log(f"context persist failed: {e}")
+
+
+def _aggregate_people(channel_summaries: dict, name_map: dict) -> list[dict]:
+    """Collapse per-channel people into one record per person across all channels."""
+    name_to_uid = {v: k for k, v in name_map.items()}
+    people: dict[str, dict] = {}
+    for ch, s in channel_summaries.items():
+        for p in s.get("people", []):
+            nm = (p.get("name") or "").strip()
+            if not nm:
+                continue
+            rec = people.setdefault(nm, {"name": nm, "slack_id": name_to_uid.get(nm, ""),
+                                         "channels": set(), "working_on": [], "blocked_on": [], "shipped": []})
+            rec["channels"].add(ch)
+            for k in ("working_on", "blocked_on", "shipped"):
+                if p.get(k):
+                    rec[k].append(p[k])
+    out = []
+    for r in people.values():
+        r["channels"] = sorted(r["channels"])
+        out.append(r)
+    return out[:MAX_PEOPLE]
+
+
+def _update_people_map(channel_summaries: dict, name_map: dict, today: str, notion_key: str):
+    """Spawn a CONTAINED claude -p that upserts each active person into the People Intelligence
+    DB via mcp__notion__ (cron has no MCP, so we delegate to an agent that does). The agent runs
+    with VARYS_CONTENT_AGENT=1 → the drift hook blocks any Slack send; it can only touch Notion.
+    Best-effort: never fails the digest (the DM already went out)."""
+    if not notion_key or not PEOPLE_DB_ID:
+        log("people-map: missing NOTION_API_KEY or NOTION_PEOPLE_DB_ID — skipping")
+        return
+    people = _aggregate_people(channel_summaries, name_map)
+    if not people:
+        return
+    payload_file = Path("/tmp/varys-intel-people.json")
+    payload_file.write_text(json.dumps(people, indent=1))
+    prompt = f"""Update the People Intelligence DB from a Slack intel sweep. Use mcp__notion__ tools ONLY — never a raw API call, never Slack.
+
+DB id: {PEOPLE_DB_ID}  (first fetch this database via mcp__notion__ to get its data source collection:// id, then query/create under that data source)
+Exact fields: Name(title), "Slack ID"(text), Role(text), Team(text), "Recurring Topics"(text), "Current Mood"(select: Unknown/Good/Stressed/Blocked), "Interaction Count"(number), "Last Seen"(date), "Varys Notes"(text).
+
+PEOPLE is a JSON array in the file {payload_file} — read it. For each person:
+1. Find their page: query the data source by Name (and "Slack ID" if given).
+2. If FOUND -> update: "Interaction Count" += 1; "Last Seen" = {today}; merge new items into "Recurring Topics" (comma-separated, dedupe); set Team/Role only if currently empty and inferable from their channels; then read the current "Varys Notes" and APPEND one line "{today}: <one line — what they worked on / shipped / are blocked on this window>" (keep all existing notes, never overwrite).
+3. If NOT FOUND -> create a page: Name, "Slack ID" if given, Team/Role if inferable, "Recurring Topics", "Interaction Count"=1, "Last Seen"={today}, "Varys Notes"="{today}: <activity>".
+Do not post to Slack. Finish with a one-line tally: "people-map: created N, updated M"."""
+    nvm = 'export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"'
+    env = os.environ.copy()
+    env["VARYS_PROMPT"] = prompt
+    env["VARYS_CONTENT_AGENT"] = "1"   # drift hook blocks Slack sends; Notion MCP still allowed
+    env["NOTION_API_KEY"] = notion_key
+    try:
+        r = subprocess.run(
+            ["bash", "-c", f'{nvm} && claude --dangerously-skip-permissions --print -p "$VARYS_PROMPT"'],
+            capture_output=True, text=True, cwd=str(VARYS_DIR), timeout=600, env=env,
+        )
+        out = (r.stdout or "").strip()
+        tail = out.splitlines()[-1] if out else (r.stderr[:200] if r.stderr else "no output")
+        log(f"people-map ({len(people)} people): {tail}")
+    except Exception as e:
+        log(f"people-map agent failed: {e}")
+        klog_error("intel-people-map", e, component="intel")
+
+
 def _dm_shoaib(bot_token: str, user_id: str, text: str) -> bool:
     """The ONLY Slack write in this script. Target is always Shoaib's DM (a 'D' channel
     opened against his user id) — never a swept channel id. This is the stealth guarantee."""
@@ -291,9 +377,10 @@ def load_state() -> dict:
 
 def main():
     dry_run   = "--dry-run" in sys.argv
-    slack_cfg = load_config(SLACK_CONFIG)
-    bot_token = slack_cfg.get("BOT_TOKEN") or os.environ.get("BOT_TOKEN")
-    user_id   = cfg("USER_SLACK_ID", "")
+    slack_cfg  = load_config(SLACK_CONFIG)
+    bot_token  = slack_cfg.get("BOT_TOKEN") or os.environ.get("BOT_TOKEN")
+    user_id    = cfg("USER_SLACK_ID", "")
+    notion_key = load_config(NOTION_CFG).get("NOTION_API_KEY") or os.environ.get("NOTION_API_KEY")
 
     if not bot_token:
         log("FATAL: no BOT_TOKEN in ~/.claude/hooks/.slack")
@@ -359,6 +446,11 @@ def main():
 
     ok = _dm_shoaib(bot_token, user_id, dm)
     log("DM sent" if ok else "DM FAILED")
+
+    # Build memory: durable rolling context + people-map upsert (via contained MCP agent).
+    _persist_context(channel_summaries, now_label)
+    _update_people_map(channel_summaries, name_map, datetime.now().strftime("%Y-%m-%d"), notion_key)
+
     STATE_FILE.write_text(json.dumps({"last_run_ts": str(datetime.now().timestamp()),
                                       "last_run_label": now_label}))
     klog("intel-digest", component="intel", action="digest",
