@@ -29,7 +29,11 @@ from varys_harness_db import (  # noqa: E402
     set_last_sync_at,
 )
 
-POLLERS = ["poll-beads.py", "poll-eng-slack.py", "poll-taleemabad-github.py"]
+# Slack ingestion is the real-time listener's job (Socket Mode → slack_queue → drain).
+# poll-eng-slack.py was a redundant second intake of the SAME mentions and a source of
+# double / mis-channeled responses — removed. The tick only polls sources that cannot
+# push to this box: beads (local work tickets) and GitHub PRs.
+POLLERS = ["poll-beads.py", "poll-taleemabad-github.py"]
 
 # Poller exit-code contract:
 #   0       → ran OK

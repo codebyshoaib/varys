@@ -201,6 +201,8 @@ Return ONLY the JSON object. No prose before or after."""
             ["bash", "-c", f'{nvm} && claude --dangerously-skip-permissions --print -p "$(cat {prompt_file})"'],
             capture_output=True, text=True, timeout=120,
             cwd=str(VARYS_DIR),
+            # Manager decides routing only — the harness posts. Block any self-send.
+            env={**os.environ, "VARYS_CONTENT_AGENT": "1"},
         )
         raw = result.stdout.strip()
         # Extract JSON from output
@@ -379,6 +381,9 @@ Every result must include: {{"status": "done|blocked", "summary": "what happened
              f'{nvm} && claude --dangerously-skip-permissions {model_flag}--print -p "$(cat {prompt_file})"'],
             capture_output=True, text=True, timeout=1800,
             cwd=work_cwd,
+            # Worker does the engineering (gh/git/code allowed) but NEVER posts to Slack —
+            # the manager posts its result to the resolved channel. Block self-sends.
+            env={**os.environ, "VARYS_CONTENT_AGENT": "1"},
         )
         raw = result.stdout.strip()
         start = raw.find("{")

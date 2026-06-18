@@ -51,13 +51,14 @@ Team Orchestrator→ varys-orchestrator-loop.sh (270s, agent-free daemon @reboot
 ```
 1. varys_harness_db: acquire tick lock → read last_sync_at
    (if lock held: exit immediately — another tick is running)
-2. poll-harness-notion.py  → Notion Harness DB: new/updated tickets assigned to Varys
-3. poll-eng-slack.py       → #engineering-* channels: @Shoaib's PR Beacon mentions (SLACK_USER_TOKEN)
-4. poll-taleemabad-github.py → taleemabad-core: PRs on agent branches (entity-filtered)
+2. poll-beads.py           → bd ready: local work tickets → ticket.created events
+3. poll-taleemabad-github.py → taleemabad-core: PRs on agent branches (entity-filtered)
    (if ANY poller fails: release lock, abort — do NOT update last_sync_at)
-5. orchestrator-dispatch.py → group pending events by context_key → spawn subagents
-6. varys_harness_db: set last_sync_at=now → release tick lock
+4. orchestrator-dispatch.py → group pending events by context_key → spawn subagents
+5. varys_harness_db: set last_sync_at=now → release tick lock
 ```
+
+**Slack is NOT polled.** The real-time listener (Socket Mode) owns ALL Slack intake → `slack_queue` → drain → `slack-worker.py` → reply in the origin thread. The tick only polls sources that can't push to this box (beads, GitHub). A Slack reply never auto-mints a bead — it stays a reply, not a ticket.
 
 Detail: `.claude/rules/orchestrator.md` · DB: `~/.varys-harness/harness.db`
 

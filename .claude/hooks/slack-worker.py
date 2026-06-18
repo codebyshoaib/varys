@@ -64,6 +64,43 @@ def _slack_post(token: str, channel: str, thread_ts: str, text: str) -> None:
         raise RuntimeError(f"Slack post failed: {resp.get('error')}")
 
 
+def _create_work_bead(work_directive, request_text, channel, thread_ts, sender_id, source):
+    """
+    Turn a Slack engineering request into a tracked, origin-linked bead.
+    work_directive format: "<repo> | <title>". Links the bead's context_key to the
+    Slack origin thread so the orchestrator reports plan/PR back HERE, not a guessed channel.
+    """
+    repo, _, title = work_directive.partition("|")
+    repo, title = repo.strip(), title.strip()
+    if not title:                       # tolerate "title only" (no repo|)
+        title, repo = repo, ""
+    if not title:
+        return
+    bd_bin = shutil.which("bd") or str(Path.home() / ".local" / "bin" / "bd")
+    desc = (f"[varys-origin] channel={channel} thread={thread_ts} "
+            f"sender={sender_id or ''} repo={repo}\n\nFrom Slack ({source}): {request_text[:500]}")
+    try:
+        r = subprocess.run(
+            [bd_bin, "create", title, "-t", "bug", "-d", desc, "--silent"],
+            capture_output=True, text=True, cwd=str(REPO), timeout=15,
+        )
+        bead_id = (r.stdout or "").strip().split()[-1] if r.returncode == 0 and r.stdout.strip() else ""
+        if not bead_id:
+            print(f"[slack-worker] WORK bead create failed: {r.stderr[:200]}", file=sys.stderr)
+            return
+        # Link origin → the SAME context_key poll-beads will mint (idempotent on bead_id).
+        from varys_harness_db import register_entity, link_entities
+        db = get_db()
+        ctx = register_entity(db, "beads", bead_id, "ticket", f"beads:{bead_id}")
+        slack_ent = register_entity(db, "slack", f"{channel}/{thread_ts}", "thread",
+                                    f"https://slack.com/archives/{channel}/p{thread_ts.replace('.','')}")
+        link_entities(db, ctx, slack_ent, "origin", session_id="slack-worker")
+        db.close()
+        print(f"[slack-worker] WORK bead {bead_id} ({repo or 'no-repo'}) linked to {channel}/{thread_ts}")
+    except Exception as e:
+        print(f"[slack-worker] WORK bead error: {e}", file=sys.stderr)
+
+
 def _build_prompt(
     text: str, thread_history: str, source: str,
     sender_name: str, is_third_party: bool, is_dm: bool,
@@ -136,8 +173,13 @@ Write the reply now. Output ONLY the reply text — no headers, no meta-commenta
 
 Then, if applicable, append ONE directive line as the VERY LAST line:
 - NLM request → `NLM: <subcommand> <topic>` (see above)
-- OR a real task needing agent work (bug, feature, code, analysis) → `BEAD: <10-word-max title>`
-- Casual chat / a question you just answered / a joke → append NOTHING."""
+- REAL ENGINEERING WORK on a repo (an explicit ask to fix/build/implement/add/change code,
+  e.g. "fix the X bug in compliance-tracker", "add endpoint Y to taleemabad-core") →
+  `WORK: <repo> | <≤10-word imperative title>`. The repo must be named or unmistakable from context.
+  For a WORK item your reply text MUST be a SHORT acknowledgement only (1 line, e.g.
+  "On it — I'll post a plan in this thread shortly."). Do NOT attempt the fix yourself here.
+- Anything else (chat, an info question you just answered, a joke) → append NOTHING.
+  Only emit WORK for a genuine code-change request, never for questions or discussion."""
 
 
 def main() -> int:
@@ -182,6 +224,10 @@ def main() -> int:
         [_claude_bin(), "--dangerously-skip-permissions", "--print", "-p", prompt],
         capture_output=True, text=True,
         cwd=str(REPO), timeout=300,
+        # Rumi principle: this agent writes text only. The harness (_slack_post below)
+        # delivers it. VARYS_CONTENT_AGENT=1 lets block-agent-slack-drift.py hard-deny
+        # any Slack send the agent tries, so it can't pick its own channel.
+        env={**os.environ, "VARYS_CONTENT_AGENT": "1"},
     )
 
     if result.returncode != 0 or not result.stdout.strip():
@@ -191,26 +237,25 @@ def main() -> int:
 
     answer = result.stdout.strip()
 
-    # Extract trailing directive line (BEAD: or NLM:) if claude appended one
-    bead_title = None
+    # Extract trailing directive (NLM: or WORK:) if claude appended one.
     nlm_directive = None
+    work_directive = None
     lines = answer.splitlines()
-    if lines and lines[-1].startswith("BEAD:"):
-        bead_title = lines[-1][5:].strip()
-        answer = "\n".join(lines[:-1]).strip()
-    elif lines and lines[-1].startswith("NLM:"):
+    if lines and lines[-1].startswith("NLM:"):
         nlm_directive = lines[-1][4:].strip()
+        answer = "\n".join(lines[:-1]).strip()
+    elif lines and lines[-1].startswith("WORK:"):
+        work_directive = lines[-1][5:].strip()
         answer = "\n".join(lines[:-1]).strip()
 
     _slack_post(bot_token, channel, thread_ts, answer)
 
-    if bead_title:
-        bd_bin = shutil.which("bd") or str(Path.home() / ".local" / "bin" / "bd")
-        subprocess.run(
-            [bd_bin, "create", bead_title, "-t", "task", "-d",
-             f"From Slack ({source}): {text[:200]}"],
-            capture_output=True, cwd=str(REPO), timeout=10,
-        )
+    # WORK directive → create an origin-tagged bead so the orchestrator tracks it,
+    # plans in THIS thread, and (on Shoaib's "go") implements + PRs back HERE.
+    # Origin is linked to the bead's context_key now, keyed by the same bead_id that
+    # poll-beads will register — so the manager resolves this thread, not a guessed channel.
+    if work_directive and thread_ts:
+        _create_work_bead(work_directive, text, channel, thread_ts, sender_id, source)
 
     if nlm_directive:
         # NLM artifacts take 2–5 min — run notebooklm_handler in a DETACHED process
@@ -223,7 +268,6 @@ def main() -> int:
             start_new_session=True, cwd=str(REPO),
         )
         print(f"[slack-worker] nlm dispatched (detached): {nlm_directive}")
-        print(f"[slack-worker] bead created: {bead_title}")
 
     mark_slack_done(db, row_id)
     print(f"[slack-worker] done: {row_id} → {len(answer)} chars posted")

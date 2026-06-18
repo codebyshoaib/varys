@@ -11,8 +11,8 @@ and handles it autonomously — but never writes code without human approval of 
 
 ## Hard Rules (never break)
 
-1. **context_key is ALWAYS a Notion ticket entity ID** — never a Slack thread ts or PR number.
-   Slack mentions → create stub Notion ticket → use that ticket's entity ID as context_key.
+1. **context_key is ALWAYS a ticket entity ID** (Notion ticket or bead) — never a Slack thread ts
+   or PR number. The orchestrator does NOT ingest Slack — that's the real-time listener's job.
 
 2. **Status=Done is written LAST** — it is the commit signal. If anything fails after
    implementation but before Status update, the ticket stays In progress and retries next tick.
@@ -54,12 +54,21 @@ and handles it autonomously — but never writes code without human approval of 
 ## Event Type Taxonomy
 
 ```
-From Notion:
-  ticket.created      → new ticket assigned to {{AGENT_NAME}} / matching filter
+From Notion / beads:
+  ticket.created      → new ticket assigned to {{AGENT_NAME}} / matching filter (Notion or `bd ready`)
   comment.tagged      → comment on Notion page containing @{{AGENT_NAME}}
 
-From Slack:
-  message.tagged      → @{{AGENT_NAME}} mention in an engineering channel
+From Slack (real-time listener only — NOT polled):
+  message.go_signal   → Shoaib (and ONLY Shoaib) replies "go"/"approve"/"proceed" on a plan
+                        thread → listener inserts this event → dispatch fires Phase 2 (worker).
+                        Non-Shoaib "go" is refused in-thread. This is the sole Slack→orchestrator
+                        event; ordinary mentions are answered by slack-worker, never reach here.
+
+Slack work-request lifecycle (anyone may request; only Shoaib approves):
+  @Varys "fix X in <repo>" → slack-worker mints an origin-tagged bead (links the bead's
+  context_key to the Slack thread) + posts an ack IN THAT THREAD → poll-beads → ticket.created
+  → manager plans IN THAT THREAD, Status=awaiting_approval → Shoaib "go" → implement → PR,
+  all reported back in the same thread. Origin link means no channel guessing.
 
 From GitHub:
   pr.review_commented → review comment on an agent-opened PR
@@ -73,8 +82,9 @@ From GitHub:
 NOTION_API_KEY          — Notion integration token
 NOTION_DATABASE_ID      — {{AGENT_NAME}} Harness DB ({{config:NOTION_HARNESS_DB_ID}})
 NOTION_AGENT_USER_ID    — {{AGENT_NAME}}'s Notion user ID (for assignee filter)
-SLACK_BOT_TOKEN         — xoxb- token (posting)
-SLACK_USER_TOKEN        — xoxp- token (search.messages — bot token alone fails)
+SLACK_BOT_TOKEN         — xoxb- token (posting results to a ticket's origin thread / DM)
+# SLACK_USER_TOKEN no longer used by the tick (was for poll-eng-slack search.messages).
+# Still consumed by other Slack hooks (proactive watch, daily digest).
 GITHUB_TOKEN            — PAT with repo scope
 GITHUB_REPO             — {{YOUR_GITHUB_ORG}}/{{YOUR_REPO}}
 GITHUB_AGENT_LOGIN      — GitHub username of agent account
@@ -102,9 +112,10 @@ Subagents operate here. Always on `develop` branch at tick start.
 ```
 .claude/hooks/varys_harness_db.py        — DB + tick lock + entity registry
 .claude/hooks/varys_notion.py            — shared Notion rate-limit utility
+.claude/hooks/poll-beads.py              — bd ready poller (active tick poller)
 .claude/hooks/poll-harness-notion.py     — Notion Harness DB poller
-.claude/hooks/poll-eng-slack.py          — engineering Slack channel poller
-.claude/hooks/poll-taleemabad-github.py  — GitHub PR poller (entity-filtered)
+.claude/hooks/poll-taleemabad-github.py  — GitHub PR poller (entity-filtered, active tick poller)
+# poll-eng-slack.py — DELETED. Slack intake is the real-time listener's job, not polled.
 .claude/hooks/orchestrator-dispatch.py  — dispatcher + subagent spawner
 ~/.varys-harness/harness.db             — SQLite state (tick_lock, events, entities, links, sessions)
 ~/.varys-harness/workspace/             — taleemabad-core checkout

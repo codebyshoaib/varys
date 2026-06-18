@@ -1353,6 +1353,9 @@ def make_handler(web: WebClient, dm_channel: str, bot_token: str):
         # 2. @Varys mention in a channel — reply in thread, use thread replies for history
         elif event_type == "app_mention":
             thread = event.get("thread_ts") or ts
+            # "@Varys go" on a plan thread = approval (Shoaib-gated) → fire orchestrator, not a reply
+            if _maybe_fire_go_signal(channel, thread, ts, user, text, web, bot_token):
+                return
             dispatch(text, web, channel, thread, f"mention in {channel}",
                      sender_id=user, is_dm=False, bot_token=bot_token, msg_ts=ts)
 
@@ -1363,7 +1366,11 @@ def make_handler(web: WebClient, dm_channel: str, bot_token: str):
             in_varys_thread = thread in _varys_thread_origins or ts in _varys_thread_origins
 
             if in_varys_thread:
-                # Reply in a Varys-originated thread → full dispatch (not just NLM auto-answer)
+                # Approval gate first: a Shoaib "go" on a plan thread fires the orchestrator
+                # worker (implement → PR), not a conversational reply. Non-Shoaib "go" is refused.
+                if _maybe_fire_go_signal(channel, thread, ts, user, text, web, bot_token):
+                    return
+                # Otherwise: reply in a Varys-originated thread → full dispatch
                 dispatch(text, web, channel, thread, f"thread-reply in {channel}",
                          sender_id=user, is_dm=False, bot_token=bot_token, msg_ts=ts)
             elif in_eng_channel:
@@ -1379,6 +1386,64 @@ def make_handler(web: WebClient, dm_channel: str, bot_token: str):
                 )
 
     return handler
+
+
+_APPROVAL_RE = re.compile(r"^(go|go ahead|approved?|proceed|ship it)\b", re.I)
+
+
+def _maybe_fire_go_signal(channel: str, thread: str, ts: str, user: str,
+                          text: str, web: "WebClient", bot_token: str) -> bool:
+    """
+    If `text` is an approval reply in a thread linked to an awaiting_approval orchestrator
+    session, gate it: ONLY Shoaib can approve. On his 'go', insert a message.go_signal event
+    (the orchestrator fires Phase 2 → implement → PR, reported back in this thread).
+    Returns True if this reply was an approval attempt (handled — caller should not dispatch).
+    """
+    clean = re.sub(r"<@[A-Z0-9]+>", "", text or "").strip()
+    if not _APPROVAL_RE.match(clean):
+        return False
+    try:
+        db = _get_harness_db()
+        row = db.execute(
+            """SELECT s.id, s.context_key FROM sessions s
+               JOIN entities e_bead ON e_bead.id = s.context_key
+               JOIN links l ON (l.entity_a = s.context_key OR l.entity_b = s.context_key)
+               JOIN entities e_slack ON e_slack.id =
+                    CASE WHEN l.entity_a = s.context_key THEN l.entity_b ELSE l.entity_a END
+               WHERE s.status='awaiting_approval'
+                 AND e_slack.source='slack' AND e_slack.external_id=?
+               ORDER BY s.updated_at DESC LIMIT 1""",
+            (f"{channel}/{thread}",),
+        ).fetchone()
+    except Exception as e:
+        log(f"[go-gate] lookup failed: {e}")
+        return False
+    if not row:
+        return False  # approval-shaped, but no awaiting session here → let normal dispatch handle it
+    session_id, context_key = row
+    if user != SHOAIB_USER_ID:
+        try:
+            web.chat_postMessage(channel=channel, thread_ts=thread,
+                text=f"Only <@{SHOAIB_USER_ID}> can approve this work. 🤖 {AGENT_NAME}")
+        except Exception:
+            pass
+        log(f"[go-gate] non-Shoaib approval blocked from {user}")
+        return True
+    try:
+        db.execute(
+            "INSERT OR IGNORE INTO events "
+            "(id, source, type, context_key, payload, status, received_at) "
+            "VALUES (?, 'slack', 'message.go_signal', ?, ?, 'pending', datetime('now'))",
+            (f"slack-go-{channel}-{ts}", context_key,
+             json.dumps({"session_id": session_id, "channel": channel, "thread": thread})),
+        )
+        db.commit()
+        web.chat_postMessage(channel=channel, thread_ts=thread,
+            text=f"Approved — implementing now, I'll post the PR here. 🤖 {AGENT_NAME}")
+        log(f"[go-gate] go_signal queued for session {session_id[:16]} ctx={context_key[:16]}")
+    except Exception as e:
+        log(f"[go-gate] failed to queue go_signal: {e}")
+    return True
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
