@@ -110,9 +110,7 @@ USER_NAME       = cfg("USER_NAME",            "Shoaib Ud Din")
 
 # Channels where {{AGENT_NAME}} auto-answers engineering questions
 # Replace with your own channel IDs (get from Slack URL or API)
-ENGINEERING_CHANNELS = {
-    # "CABC1234DEF",  # #engineering-channel-name
-}
+ENGINEERING_CHANNELS: set[str] = set()  # populated on startup from Slack API
 
 # Tracks thread_ts of posts Varys originated — auto-answer replies in these
 _varys_thread_origins: set[str] = set()
@@ -302,6 +300,162 @@ def _is_already_processed(channel: str, ts: str) -> bool:
     if len(_processed_event_ts) > 2000:
         _processed_event_ts.clear()
     return False
+
+
+def _save_thread_origin(channel: str, ts: str):
+    """Persist a Varys-originated thread to harness.db so it survives restarts."""
+    if _listener_db is None:
+        return
+    with _listener_db_lock:
+        try:
+            _listener_db.execute(
+                "INSERT OR IGNORE INTO events "
+                "(id, source, type, context_key, payload, status, received_at) "
+                "VALUES (?, 'varys', 'thread_origin', ?, '{}', 'done', datetime('now'))",
+                (f"thread-{channel}-{ts}", ts),
+            )
+            _listener_db.commit()
+        except Exception:
+            pass
+
+
+def _load_thread_origins():
+    """Reload Varys thread_ts values from harness.db into the in-memory set on startup."""
+    if _listener_db is None:
+        return
+    try:
+        with _listener_db_lock:
+            rows = _listener_db.execute(
+                "SELECT context_key FROM events "
+                "WHERE type='thread_origin' AND source='varys' "
+                "AND received_at >= datetime('now', '-7 days')"
+            ).fetchall()
+        for (ts,) in rows:
+            _varys_thread_origins.add(ts)
+        log(f"[startup] loaded {len(rows)} thread origins from harness.db")
+    except Exception as e:
+        log(f"[startup] could not load thread origins: {e}")
+
+
+_CHANNEL_SCAN_TS_FILE = Path("/tmp/varys-channel-scan-ts.txt")
+
+
+def _populate_engineering_channels(web: WebClient):
+    """Populate ENGINEERING_CHANNELS from all channels Varys is currently a member of."""
+    try:
+        resp = web.conversations_list(
+            types="public_channel,private_channel",
+            exclude_archived=True,
+            limit=200,
+        )
+        new_ids   = {c["id"] for c in resp.get("channels", []) if c.get("is_member")}
+        new_names = [
+            f"#{c.get('name', c['id'])}"
+            for c in resp.get("channels", [])
+            if c.get("is_member")
+        ]
+        ENGINEERING_CHANNELS.clear()
+        ENGINEERING_CHANNELS.update(new_ids)
+        log(f"[startup] ENGINEERING_CHANNELS ({len(new_ids)}): {', '.join(new_names)}")
+    except Exception as e:
+        log(f"[startup] could not populate ENGINEERING_CHANNELS: {e}")
+
+
+def _startup_channel_scan(web: WebClient, dm_channel: str, bot_token: str):
+    """
+    On startup: scan all member channels for missed messages since last run.
+    • Messages @mentioning Varys  → enqueued in slack_queue for the drain
+    • Other messages              → summarised by Claude, DM'd to Shoaib
+    Runs in a background thread so the listener socket is ready immediately.
+    """
+    def _run():
+        if not ENGINEERING_CHANNELS:
+            log("[startup] channel scan skipped — no member channels")
+            return
+
+        last_ts = (
+            _CHANNEL_SCAN_TS_FILE.read_text().strip()
+            if _CHANNEL_SCAN_TS_FILE.exists()
+            else str(time.time() - 6 * 3600)
+        )
+
+        mention_count = 0
+        other_msgs: list[str] = []
+
+        for ch_id in list(ENGINEERING_CHANNELS):
+            try:
+                resp = web.conversations_history(channel=ch_id, oldest=last_ts, limit=50)
+                time.sleep(0.4)  # Slack rate-limit courtesy pause
+            except Exception as e:
+                log(f"[startup] history fetch failed for {ch_id}: {e}")
+                continue
+
+            for m in resp.get("messages", []):
+                ts      = m.get("ts", "")
+                user    = m.get("user", "")
+                bot_id  = m.get("bot_id", "")
+                text    = m.get("text", "").strip()
+                subtype = m.get("subtype", "")
+
+                if not text or subtype:
+                    continue
+                # Track and skip Varys-originated messages
+                if bot_id or user == VARYS_BOT_USER:
+                    _varys_thread_origins.add(ts)
+                    _save_thread_origin(ch_id, ts)
+                    continue
+                if _is_already_processed(ch_id, ts):
+                    continue
+
+                if VARYS_BOT_USER and f"<@{VARYS_BOT_USER}>" in text:
+                    thread_ts = m.get("thread_ts") or ts
+                    if _harness_db_available and _listener_db is not None:
+                        row_id = f"slack-{ch_id}-{ts}"
+                        enqueue_slack_mention(
+                            _listener_db,
+                            row_id=row_id,
+                            source=f"channel-scan:{ch_id}",
+                            channel=ch_id,
+                            thread_ts=thread_ts,
+                            sender_id=user,
+                            sender_name=user,
+                            text=re.sub(r"<@[A-Z0-9]+>", "", text).strip(),
+                            thread_history="",
+                            is_dm=False,
+                            is_third_party=(user != SHOAIB_USER_ID),
+                            priority=1,
+                        )
+                        mention_count += 1
+                        log(f"[startup] enqueued @mention from {ch_id}: {text[:60]}")
+                else:
+                    other_msgs.append(f"<#{ch_id}>: {text[:200]}")
+
+        log(f"[startup] scan done — {mention_count} mentions enqueued, {len(other_msgs)} msgs for summary")
+        _CHANNEL_SCAN_TS_FILE.write_text(str(time.time()))
+
+        if not other_msgs or not dm_channel:
+            return
+
+        summary_input = "\n".join(other_msgs[:40])
+        prompt = (
+            f"You are {AGENT_NAME}, {USER_NAME}'s AI agent at Taleemabad. "
+            f"You just came back online. Below are Slack messages from the past few hours "
+            f"across channels you're in. Write a tight 3-5 bullet summary of what's been "
+            f"happening — decisions made, things shipped, blockers, team mood. Skip small talk. "
+            f"Slack formatting only (*bold*, bullets, no # headers).\n\n{summary_input}"
+        )
+        summary = run_claude(prompt, event_context="startup-channel-scan")
+        if summary and not summary.startswith(("⚠️", "⏱️")):
+            try:
+                web.chat_postMessage(
+                    channel=dm_channel,
+                    text=f"*📡 Catch-up ({len(other_msgs)} msgs since last online):*\n{summary}\n🤖 {AGENT_NAME}",
+                )
+            except Exception as e:
+                log(f"[startup] could not DM catch-up: {e}")
+
+    threading.Thread(target=_run, daemon=True, name="startup-channel-scan").start()
+
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -863,7 +1017,7 @@ def process_missed_messages(web: WebClient, dm_channel: str, retry_count: int = 
 
             log(f"[catchup] {user}: {text[:60]}")
             klog_catchup(sender_id=user, text_preview=text[:100], ts=ts)
-            dispatch(text, web, dm_channel, ts, "DM-catchup", sender_id=user, is_dm=True, bot_token=bot_token)
+            dispatch(text, web, dm_channel, ts, "DM-catchup", sender_id=user, is_dm=True, bot_token=bot_token, msg_ts=ts)
             last_ts = ts
             count  += 1
 
@@ -889,7 +1043,8 @@ def process_missed_messages(web: WebClient, dm_channel: str, retry_count: int = 
 
 
 def dispatch(text: str, web: WebClient, channel: str, thread_ts: str, source: str,
-             sender_id: str = None, is_dm: bool = False, bot_token: str = None):
+             sender_id: str = None, is_dm: bool = False, bot_token: str = None,
+             msg_ts: str = None):
     """Dispatch to unified handler with full conversation context."""
     global last_activity_time
     last_activity_time = time.time()
@@ -983,8 +1138,9 @@ def dispatch(text: str, web: WebClient, channel: str, thread_ts: str, source: st
     # where the LLM judges intent properly instead of dumb keyword matching.
 
     if _harness_db_available and _listener_db is not None:
-        import uuid as _uuid
-        row_id = f"slack-{channel}-{thread_ts}-{_uuid.uuid4().hex[:8]}"
+        # ponytail: deterministic ID on msg_ts (or thread_ts for DMs) — UUID suffix was
+        # breaking INSERT OR IGNORE dedup, causing the same message to be processed twice.
+        row_id = f"slack-{channel}-{msg_ts or thread_ts}"
         enqueued = enqueue_slack_mention(
             _listener_db, row_id, source, channel, thread_ts,
             sender_id or "", sender_name or "", clean,
@@ -1172,40 +1328,45 @@ def make_handler(web: WebClient, dm_channel: str, bot_token: str):
         bot_id     = event.get("bot_id", "")
         ts         = event.get("ts", "")
         channel    = event.get("channel", "")
+        user       = event.get("user", "")
 
         # Persistent dedup — survives restarts via harness.db (fallback: in-memory set)
         if _is_already_processed(channel, ts):
             return
 
+        # Track Varys-originated threads BEFORE the bot-skip — bot messages carry bot_id
+        # ponytail: was dead code after the early-return; moved here to actually fire
+        if bot_id and user == VARYS_BOT_USER and event_type == "message":
+            _varys_thread_origins.add(ts)
+            _save_thread_origin(channel, ts)
+
         # Skip bot messages and edits/deletes
         if bot_id or subtype:
             return
 
-        text    = event.get("text", "").strip()
-        user    = event.get("user", "")
-        channel = event.get("channel", "")
-
-        # Track Varys's own posts so we can auto-answer replies in those threads
-        if user == VARYS_BOT_USER and event_type == "message":
-            _varys_thread_origins.add(ts)
+        text = event.get("text", "").strip()
 
         # 1. DM to Varys bot — Shoaib, Fatima, anyone. is_dm=True → flat history fetch
         if event_type == "message" and event.get("channel_type") == "im":
-            dispatch(text, web, channel, ts, "DM", sender_id=user, is_dm=True, bot_token=bot_token)
+            dispatch(text, web, channel, ts, "DM", sender_id=user, is_dm=True, bot_token=bot_token, msg_ts=ts)
 
         # 2. @Varys mention in a channel — reply in thread, use thread replies for history
         elif event_type == "app_mention":
             thread = event.get("thread_ts") or ts
             dispatch(text, web, channel, thread, f"mention in {channel}",
-                     sender_id=user, is_dm=False, bot_token=bot_token)
+                     sender_id=user, is_dm=False, bot_token=bot_token, msg_ts=ts)
 
-        # 3. Thread reply or channel message in engineering channels — auto-answer questions
+        # 3. Thread reply or channel message in member channels
         elif event_type == "message" and user and user != VARYS_BOT_USER:
             thread = event.get("thread_ts") or ts
             in_eng_channel  = channel in ENGINEERING_CHANNELS
             in_varys_thread = thread in _varys_thread_origins or ts in _varys_thread_origins
 
-            if in_eng_channel or in_varys_thread:
+            if in_varys_thread:
+                # Reply in a Varys-originated thread → full dispatch (not just NLM auto-answer)
+                dispatch(text, web, channel, thread, f"thread-reply in {channel}",
+                         sender_id=user, is_dm=False, bot_token=bot_token, msg_ts=ts)
+            elif in_eng_channel:
                 try:
                     info        = web.users_info(user=user)
                     sender_name = info["user"]["profile"].get("real_name") or info["user"]["name"]
@@ -1235,6 +1396,7 @@ def main():
 
     # Init persistent event dedup (harness.db) — must happen before SocketModeClient
     _init_event_dedup()
+    _load_thread_origins()
 
     web = WebClient(token=bot_token)
     _web_client_ref[0] = web
@@ -1287,8 +1449,10 @@ def main():
 
     log("Connected. Listening for DMs and @Varys mentions.")
 
-    # Process any messages that arrived while listener was offline
+    # Populate member channels, catch up DMs, then scan all channels in background
+    _populate_engineering_channels(web)
     process_missed_messages(web, dm_channel, bot_token=bot_token)
+    _startup_channel_scan(web, dm_channel, bot_token)
 
     # Heartbeat: reconnect if socket goes stale (no events for 5 min)
     # Also poll for missed messages every 2 min regardless of socket state
