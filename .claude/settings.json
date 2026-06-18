@@ -77,7 +77,7 @@
         "hooks": [
           {
             "command": "python3 .claude/hooks/stop-notion.py",
-            "statusMessage": "Writing Work Log to Notion...",
+            "statusMessage": "Finishing session...",
             "timeout": 30,
             "type": "command"
           },

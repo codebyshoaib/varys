@@ -344,6 +344,18 @@ def build_system_message() -> str:
         except Exception:
             pass
 
+    # Surface open beads for Notion mirror
+    try:
+        import subprocess as _sp
+        _beads_out = _sp.run(
+            ["python3", str(Path(__file__).parent / "beads-to-notion.py")],
+            capture_output=True, text=True, timeout=5
+        ).stdout.strip()
+        if _beads_out:
+            lines += ["", _beads_out, ""]
+    except Exception:
+        pass
+
     # Tell Claude what to fetch via MCP
     lines += [
         "## 🔌 Notion MCP — Fetch These Now",
