@@ -47,7 +47,11 @@ SERVICES = [
         "script": str(HOOKS_DIR / "varys-slack-listener.py"),
         "log": "/tmp/varys-slack-listener.log",
         "pid_file": "/tmp/varys-slack-listener.pid",
-        "start_cmd": f"cd {VARYS_DIR} && python3 .claude/hooks/varys-slack-listener.py >> /tmp/varys-slack-listener.log 2>&1 &",
+        # Heal THROUGH systemd (the unit owns this daemon: Restart=always) — never spawn a raw
+        # process, which would race systemd and create a second, unmanaged listener. `restart`
+        # is idempotent (starts if stopped). XDG_RUNTIME_DIR is needed for `systemctl --user`
+        # from cron/headless contexts where the user DBus session isn't auto-exported.
+        "start_cmd": "XDG_RUNTIME_DIR=/run/user/$(id -u) systemctl --user restart varys-slack-listener.service",
         "check_process": "varys-slack-listener.py",
     },
     {
