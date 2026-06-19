@@ -254,6 +254,40 @@ def _run_claude(prompt: str, timeout: int = 90) -> str:
         return ""
 
 
+def parse_stream_json(stdout: str):
+    """
+    Parse `claude --output-format stream-json` (newline-delimited JSON events).
+    Returns (final_text, [tool_names]). Tool names are the tools the agent ACTUALLY
+    called — used by the judge to catch fabricated tool-use. Falls back to raw
+    stdout as the text if the stream can't be parsed, so a CLI format change can
+    never blank a reply.
+    """
+    final_text, texts, tools = "", [], []
+    for line in (stdout or "").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            ev = json.loads(line)
+        except Exception:
+            continue
+        et = ev.get("type")
+        if et == "result" and isinstance(ev.get("result"), str):
+            final_text = ev["result"]
+        elif et == "assistant":
+            for block in (ev.get("message", {}) or {}).get("content", []) or []:
+                if block.get("type") == "tool_use" and block.get("name"):
+                    tools.append(block["name"])
+                elif block.get("type") == "text" and block.get("text"):
+                    texts.append(block["text"])
+    text = final_text or "\n".join(texts).strip() or (stdout or "").strip()
+    seen, ordered = set(), []
+    for t in tools:
+        if t not in seen:
+            seen.add(t); ordered.append(t)
+    return text, ordered
+
+
 def _parse_last_json(result: str, opener: str):
     """Return the last line that parses as JSON starting with opener ('{' or '[')."""
     if not result:
@@ -281,13 +315,23 @@ def log_to_eval(
     latency_s: float,
     thread: str = "",
     tools: str = "",
+    block: bool = False,
 ):
     """
     Write a conversation row to the Eval Log DB (Score unset = unjudged).
-    Runs in a background thread — never blocks the reply. `thread` (full history)
-    and `tools` (comma-joined tool names actually called) default to "" so any
-    older call site keeps working.
+    `thread` (full history) and `tools` (comma-joined tool names actually called)
+    default to "" so any older call site keeps working.
+
+    block=False (default): write in a daemon thread — for long-running callers
+    (the Socket Mode listener) where the process outlives the thread.
+    block=True: write synchronously — REQUIRED for short-lived callers like
+    slack-worker.py, which exits the instant main() returns and would otherwise
+    kill the daemon thread before the Notion write lands.
     """
+    if block:
+        _write_eval_entry(conv_id, sender_name, request, reply, mode, source,
+                          latency_s, thread, tools)
+        return
     threading.Thread(
         target=_write_eval_entry,
         args=(conv_id, sender_name, request, reply, mode, source, latency_s,

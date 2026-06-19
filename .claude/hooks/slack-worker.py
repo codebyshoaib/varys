@@ -16,6 +16,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 import urllib.request
 from pathlib import Path
 
@@ -24,6 +25,7 @@ REPO  = HOOKS.parent.parent
 sys.path.insert(0, str(HOOKS))
 
 from varys_harness_db import get_db, mark_slack_processing, mark_slack_done
+from varys_eval import log_to_eval, parse_stream_json
 from agent_config import cfg
 
 AGENT_NAME    = cfg("AGENT_NAME", "Varys")
@@ -232,8 +234,13 @@ def main() -> int:
         failure_context=failure_context or "",
     )
 
+    t0 = time.time()
     result = subprocess.run(
-        [_claude_bin(), "--dangerously-skip-permissions", "--print", "-p", prompt],
+        # stream-json (+ --verbose, required with --print) so we can capture which
+        # tools the agent ACTUALLY called — fed to the eval judge to catch fabricated
+        # tool-use. parse_stream_json falls back to raw stdout if the format changes.
+        [_claude_bin(), "--dangerously-skip-permissions", "--print",
+         "--output-format", "stream-json", "--verbose", "-p", prompt],
         capture_output=True, text=True,
         cwd=_repo_cwd(text), timeout=300,
         # Rumi principle: this agent writes text only. The harness (_slack_post below)
@@ -241,13 +248,15 @@ def main() -> int:
         # any Slack send the agent tries, so it can't pick its own channel.
         env={**os.environ, "VARYS_CONTENT_AGENT": "1"},
     )
+    latency_s = round(time.time() - t0, 1)
 
     if result.returncode != 0 or not result.stdout.strip():
         error_msg = result.stderr.strip()[:1000] or "no output"
         print(f"[slack-worker] claude failed: {error_msg}", file=sys.stderr)
         return 1
 
-    answer = result.stdout.strip()
+    answer, tools_used = parse_stream_json(result.stdout)
+    answer = answer.strip()
 
     # Extract trailing directive (NLM: or WORK:) if claude appended one.
     nlm_directive = None
@@ -261,6 +270,24 @@ def main() -> int:
         answer = "\n".join(lines[:-1]).strip()
 
     _slack_post(bot_token, channel, thread_ts, answer)
+
+    # Eval Log: this is the LIVE reply path, so logging MUST happen here (the listener's
+    # handle_message is not the runtime path). thread = full history, tools = what the
+    # agent actually called — both feed the nightly judge. Third-party replies are
+    # excluded (they're not Varys-as-Shoaib answers and would skew the eval).
+    if not is_third_party:
+        log_to_eval(
+            conv_id     = f"{channel}-{thread_ts}",
+            sender_name = sender_name or USER_NAME,
+            request     = text,
+            reply       = answer,
+            mode        = "dm" if is_dm else "mention",
+            source      = source,
+            latency_s   = latency_s,
+            thread      = thread_history or "",
+            tools       = ", ".join(tools_used),
+            block       = True,   # short-lived process; must write before exit
+        )
 
     # WORK directive → create an origin-tagged bead so the orchestrator tracks it,
     # plans in THIS thread, and (on Shoaib's "go") implements + PRs back HERE.
