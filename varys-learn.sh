@@ -155,12 +155,20 @@ if not opened.get("ok") or not dm_ch.startswith("D"):
     sys.exit(1)
 
 e = os.environ.get
+# 0 scored = no interactions logged today, NOT 0% confidence. Don't cry wolf.
+if int(e('VL_SCORED') or 0) == 0:
+    summary = "No interactions logged today — nothing to score."
+else:
+    summary = (
+        f"Confidence: {e('VL_CONF')}% ({e('VL_PASSED')} pass / {e('VL_FAILED')} fail "
+        f"of {e('VL_SCORED')} scored, avg {e('VL_AVG')})\n"
+        f"By agent: {e('VL_BY_AGENT')}"
+    )
 text = (
     f"\U0001f9e0 *Nightly eval — {e('VL_TODAY')}*\n"
-    f"Confidence: {e('VL_CONF')}% ({e('VL_PASSED')} pass / {e('VL_FAILED')} fail of {e('VL_SCORED')} scored, avg {e('VL_AVG')})\n"
-    f"By agent: {e('VL_BY_AGENT')}\n"
+    f"{summary}\n"
     f"Eval Log: https://www.notion.so/{e('VL_DBID')}\n"
-    "\U0001f916 Varys (nightly run, proposals only — your approval needed)"
+    "\U0001f577️ Varys (nightly run, proposals only — your approval needed)"
 )
 
 try:
