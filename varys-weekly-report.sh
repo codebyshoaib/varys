@@ -41,7 +41,7 @@ IMPORTANT rules for the message:
 - Be specific, not vague. Show you actually read things.
 - Keep it under 400 words total.
 - Be direct like Shoaib. No fluff.
-- Sign off as 'Varys 🤖'
+- Sign off as 'Varys 🕷️'
 
 After composing the message, send it to Shoaib via Slack DM (Shoaib's Slack user ID: see config USER_SLACK_ID).
 Use the Slack MCP to send the message.

@@ -247,7 +247,7 @@ def run(token: str) -> int:
         if len(new_connections) > 5:
             lines.append(f"_(+{len(new_connections)-5} more — check Notion Job Tracker)_")
 
-        lines.append("_Reply \"followup [name]\" and I'll write a message._\n🤖 Varys")
+        lines.append("_Reply \"followup [name]\" and I'll write a message._\n🕷️ Varys")
         slack_dm(token, "\n".join(lines))
 
     # New inbound replies
@@ -281,7 +281,7 @@ def run(token: str) -> int:
             seen_replies.add(str(r["id"]))
             new_events += 1
         lines.append("\n_Check OpenOutreach admin to respond: http://localhost:8000/admin_")
-        lines.append("🤖 Varys")
+        lines.append("🕷️ Varys")
         slack_dm(token, "\n".join(lines))
 
     # Log new connections and replies to Axiom

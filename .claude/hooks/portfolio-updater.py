@@ -322,7 +322,7 @@ def run():
             top = ", ".join(f"{k}({v})" for k, v in
                             sorted(job_skills.items(), key=lambda x: -x[1])[:5])
             slack_dm(token, f"📊 *Portfolio check:* No updates needed this week.\n"
-                            f"Top demanded skills match your CV: {top}\n🤖 Varys")
+                            f"Top demanded skills match your CV: {top}\n🕷️ Varys")
         return
 
     # Save updated portfolio.json
@@ -359,7 +359,7 @@ def run():
             f"{changes_text}\n\n"
             f"*Top demanded skills:* {top}\n"
             f"{status}\n"
-            f"_Reply \"revert\" if you don't want this change._\n🤖 Varys"
+            f"_Reply \"revert\" if you don't want this change._\n🕷️ Varys"
         )
 
 

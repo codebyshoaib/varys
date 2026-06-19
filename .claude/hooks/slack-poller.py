@@ -417,7 +417,7 @@ Question index: {idx}"""
         log(f"Self-question explored: {finding[:80]}")
     else:
         send_dm(bot_token, dm_channel,
-                f"*🤖 {datetime.now().strftime('%H:%M')} —* Slack quiet. Researching open questions... check Notion Self-Questions page for updates.")
+                f"*🕷️ {datetime.now().strftime('%H:%M')} —* Slack quiet. Researching open questions... check Notion Self-Questions page for updates.")
 
 
 # ── Summary DM ────────────────────────────────────────────────────────────────
@@ -437,7 +437,7 @@ def build_summary_dm(new_items: list, total_inbox: int, run_ts: str) -> str:
     if not priority and not learned:
         return ""
 
-    lines = [f"*🤖 {now} — {len(priority) + len(learned)} things worth your eyes*\n"]
+    lines = [f"*🕷️ {now} — {len(priority) + len(learned)} things worth your eyes*\n"]
 
     for item in priority[:5]:
         t       = item["type"]

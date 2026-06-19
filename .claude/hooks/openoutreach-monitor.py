@@ -281,7 +281,7 @@ def handle_inbound_replies(conn, token: str, seen_reply_ids: set) -> tuple[list[
             "",
             pause_note,
             f'Reply *"followup {handle}"* and I\'ll send this. Or respond manually on LinkedIn.',
-            "🤖 Varys",
+            "🕷️ Varys",
         ]
         slack_dm(token, "\n".join(lines))
 
@@ -318,7 +318,7 @@ def check_stuck_tasks(conn, token: str):
         slack_dm(token,
             f"⚠️ *OpenOutreach: {stuck} tasks are stuck* (pending but never started).\n"
             f"The daemon may have stopped. Check: `docker logs openoutreach --tail 20`\n"
-            f"Restart if needed: `docker restart openoutreach`\n🤖 Varys"
+            f"Restart if needed: `docker restart openoutreach`\n🕷️ Varys"
         )
 
 
@@ -393,7 +393,7 @@ def handle_new_connections(conn, token: str, seen_connected_ids: set) -> tuple[l
 
         if len(new_rows) > 5:
             lines.append(f"_(+{len(new_rows)-5} more — check Notion Job Tracker)_")
-        lines.append('_Reply "followup [name]" and I\'ll write a value-first message._\n🤖 Varys')
+        lines.append('_Reply "followup [name]" and I\'ll write a value-first message._\n🕷️ Varys')
         slack_dm(token, "\n".join(lines))
 
     return list(seen_connected_ids), new_events

@@ -29,7 +29,7 @@ Post to the Slack thread immediately:
 ```
 Here's what was completed: [X in 1-2 sentences].
 Stuck on: [Y in exactly 1 sentence].
-🤖 {{AGENT_NAME}}
+🕷️ {{AGENT_NAME}}
 ```
 
 ### Step 2 — Try a Different Angle (one attempt only)

@@ -30,6 +30,6 @@ curl -s -X POST https://slack.com/api/chat.postMessage \
 
 ## Rules
 - Slack format only: `*bold*`, bullets, emoji. No `#` headers.
-- Sign off with `🤖 {{AGENT_NAME}}`.
+- Sign off with `🕷️ {{AGENT_NAME}}`.
 - Never post twice in a row without a human reply in between.
 - Read the full thread history before replying — never ask what the thread shows.

@@ -144,7 +144,7 @@ def run() -> None:
                     f"📚 *Capability gap learned:* `{gap_type}`\n"
                     f"Hit {count} times this week ({rejected} rejected).\n"
                     f"Added to my limits in `CAPABILITIES.md`.{ticket_line}\n"
-                    f"Want me to start building it? 🤖 Varys")
+                    f"Want me to start building it? 🕷️ Varys")
             except Exception as e:
                 klog_error("gap_watcher_dm_outer_fail", component="gap-watcher", error=str(e))
 

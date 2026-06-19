@@ -724,11 +724,11 @@ def nlm_poll_and_send(nb_id: str, artifact_type: str, topic: str,
                                 slack_upload(
                                     token, outfile,
                                     title=f"{topic} — {artifact_type.replace('_', ' ')}",
-                                    comment=f"{icon} *{topic}* — {artifact_type.replace('_', ' ')}\n🤖 Varys",
+                                    comment=f"{icon} *{topic}* — {artifact_type.replace('_', ' ')}\n🕷️ Varys",
                                 )
                                 state[artifact_type] = "completed"
                             else:
-                                slack_dm(token, f"{icon} *{topic}* — {artifact_type} ready in NotebookLM (download failed)\n🤖 Varys")
+                                slack_dm(token, f"{icon} *{topic}* — {artifact_type} ready in NotebookLM (download failed)\n🕷️ Varys")
                                 state[artifact_type] = "download_failed"
                             _update_nlm_artifact_status(log_page_id, state)
                             return
@@ -980,7 +980,7 @@ def run_nlm_with_profile_fallback(token: str, topic: str, track: str) -> tuple[s
     slack_dm(token,
         f"⚠️ *Both NLM accounts quota-exhausted for {track}*\n"
         f"Topic: *{topic}*\n"
-        f"Caption will still go out — no infographic today for this track.\n🤖 Varys")
+        f"Caption will still go out — no infographic today for this track.\n🕷️ Varys")
     return None, "", {}
 
 
@@ -1072,7 +1072,7 @@ def canva_infographic_from_nlm_insights(topic: str, track: str,
         if result.get("export_url"):
             slack_dm(token,
                 f"🖼️ *Canva infographic (NLM fallback):* {topic}\n"
-                f"View: {result['export_url']}\n🤖 Varys")
+                f"View: {result['export_url']}\n🕷️ Varys")
         return None
     except Exception as e:
         print(f"[scheduler] Canva infographic exception: {e}")
@@ -1090,7 +1090,7 @@ def _canva_fallback_thread(topic: str, track: str, nlm_insights: str,
             comment=(
                 f"🖼️ *{topic}* — infographic\n"
                 f"_(NLM rate-limited → generated via Canva using NLM research insights)_\n"
-                f"🤖 Varys"
+                f"🕷️ Varys"
             ),
         )
         print(f"[scheduler] Canva fallback uploaded to Slack: {local_path}")
@@ -1109,7 +1109,7 @@ def run_fitness_or_tech(track: str, token: str):
     if not result:
         slack_dm(token,
             f"📅 *{track} content* — no Pending topics in Notion Content Calendar.\n"
-            f"Add topics with Status=Pending, Track={track}\n🤖 Varys")
+            f"Add topics with Status=Pending, Track={track}\n🕷️ Varys")
         return
 
     page_id, topic, post_type, score, reason, existing_nb_id = result
@@ -1118,7 +1118,7 @@ def run_fitness_or_tech(track: str, token: str):
     slack_dm(token,
         f"🚀 *{track} pipeline started* — *{topic}*\n"
         f"Score: {score}/100 | {reason}\n"
-        f"Checking NLM notebooks + generating...\n🤖 Varys")
+        f"Checking NLM notebooks + generating...\n🕷️ Varys")
 
     # NLM pipeline — try work profile first, personal profile second, skip visuals if both exhausted
     # If Notion has a stored notebook ID, try to reuse it on the work profile first
@@ -1177,7 +1177,7 @@ def run_fitness_or_tech(track: str, token: str):
         f"{li_line}{nb_line}"
         f"{li_section}\n\n"
         f"*Instagram/TikTok caption:*\n{caption}\n\n"
-        f"📱 Post to Instagram + TikTok\n🤖 Varys")
+        f"📱 Post to Instagram + TikTok\n🕷️ Varys")
 
     # Extract hashtags from caption for logging
     hashtag_line = " ".join(w for w in caption.split() if w.startswith("#"))
@@ -1265,7 +1265,7 @@ def run_vlog(token: str):
     if not result:
         slack_dm(token,
             "📅 *Vlog* — no Pending topics in Notion Content Calendar.\n"
-            "Add topics with Track=vlog, Status=Pending\n🤖 Varys")
+            "Add topics with Track=vlog, Status=Pending\n🕷️ Varys")
         return
 
     page_id, topic, _, score, reason, _ = result
@@ -1280,7 +1280,7 @@ def run_vlog(token: str):
         f"🎬 *Vlog script ready — {topic}*\n"
         f"Score: {score}/100 — {reason}\n\n"
         f"{script}\n\n"
-        f"📱 Film today → post to YouTube/TikTok/Reels/Shorts\n🤖 Varys")
+        f"📱 Film today → post to YouTube/TikTok/Reels/Shorts\n🕷️ Varys")
 
     # Log vlog to Content Log — get back page ID for backlink
     log_page_id = log_to_content_log(
@@ -1344,5 +1344,5 @@ if __name__ == "__main__":
         token = load_slack_token()
         slack_dm(token,
             f"⚠️ *Content scheduler crashed*: {e}\n"
-            f"Check: tail -50 /tmp/varys-content.log\n🤖 Varys")
+            f"Check: tail -50 /tmp/varys-content.log\n🕷️ Varys")
         raise

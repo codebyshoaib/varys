@@ -96,7 +96,7 @@ def main() -> int:
     token   = _bot_token()
     user_id = cfg("USER_SLACK_ID", "")
     icon    = "⚠️" if sev == "warn" else "🔴"
-    text    = f"{icon} *Nightly self-improvement watchdog*\n{msg}\n🤖 Varys"
+    text    = f"{icon} *Nightly self-improvement watchdog*\n{msg}\n🕷️ Varys"
     if token and user_id and _dm(token, user_id, text):
         print(f"[check-learn-run] {sev}: DMed Shoaib.")
     else:

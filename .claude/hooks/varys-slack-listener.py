@@ -191,7 +191,7 @@ def auto_answer_engineering_question(
             mention = f"<@{sender_id}>"
             nudge = (
                 f"{mention} — no research notebook on this topic yet. "
-                f"Say `nlm research {keywords[0]}` to build one. 🤖 {AGENT_NAME}"
+                f"Say `nlm research {keywords[0]}` to build one. 🕷️ {AGENT_NAME}"
             )
             web.chat_postMessage(channel=channel, thread_ts=thread_ts, text=nudge)
         except Exception:
@@ -225,7 +225,7 @@ def auto_answer_engineering_question(
             f"{mention} — queried the research on this.\n\n"
             f"{answer}\n\n"
             f"_Source: NotebookLM `{alias}` — ask more with_ `nlm ask {alias} \"[question]\"`\n"
-            f"🤖 {AGENT_NAME}"
+            f"🕷️ {AGENT_NAME}"
         )
         web.chat_postMessage(channel=channel, thread_ts=thread_ts, text=reply)
 
@@ -449,7 +449,7 @@ def _startup_channel_scan(web: WebClient, dm_channel: str, bot_token: str):
             try:
                 web.chat_postMessage(
                     channel=dm_channel,
-                    text=f"*📡 Catch-up ({len(other_msgs)} msgs since last online):*\n{summary}\n🤖 {AGENT_NAME}",
+                    text=f"*📡 Catch-up ({len(other_msgs)} msgs since last online):*\n{summary}\n🕷️ {AGENT_NAME}",
                 )
             except Exception as e:
                 log(f"[startup] could not DM catch-up: {e}")
@@ -679,7 +679,7 @@ def handle_message(text: str, thread_history: str, web: WebClient, channel: str,
             )
             reply_kwargs = {
                 "channel": channel,
-                "text": "I couldn't find a PR URL in this thread — can you share the link? 🤖 {AGENT_NAME}",
+                "text": "I couldn't find a PR URL in this thread — can you share the link? 🕷️ {AGENT_NAME}",
                 "thread_ts": thread_ts,
             }
             web.chat_postMessage(**reply_kwargs)
@@ -878,7 +878,7 @@ When {USER_NAME} asks about a person ("how is Fatima?", "what does Haroon need?"
 Source: {source}
 {USER_NAME} says: "{text}"
 
-Reply now. Do NOT output any mode label, header, or internal reasoning — just the response itself. Sign off: 🤖 {AGENT_NAME}"""
+Reply now. Do NOT output any mode label, header, or internal reasoning — just the response itself. Sign off: 🕷️ {AGENT_NAME}"""
 
     t0 = time.time()
     answer = run_claude(prompt, cwd=str(VARYS_DIR), timeout=300, event_context=source)
@@ -1009,7 +1009,7 @@ def process_missed_messages(web: WebClient, dm_channel: str, retry_count: int = 
             # Skip bot messages, Varys's own replies, and edits/deletes
             # MCP Slack tool sends as Shoaib's OAuth token so bot_id is absent —
             # detect Varys's own messages by the leading robot emoji signature
-            is_varys_own = (user == VARYS_BOT_USER or text.startswith("🤖"))
+            is_varys_own = (user == VARYS_BOT_USER or text.startswith("🕷️"))
             if not text or bot_id or subtype or ts == last_ts or is_varys_own:
                 continue
             if float(ts) <= float(last_ts):
@@ -1268,8 +1268,8 @@ BOT_TOKEN is in ~/.claude/hooks/.slack"""
             from datetime import date as _d
             _day = _d.today().day
             TECH_CAPTIONS = [
-                "5 Claude prompts that replaced 80% of my Stack Overflow usage 🤖\n\nAfter 1 year building production Django at Taleemabad (10K+ DAU), these prompts save me 3+ hours every week:\n\n1️⃣ Review this code for security vulnerabilities\n2️⃣ Write tests with edge cases\n3️⃣ Refactor without changing behavior\n4️⃣ Explain this error 3 ways\n5️⃣ What breaks if I change X?\n\nSpecificity beats vagueness. Every time.\n\n#ClaudeAI #SoftwareEngineering #Python #Django #AITools #DeveloperProductivity",
-                "I built a personal AI agent that works 24/7 on my behalf 🤖\n\nVarys monitors Slack, reviews PRs, finds freelance work, posts content, and heals itself when it crashes.\n\nBuilt with Claude API, Python, and MCP.\n\nThe stack: Slack SDK + Notion MCP + GitHub CLI + NotebookLM + LinkedIn API\n\nMore details in my next post.\n\n#AIAgents #ClaudeAI #BuildInPublic #Python #SoftwareEngineering",
+                "5 Claude prompts that replaced 80% of my Stack Overflow usage 🕷️\n\nAfter 1 year building production Django at Taleemabad (10K+ DAU), these prompts save me 3+ hours every week:\n\n1️⃣ Review this code for security vulnerabilities\n2️⃣ Write tests with edge cases\n3️⃣ Refactor without changing behavior\n4️⃣ Explain this error 3 ways\n5️⃣ What breaks if I change X?\n\nSpecificity beats vagueness. Every time.\n\n#ClaudeAI #SoftwareEngineering #Python #Django #AITools #DeveloperProductivity",
+                "I built a personal AI agent that works 24/7 on my behalf 🕷️\n\nVarys monitors Slack, reviews PRs, finds freelance work, posts content, and heals itself when it crashes.\n\nBuilt with Claude API, Python, and MCP.\n\nThe stack: Slack SDK + Notion MCP + GitHub CLI + NotebookLM + LinkedIn API\n\nMore details in my next post.\n\n#AIAgents #ClaudeAI #BuildInPublic #Python #SoftwareEngineering",
                 "Django multi-tenant architecture — the pattern that scales 🏗️\n\nAt Taleemabad we serve 10K+ daily active users across multiple tenants.\n\nThe key: every single query is scoped by tenant_id in middleware. No exceptions.\n\n→ Middleware injects tenant context\n→ Custom QuerySet filters automatically\n→ Migrations are tenant-aware\n→ APIs return only tenant data\n\nOne mistake = data leak. Zero tolerance.\n\n#Django #Python #SoftwareArchitecture #MultiTenant #Backend",
                 "Why I switched from ChatGPT to Claude for production code 🔄\n\nAfter using both for 2+ years on real Django/Python projects:\n\nClaude wins on:\n→ Longer context (whole files, not snippets)\n→ More careful with breaking changes\n→ Better at explaining WHY, not just what\n→ Follows constraints more reliably\n\nBoth are tools. Know when to use which.\n\n#ClaudeAI #ChatGPT #AITools #Developer #Python",
                 "How I reduced API latency by 40% at Taleemabad ⚡\n\nReal numbers from production Django:\n\nBefore: 800ms avg response\nAfter: 480ms avg response\n\nWhat worked:\n1. N+1 query elimination (select_related + prefetch_related)\n2. Redis caching for hot endpoints\n3. PostgreSQL index optimization\n4. Pagination on all list endpoints\n\nNone of it was magic. All of it was measurement first.\n\n#Django #Python #PerformanceOptimization #Backend #PostgreSQL",
@@ -1424,7 +1424,7 @@ def _maybe_fire_go_signal(channel: str, thread: str, ts: str, user: str,
     if user != SHOAIB_USER_ID:
         try:
             web.chat_postMessage(channel=channel, thread_ts=thread,
-                text=f"Only <@{SHOAIB_USER_ID}> can approve this work. 🤖 {AGENT_NAME}")
+                text=f"Only <@{SHOAIB_USER_ID}> can approve this work. 🕷️ {AGENT_NAME}")
         except Exception:
             pass
         log(f"[go-gate] non-Shoaib approval blocked from {user}")
@@ -1439,7 +1439,7 @@ def _maybe_fire_go_signal(channel: str, thread: str, ts: str, user: str,
         )
         db.commit()
         web.chat_postMessage(channel=channel, thread_ts=thread,
-            text=f"Approved — implementing now, I'll post the PR here. 🤖 {AGENT_NAME}")
+            text=f"Approved — implementing now, I'll post the PR here. 🕷️ {AGENT_NAME}")
         log(f"[go-gate] go_signal queued for session {session_id[:16]} ctx={context_key[:16]}")
     except Exception as e:
         log(f"[go-gate] failed to queue go_signal: {e}")

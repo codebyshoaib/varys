@@ -23,7 +23,7 @@ paths:
 When {{USER_NAME}} says anything like "fix X", "teachers can't see Y", "white screen on Z":
 
 1. Recognize this as a taleemabad-core task
-2. Post to Slack thread: "On it — running /feature now. Will post plan shortly. 🤖 {{AGENT_NAME}}"
+2. Post to Slack thread: "On it — running /feature now. Will post plan shortly. 🕷️ {{AGENT_NAME}}"
 3. The orchestrator dispatcher fires `taleemabad-bug-agent` via the next tick
 4. The agent runs `/feature`, posts the plan, waits for `@{{AGENT_NAME}} go`
 

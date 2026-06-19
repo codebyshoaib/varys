@@ -62,7 +62,7 @@ def _rewrite_honest(draft: str, request: str) -> str:
         f"or sent something but did not actually do it. "
         f"Remove the false claim. State clearly what wasn't possible "
         f"and offer 1-2 concrete alternatives that ARE possible. "
-        f"Keep it under 3 lines. Sign off: 🤖 Varys\n\n"
+        f"Keep it under 3 lines. Sign off: 🕷️ Varys\n\n"
         f"Original request: \"{request[:200]}\"\n\n"
         f"Draft to rewrite:\n\"{draft[:600]}\""
     )
@@ -89,7 +89,7 @@ def _rewrite_honest(draft: str, request: str) -> str:
     return (
         "I wasn't able to produce that — something went wrong during generation. "
         "Try `nlm slides [topic]` for a slide deck, or ask me to describe the research instead. "
-        "🤖 Varys"
+        "🕷️ Varys"
     )
 
 

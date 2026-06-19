@@ -101,7 +101,7 @@ Your job:
    If the question is about a specific project ({project or 'check the context'}), read that project's harness too.
 2. Send your response as a Slack DM to Shoaib (Slack user ID: {SHOAIB_SLACK_ID}).
    Keep the response direct and specific — show you actually checked Notion data, not just guessing.
-   Sign off as: Varys 🤖
+   Sign off as: Varys 🕷️
 3. Log this conversation to Notion Work Log with title: "Shoaib asked: {text[:60]}"
 
 Rules:
