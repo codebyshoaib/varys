@@ -24,3 +24,10 @@ repos/
 .dolt/
 *.db
 .beads-credential-key
+
+# bd git-sync: ~/.gitignore_global ignores .beads/ entirely, which blocks
+# bd's git-based bead sync (sync.remote=git) — its `git add .beads/issues.jsonl`
+# fails on every write. Re-include the dir so committed bead files are trackable;
+# .beads/.gitignore still excludes per-machine/runtime files, and the line above
+# still excludes per-machine/runtime files.
+!.beads/
