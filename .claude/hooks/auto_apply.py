@@ -23,9 +23,11 @@ Called by job-finder.py after finding new qualifying jobs.
 import json
 import os
 import re
+import smtplib
 import subprocess
 import sys
 import urllib.request
+from email.mime.text import MIMEText
 from datetime import datetime
 from pathlib import Path
 
@@ -34,22 +36,29 @@ from agent_config import cfg
 from varys_log import klog, klog_error
 from varys_eval_tracker import log_action
 
-VARYS_DIR   = Path(__file__).parent.parent.parent
-SHOAIB_DM    = os.environ.get("USER_SLACK_DM", "")  # set USER_SLACK_DM in ~/.agent-config.json
-JOBS_DB     = "0d69c6ff-83d8-44c7-94c2-d341c4ded8d7"
-SLACK_CFG   = Path.home() / ".claude" / "hooks" / ".slack"
+VARYS_DIR    = Path(__file__).parent.parent.parent
+SHOAIB_DM    = os.environ.get("USER_SLACK_DM", "") or cfg("USER_SLACK_ID", "")
+JOBS_DB      = "0d69c6ff-83d8-44c7-94c2-d341c4ded8d7"
+SLACK_CFG    = Path.home() / ".claude" / "hooks" / ".slack"
 APPLIED_FILE = Path("/tmp/varys-applied.jsonl")  # dedup — never apply twice
 
 # Auto-apply threshold
-AUTO_APPLY_SCORE   = 75
-APPROVAL_NEEDED    = 60   # 60-74: ask {{USER_NAME}} first
+AUTO_APPLY_SCORE = 75
+APPROVAL_NEEDED  = 60   # 60-74: ask Shoaib first
 
-_user_email = cfg("USER_EMAIL", "your-email@example.com")
-USER_BIO = f"""{{USER_NAME}} — Fill in your bio
-- Set USER_BIO_TEXT env var or edit this in auto-apply.py after /setup
-- Your skills, experience, and portfolio
-- GitHub: https://github.com/{{YOUR_GITHUB}}
-- Email: {_user_email}"""
+GMAIL_USER = cfg("USER_EMAIL", "ushoaib224@gmail.com")
+GMAIL_PASS = cfg("GMAIL_APP_PASSWORD", "")
+
+USER_BIO = """Shoaib Ud Din — Full-Stack Developer & AI Automation Engineer
+- 4+ years building production Django/Python backends and React/TypeScript frontends
+- Currently engineering a multi-tenant EdTech LMS (Django, PostgreSQL, Celery, Redis, AWS) used by thousands of teachers across Pakistan
+- Built Varys: a fully autonomous AI agent that handles Slack triage, Notion updates, LinkedIn outreach, and freelance hunting — end to end, no babysitting
+- Strong in: Django REST Framework, Next.js, TypeScript, AI agent pipelines (Claude API), Docker, Terraform, PostgreSQL
+- Delivered automation systems that replaced 10+ hours/week of manual ops work
+- GitHub: https://github.com/codebyshoaib/
+- Portfolio: https://shoaib-fullstack-dev.vercel.app/
+- Email: ushoaib224@gmail.com
+- Rate: $20-60/hr or fixed-price projects"""
 
 
 def load_token() -> str:
@@ -87,7 +96,7 @@ def mark_applied(url: str, method: str, job_title: str):
         f.write(entry + "\n")
 
 
-def run_claude(prompt: str, timeout: int = 120) -> str:
+def run_claude(prompt: str, timeout: int = 150) -> str:
     env = os.environ.copy()
     env["VARYS_APPLY_PROMPT"] = prompt
     nvm = 'export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"'
@@ -118,70 +127,55 @@ def extract_github_issue(url: str) -> tuple[str, str, str] | None:
 
 
 def write_proposal(job: dict) -> str:
-    """Generate a tailored proposal using Claude."""
-    title       = job.get("title", "")
-    description = job.get("description", "")
-    source      = job.get("source", "")
-    rate        = job.get("rate", "")
-
-    prompt = f"""You are Varys writing a freelance proposal for Shoaib.
-
-JOB:
-Title: {title}
-Description: {description[:600]}
-Source: {source}
-Rate mentioned: {rate}
-
-SHOAIB'S BACKGROUND:
-{USER_BIO}
-
-Write a SHORT, tailored proposal (max 150 words). Rules:
-- Open with ONE specific thing from the job description that matches Shoaib's experience
-- 2-3 bullet points of relevant proof (use real numbers from bio)
-- Clear CTA: "Happy to jump on a quick call or send more details"
-- Natural, human tone — not AI-sounding
-- DO NOT mention being an AI
-- Sign: "{{USER_NAME}} | {_user_email} | {{YOUR_PORTFOLIO}}"
-
-Output ONLY the proposal text. No explanation, no preamble."""
-
-    return run_claude(prompt, timeout=60)
+    """Generate a tailored proposal using claude --print (uses Claude subscription)."""
+    prompt = (
+        f"You are writing a freelance proposal for Shoaib Ud Din.\n\n"
+        f"JOB:\nTitle: {job.get('title','')}\n"
+        f"Description: {job.get('description','')[:600]}\n"
+        f"Rate mentioned: {job.get('rate','')}\n\n"
+        f"SHOAIB'S BACKGROUND:\n{USER_BIO}\n\n"
+        "Write a SHORT tailored proposal (max 150 words). Rules:\n"
+        "- Open with ONE specific thing from the job that matches Shoaib's experience\n"
+        "- 2-3 bullet points of relevant proof (real numbers from bio)\n"
+        "- CTA: 'Happy to jump on a quick call or send more details'\n"
+        "- Natural human tone, no AI mentions\n"
+        "- Sign: 'Shoaib Ud Din | ushoaib224@gmail.com | https://shoaib-fullstack-dev.vercel.app/'\n"
+        "Output ONLY the proposal text."
+    )
+    return run_claude(prompt, timeout=120)
 
 
 def apply_via_email(job: dict, email: str, token: str) -> bool:
-    """Send application email via Gmail MCP."""
+    """Send application email via Gmail SMTP."""
     proposal = write_proposal(job)
-    if not proposal:
+    if not proposal or not GMAIL_PASS:
         return False
 
-    subject = f"Re: {job['title'][:80]}"
+    msg = MIMEText(proposal)
+    msg["Subject"] = f"Re: {job['title'][:80]}"
+    msg["From"]    = GMAIL_USER
+    msg["To"]      = email
 
-    prompt = f"""Use mcp__claude_ai_Gmail__create_draft to create an email draft:
+    try:
+        with smtplib.SMTP("smtp.gmail.com", 587) as s:
+            s.starttls()
+            s.login(GMAIL_USER, GMAIL_PASS)
+            s.send_message(msg)
+    except Exception as e:
+        klog_error("auto_apply_email", e, job_title=job["title"][:80])
+        return False
 
-To: {email}
-Subject: {subject}
-Body:
-{proposal}
-
-Then use the send endpoint to send it immediately.
-Reply only "sent" when done."""
-
-    result = run_claude(prompt, timeout=90)
-    success = "sent" in result.lower() or "draft" in result.lower()
-
-    if success:
-        klog("auto_apply_email", component="auto-apply",
-             job_title=job["title"][:80], email=email, score=job.get("score", 0))
-        log_action("conversation", event=f"Applied via email: {job['title'][:60]}",
-                   evidence=f"Sent to {email}", signal="sent", service="auto-apply",
-                   channel=SHOAIB_DM)
-        slack_dm(token,
-            f"✉️ *Applied (email):* {job['title'][:70]}\n"
-            f"Sent to: `{email}`\n"
-            f"Score: {job.get('score',0)}/100\n"
-            f"🔗 {job['url'][:80]}\n🤖 Varys")
-
-    return success
+    klog("auto_apply_email", component="auto-apply",
+         job_title=job["title"][:80], email=email, score=job.get("score", 0))
+    log_action("conversation", event=f"Applied via email: {job['title'][:60]}",
+               evidence=f"Sent to {email}", signal="sent", service="auto-apply",
+               channel=SHOAIB_DM)
+    slack_dm(token,
+        f"✉️ *Applied (email):* {job['title'][:70]}\n"
+        f"Sent to: `{email}`\n"
+        f"Score: {job.get('score',0)}/100\n"
+        f"🔗 {job['url'][:80]}\n🤖 Varys")
+    return True
 
 
 def apply_via_github(job: dict, token: str) -> bool:

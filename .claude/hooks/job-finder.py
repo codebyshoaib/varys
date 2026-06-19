@@ -38,7 +38,7 @@ LOG_FILE      = Path("/tmp/varys-jobs.log")
 VARYS_DIR     = Path(__file__).parent.parent.parent
 
 SHOAIB_USER_ID = cfg("USER_SLACK_ID", "")
-SHOAIB_DM      = os.environ.get("USER_SLACK_DM", "")  # set USER_SLACK_DM in ~/.agent-config.json
+SHOAIB_DM      = os.environ.get("USER_SLACK_DM", "") or SHOAIB_USER_ID  # falls back to user ID for DMs
 JOBS_DB       = "0d69c6ff-83d8-44c7-94c2-d341c4ded8d7"
 
 # Only DM jobs with score >= this
@@ -130,18 +130,30 @@ SCORE_WEIGHTS = {
     "freelance":        5,
     "contract":         5,
     "paid":             5,
+    # Pakistan / global remote signals
+    "pakistan":         25,
+    "karachi":          25,
+    "lahore":           25,
+    "islamabad":        25,
+    "worldwide":        15,
+    "work from anywhere": 15,
+    "global remote":    15,
+    "open to all":      12,
+    "timezone flexible": 12,
+    "any timezone":     12,
+    "asia":             8,
+    "pst":              8,
 }
 
 SCORE_PENALTIES = {
     # Hard blockers — genuinely can't do
-    "us citizen":   -30,
-    "clearance":    -30,
-    "in-person":    -25,
-    "on-site":      -25,
+    "us citizen":    -30,
+    "clearance":     -30,
+    "in-person":     -25,
+    "on-site":       -25,
     "must relocate": -25,
-    # Light penalties — possible but less ideal
-    "us only":      -10,
-    "full time only": -5,
+    # Light penalties
+    "us only":       -10,
 }
 
 LOW_BUDGET_PATTERNS = [
@@ -440,6 +452,145 @@ def fetch_freelancer_rss(skill: str) -> list[dict]:
     return jobs
 
 
+def _load_indeed_cookies() -> str:
+    """Read Indeed cookies live from the browser. Scans all Chrome/Firefox
+    profiles and picks the one with an active login session (PPID marker)."""
+    try:
+        import browser_cookie3
+        import glob
+        candidates = []
+        for cf in glob.glob(str(Path.home() / ".config/google-chrome/*/Cookies")):
+            candidates.append((browser_cookie3.chrome, cf))
+        for cf in glob.glob(str(Path.home() / ".config/chromium/*/Cookies")):
+            candidates.append((browser_cookie3.chromium, cf))
+        candidates.append((browser_cookie3.firefox, None))
+
+        best = ""
+        for fn, cookie_file in candidates:
+            try:
+                kw = {"domain_name": "indeed.com"}
+                if cookie_file:
+                    kw["cookie_file"] = cookie_file
+                jar = {c.name: c.value for c in fn(**kw)}
+                if not jar:
+                    continue
+                pairs = "; ".join(f"{k}={v}" for k, v in jar.items())
+                # PPID = logged-in session → prefer it immediately
+                if "PPID" in jar:
+                    return pairs
+                # otherwise keep the richest cookie set as fallback
+                if len(pairs) > len(best):
+                    best = pairs
+            except Exception:
+                continue
+        if best:
+            return best
+    except ImportError:
+        pass
+    # Manual fallback from agent-config
+    return cfg("INDEED_COOKIES", "")
+
+
+def fetch_indeed(query: str, location: str, bot_token: str, days: int = 7) -> list[dict]:
+    """Fetch Indeed jobs via the authenticated search page.
+
+    Uses browser session cookies + curl_cffi Chrome TLS impersonation to get
+    past Cloudflare, then parses the embedded mosaic-provider-jobcards JSON.
+    DMs Shoaib once per run if login/cookies break.
+    """
+    cookies = _load_indeed_cookies()
+    if not cookies:
+        _indeed_warn(bot_token, "not logged into Indeed in any browser (Chrome/Firefox)")
+        return []
+
+    try:
+        from curl_cffi import requests as creq
+    except ImportError:
+        log("curl_cffi not installed — Indeed disabled")
+        _indeed_warn(bot_token, "curl_cffi missing — run `pip3 install curl_cffi --break-system-packages`")
+        return []
+
+    # Pakistan jobs → pk.indeed.com; remote/worldwide → www.indeed.com with l=remote
+    loc_l = location.lower()
+    if loc_l in ("pakistan", "pk", "karachi", "lahore", "islamabad"):
+        host, loc_param = "pk.indeed.com", "" if loc_l == "pakistan" else location
+    else:
+        host, loc_param = "www.indeed.com", "remote"
+
+    url = (f"https://{host}/jobs?q={urllib.parse.quote(query)}"
+           f"&l={urllib.parse.quote(loc_param)}&fromage={days}&sort=date")
+    cookie_dict = dict(p.split("=", 1) for p in cookies.split("; ") if "=" in p)
+
+    try:
+        r = creq.get(url, cookies=cookie_dict, impersonate="chrome120", timeout=20)
+        content = r.text
+    except Exception as e:
+        log(f"Indeed fetch error ({query}/{location}): {e}")
+        _indeed_warn(bot_token, f"network error: {e}")
+        return []
+
+    m = re.search(r'window\.mosaic\.providerData\["mosaic-provider-jobcards"\]=(\{.*?\});',
+                  content)
+    if not m:
+        # Either Cloudflare hard-blocked, or cookies expired (login wall)
+        if any(s in content for s in ["Security Check", "captcha", "challenge-running"]):
+            log(f"Indeed blocked ({query}/{location})")
+            _indeed_warn(bot_token, "Cloudflare hard-blocked — open indeed.com in your browser to clear the check")
+        else:
+            log(f"Indeed: no jobcards in response ({query}/{location})")
+        return []
+
+    try:
+        data = json.loads(m.group(1))
+        results = (data.get("metaData", {})
+                       .get("mosaicProviderJobCardsModel", {})
+                       .get("results", []))
+    except (json.JSONDecodeError, KeyError) as e:
+        log(f"Indeed JSON parse error ({query}): {e}")
+        return []
+
+    jobs = []
+    for j in results:
+        jk = j.get("jobkey", "")
+        if not jk:
+            continue
+        salary = ""
+        ss = j.get("salarySnippet") or {}
+        if ss.get("salaryTextFormatted"):
+            salary = ss.get("text", "") or ss.get("currency", "")
+        desc = (j.get("snippet") or "").strip()
+        desc = re.sub(r"<[^>]+>", " ", desc)
+        jobs.append({
+            "title":       (j.get("title") or j.get("displayTitle") or "")[:120],
+            "url":         f"https://{host}/viewjob?jk={jk}",
+            "description": (desc + f" [{j.get('formattedLocation','')}]")[:500],
+            "platform":    "indeed",
+            "rate":        salary or extract_rate(desc),
+            "company":     (j.get("company") or "")[:100],
+            "source":      "indeed",
+        })
+
+    return jobs
+
+
+# one warning per run — avoid Slack spam when multiple queries all fail
+_indeed_warned = False
+
+def _indeed_warn(bot_token: str, reason: str):
+    global _indeed_warned
+    if _indeed_warned or not bot_token:
+        return
+    _indeed_warned = True
+    slack_post(bot_token, {
+        "channel": SHOAIB_USER_ID,
+        "text": (
+            f"⚠️ *Indeed down* — {reason}\n"
+            "_Log into indeed.com in Chrome or Firefox → cookies refresh automatically next run._\n"
+            "🤖 Varys"
+        ),
+    })
+
+
 # ── Notion write ──────────────────────────────────────────────────────────────
 
 def save_job_to_notion(job: dict):
@@ -688,7 +839,8 @@ def main():
 
                 elif source == "hn_ask":
                     # HN Ask threads needing help
-                    data = http_get("https://hn.algolia.com/api/v1/search_by_date?query=django+python+help&tags=ask_hn&hitsPerPage=10")
+                    from internet_scanner import http_get as _is_http_get
+                    data = _is_http_get("https://hn.algolia.com/api/v1/search_by_date?query=django+python+help&tags=ask_hn&hitsPerPage=10")
                     if data:
                         try:
                             import re as _re
@@ -730,16 +882,32 @@ def main():
     raw_jobs += fetch_remoteok("ai")
     raw_jobs += fetch_remoteok("react")
     raw_jobs += fetch_remoteok("backend")
+    raw_jobs += fetch_remoteok("worldwide")
     # Jobicy — aggregates remote jobs from many platforms
     raw_jobs += fetch_jobicy("django")
     raw_jobs += fetch_jobicy("python AI")
     raw_jobs += fetch_jobicy("react developer")
     raw_jobs += fetch_jobicy("AI automation")
+    raw_jobs += fetch_jobicy("pakistan remote")
+    raw_jobs += fetch_jobicy("worldwide remote developer")
     # We Work Remotely — by category
     raw_jobs += fetch_wwr_api("programming")
     raw_jobs += fetch_wwr_api("full-stack")
     # Freelancer.com RSS
     raw_jobs += fetch_freelancer_rss("django")
+    raw_jobs += fetch_freelancer_rss("python")
+    # Indeed — browser cookies + curl_cffi. Space requests to avoid Cloudflare
+    # rate-limiting (bursts get 403'd). 3 queries, ~3s apart, is the safe ceiling.
+    import time as _time
+    indeed_queries = [
+        ("python OR django OR react developer", "Pakistan"),
+        ("AI automation engineer python",       "Pakistan"),
+        ("remote python backend developer",     "Remote"),
+    ]
+    for _i, (_q, _loc) in enumerate(indeed_queries):
+        if _i:
+            _time.sleep(3)
+        raw_jobs += fetch_indeed(_q, _loc, bot_token)
 
     log(f"Fetched {len(raw_jobs)} raw jobs from all sources")
 
@@ -808,16 +976,16 @@ def main():
     dm_jobs = new_jobs[:MAX_JOBS_PER_DM]
     if not dm_jobs:
         # Still tell Shoaib what we explored
-        if slot_name:
+        if slots_explored:
             slack_post(bot_token, {"channel": SHOAIB_DM,
-                "text": f"🔍 *Explored:* {slot_name}\n_No new qualifying work found this pass. Back in 30 min._\n🤖 Varys"})
+                "text": f"🔍 *Explored:* {slots_explored}\n_No new qualifying work found this pass. Back in 30 min._\n🤖 Varys"})
         log("No new qualifying jobs this run — skipping DM.")
         return 0
 
     # Build Slack DM
     today = datetime.now().strftime("%Y-%m-%d")
     time_now = datetime.now().strftime("%H:%M")
-    lines = [f"🏠 *{time_now} — Found work ({slot_name or 'job boards'})*\n"]
+    lines = [f"🏠 *{time_now} — Found work ({slots_explored or 'job boards'})*\n"]
 
     for i, job in enumerate(dm_jobs, 1):
         title   = job["title"][:80]

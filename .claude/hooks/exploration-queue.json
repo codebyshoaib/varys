@@ -1,7 +1,7 @@
 {
   "_comment": "Varys explores one slot every 30 min. Rotates forever. Each slot = one source to mine for paid work.",
   "_managed_by": "job-finder.py reads this and increments current_index",
-  "current_index": 18,
+  "current_index": 34,
   "slots": [
     {
       "id": "reddit_forhire",
@@ -584,6 +584,30 @@
       "source": "reddit",
       "subreddit": "BigDataJobs",
       "hours": 72
+    },
+    {
+      "id": "reddit_digitalnomad",
+      "name": "Reddit r/digitalnomad \u2014 location-independent work",
+      "description": "Clients explicitly open to hiring from anywhere",
+      "source": "reddit",
+      "subreddit": "digitalnomad",
+      "hours": 48
+    },
+    {
+      "id": "reddit_pakistanit",
+      "name": "Reddit r/PakistanIT \u2014 local Pakistan tech hiring",
+      "description": "Pakistani companies and freelance gigs posted locally",
+      "source": "reddit",
+      "subreddit": "PakistanIT",
+      "hours": 72
+    },
+    {
+      "id": "reddit_cscareerquestions_pk",
+      "name": "Reddit r/cscareerquestions \u2014 remote-friendly companies",
+      "description": "Discussions about companies that hire remote internationally",
+      "source": "reddit",
+      "subreddit": "cscareerquestions",
+      "hours": 48
     }
   ]
 }

@@ -1,10 +1,10 @@
 {
   "_comment": "OpenOutreach campaign config — edit after /setup with your own profile",
-  "_managed_by": "{{AGENT_NAME}} — do not edit manually, use openoutreach-manager.py",
+  "_managed_by": "Varys — do not edit manually, use openoutreach-manager.py",
 
   "campaign": {
-    "name": "Freelance Client Outreach — {{YOUR_TITLE}}",
-    "objective": "Connect with CTOs, Engineering Managers, Founders, and Technical leads at tech startups (5-200 employees). I am {{USER_NAME}}, a {{YOUR_ROLE}}. My outreach approach is value-first: I reference something specific about their company, tie it to a real automation or engineering problem I can solve, and offer a concrete demo or proof-of-concept — no questions, no pitching on first contact. I never open with 'How do you handle X?' — instead I observe what they're doing and mention one specific thing I can automate or improve.",
+    "name": "Freelance Client Outreach — Full-Stack & AI Automation Engineer",
+    "objective": "Connect with CTOs, Engineering Managers, Founders, and Technical leads at tech startups (5-200 employees). I am Shoaib Ud Din, a full-stack developer and AI automation engineer. My outreach approach is value-first: I reference something specific about their company, tie it to a real automation or engineering problem I can solve, and offer a concrete demo or proof-of-concept — no questions, no pitching on first contact. I never open with 'How do you handle X?' — instead I observe what they're doing and mention one specific thing I can automate or improve.",
 
     "target_market": "Buyer-focused: (1) Operations Manager, (2) Agency Owner, (3) Marketing Agency Founder, (4) Recruitment Agency Owner, (5) Real Estate Broker, (6) E-commerce Founder, (7) Customer Support Manager, (8) Sales Operations Manager, (9) Founder (small business/non-technical), (10) Practice Manager (clinics/law/accounting). Technical-adjacent: (11) Startup Founder, (12) Product Manager. These are people drowning in repetitive manual work with budget to automate it.",
 
@@ -22,25 +22,25 @@
   },
 
   "message_templates": {
-    "connection_request": "Hi {{first_name}}, I'm a {{YOUR_ROLE}} who also builds AI agents. Saw your work at {{company}} — looked interesting. Happy to connect.",
+    "connection_request": "Hi {{first_name}}, I'm a full-stack developer who also builds AI agents. Saw your work at {{company}} — looked interesting. Happy to connect.",
 
     "follow_up_1": "Hi {{first_name}} — saw you're running {{company}}. Teams at your stage usually lose hours to manual {{specific_task}} work. I build small AI agents that handle exactly that — happy to send a 60-sec demo of one I made if it's useful.",
 
-    "follow_up_2": "Here's a quick demo of an agent I built that auto-qualifies inbound leads and drafts replies: {{YOUR_PORTFOLIO}} — I could adapt something similar for {{company}}'s workflow. Want me to mock one up?",
+    "follow_up_2": "Here's a quick demo of an agent I built that auto-qualifies inbound leads and drafts replies: https://shoaib-fullstack-dev.vercel.app/ — I could adapt something similar for {{company}}'s workflow. Want me to mock one up?",
 
-    "follow_up_3": "Hi {{first_name}}, last message from me. I can build a quick proof-of-concept for {{company}}'s {{specific_task}} free of charge — if it works for you, we talk about a paid setup. 15 min to walk through it? Either way, feel free to reach out at {{USER_EMAIL}}."
+    "follow_up_3": "Hi {{first_name}}, last message from me. I can build a quick proof-of-concept for {{company}}'s {{specific_task}} free of charge — if it works for you, we talk about a paid setup. 15 min to walk through it? Either way, feel free to reach out at ushoaib224@gmail.com."
   },
 
   "user_profile": {
-    "name": "{{USER_NAME}}",
-    "title": "{{YOUR_TITLE}}",
-    "email": "{{USER_EMAIL}}",
-    "portfolio": "{{YOUR_PORTFOLIO}}",
-    "github": "https://github.com/{{YOUR_GITHUB}}",
+    "name": "Shoaib Ud Din",
+    "title": "Full-Stack Developer & AI Automation Engineer",
+    "email": "ushoaib224@gmail.com",
+    "portfolio": "https://shoaib-fullstack-dev.vercel.app/",
+    "github": "https://github.com/codebyshoaib/",
     "linkedin": "https://linkedin.com/in/{{YOUR_LINKEDIN}}",
-    "top_skills": ["Add", "your", "skills", "here"],
-    "headline_achievement": "{{YOUR_HEADLINE_ACHIEVEMENT}}",
-    "rate_hourly": "$0-0",
-    "rate_fixed": "$0-0"
+    "top_skills": ["Django", "Python", "React", "TypeScript", "AI Agents", "Automation"],
+    "headline_achievement": "Built a fully autonomous AI agent (Varys) that handles Slack, Notion, LinkedIn, and freelance hunting end-to-end",
+    "rate_hourly": "$20-60",
+    "rate_fixed": "$200-3000"
   }
 }
