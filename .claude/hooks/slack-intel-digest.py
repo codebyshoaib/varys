@@ -166,17 +166,21 @@ def resolve_names(token: str, uids: set) -> dict:
 def run_claude(prompt: str, timeout: int = 90) -> str:
     """Synthesis only. Spawned with VARYS_CONTENT_AGENT=1 so the drift hook hard-blocks
     any Slack send the model might attempt — synthesis can never post to a channel."""
-    nvm = 'export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"'
+    # ponytail: absolute path — cron's minimal PATH breaks nvm sourcing
+    claude_bin = os.path.expanduser("~/.nvm/versions/node/v24.14.0/bin/claude")
     env = os.environ.copy()
     env["VARYS_PROMPT"] = prompt
     env["VARYS_CONTENT_AGENT"] = "1"
     try:
         result = subprocess.run(
-            ["bash", "-c", f'{nvm} && claude --dangerously-skip-permissions --print -p "$VARYS_PROMPT"'],
+            [claude_bin, "--dangerously-skip-permissions", "--print", "-p", prompt],
             capture_output=True, text=True,
             cwd=str(VARYS_DIR), timeout=timeout, env=env,
         )
-        return result.stdout.strip() if result.returncode == 0 else ""
+        if result.returncode != 0:
+            log(f"Claude exited {result.returncode}: {result.stderr.strip()[:200]}")
+            return ""
+        return result.stdout.strip()
     except Exception as e:
         log(f"Claude call failed: {e}")
         return ""
@@ -318,14 +322,13 @@ PEOPLE is a JSON array in the file {payload_file} — read it. For each person:
 2. If FOUND -> update: "Interaction Count" += 1; "Last Seen" = {today}; merge new items into "Recurring Topics" (comma-separated, dedupe); set Team/Role only if currently empty and inferable from their channels; then read the current "Varys Notes" and APPEND one line "{today}: <one line — what they worked on / shipped / are blocked on this window>" (keep all existing notes, never overwrite).
 3. If NOT FOUND -> create a page: Name, "Slack ID" if given, Team/Role if inferable, "Recurring Topics", "Interaction Count"=1, "Last Seen"={today}, "Varys Notes"="{today}: <activity>".
 Do not post to Slack. Finish with a one-line tally: "people-map: created N, updated M"."""
-    nvm = 'export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"'
+    claude_bin = os.path.expanduser("~/.nvm/versions/node/v24.14.0/bin/claude")
     env = os.environ.copy()
-    env["VARYS_PROMPT"] = prompt
     env["VARYS_CONTENT_AGENT"] = "1"   # drift hook blocks Slack sends; Notion MCP still allowed
     env["NOTION_API_KEY"] = notion_key
     try:
         r = subprocess.run(
-            ["bash", "-c", f'{nvm} && claude --dangerously-skip-permissions --print -p "$VARYS_PROMPT"'],
+            [claude_bin, "--dangerously-skip-permissions", "--print", "-p", prompt],
             capture_output=True, text=True, cwd=str(VARYS_DIR), timeout=600, env=env,
         )
         out = (r.stdout or "").strip()

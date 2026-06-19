@@ -15,6 +15,7 @@ Full pipeline: topic → NLM notebook → NLM infographic (visual, minimal text)
 ```
 
 Examples:
+
 ```
 /linkedin-post Harness Engineering for AI Coding
 /linkedin-post How to review PRs like a senior engineer
@@ -44,6 +45,7 @@ Save the notebook ID as `NB_ID`.
 ### Step 3: Add content source to notebook
 
 If the notebook is newly created (source_count == 0), synthesize a rich, structured text source covering:
+
 - What the topic is (definition, 1 paragraph)
 - Why it matters (3–5 key reasons)
 - How it works (the core mechanism or framework, numbered steps)
@@ -52,6 +54,7 @@ If the notebook is newly created (source_count == 0), synthesize a rich, structu
 - Key insight / takeaway
 
 Add it:
+
 ```bash
 nlm source add "$NB_ID" --wait --title "<topic> — Core Concepts" --text "<your synthesized content>"
 ```
@@ -63,12 +66,15 @@ Wait for `--wait` to confirm the source is ready before moving on.
 The infographic should be visual-first, minimal text. Big numbers, icons, short labels — not paragraphs.
 
 ```bash
-nlm infographic create "$NB_ID" --orientation portrait --detail brief --confirm
+nlm infographic create "$NB_ID" --orientation portrait --detail concise --style editorial --confirm
 ```
+
+`--detail` is `concise|standard|detailed` (NOT `brief` — that errors). Always pass an explicit `--style` (default `auto_select` looks generic). See **conventions + 4:5 normalization** in `.claude/rules/infographics.md` — the raw output is a 9:16 sliver and MUST be padded to 4:5 before posting or LinkedIn shows black gutters.
 
 Capture the Artifact ID from the output line `Artifact ID: <id>`. Save as `ART_ID`.
 
 Poll until status is `completed`:
+
 ```bash
 until nlm studio status "$NB_ID" --json 2>/dev/null | python3 -c "
 import sys, json
@@ -80,6 +86,7 @@ sys.exit(0 if art and art['status'] == 'completed' else 1)
 ```
 
 Download:
+
 ```bash
 nlm download infographic "$NB_ID" --id "$ART_ID" --output /tmp/linkedin-infographic.png
 ```
@@ -91,6 +98,7 @@ Show the image to the user with Read so they can see it before posting.
 Write the post using the notebook research as your substance. The voice is Shoaib — a senior engineer who ships real things under real constraints.
 
 **Voice rules — these override everything else:**
+
 - Write one specific story or observation. Not a summary. Not a list of tips.
 - Short sentences. 1–2 sentences per paragraph. Break between every paragraph.
 - Concrete: real numbers, tool names, named systems. Not "it was slow" → "847ms per request, fixed with one index".
@@ -98,17 +106,20 @@ Write the post using the notebook research as your substance. The voice is Shoai
 - Opening line: a fact, surprising number, or admission. Never a question. Never hype.
 
 **What AI-sounding looks like — don't write this:**
+
 - "In today's fast-paced tech landscape, X is changing everything..."
 - "Here's why this matters → ✅ Point 1 ✅ Point 2 ✅ Point 3"
 - "🔥 Game changer alert: 5 things every engineer should know about..."
 - "Excited to share that I've been exploring..."
 
 **What senior-engineer LinkedIn actually looks like:**
+
 - "I wasted 3 weeks on the wrong abstraction. Here's what I should have done from day 1."
 - "We had 2000 active tenants hitting the same unindexed query. Fixing it was embarrassing in retrospect."
 - "The thing nobody tells you about Django signals: they run synchronously in the same transaction."
 
 **Structure (prose paragraphs, not a template):**
+
 1. Para 1: one specific, surprising, or uncomfortable observation — 1–2 sentences
 2. Para 2: what caused it / the actual situation you were dealing with
 3. Para 3: what changed and what happened — the concrete payoff
@@ -132,6 +143,7 @@ On success, output looks like: `✅ Posted to LinkedIn | ID: urn:li:share:<id>`
 ### Step 7: Report back
 
 Tell the user:
+
 - Post ID / share URN
 - Infographic was NLM-generated
 - One-line summary of the post angle
@@ -146,6 +158,7 @@ Tell the user:
 ## Notebook Registry
 
 After a successful run, register the notebook in the Notion NLM Registry DB so it's findable next time:
+
 - DB ID: from `.claude/rules/notebooklm.md` (`NOTION_NLM_REGISTRY_DB_ID`)
 - Fields: alias (slug of topic), domain (infer: tech/content/fitness/freelance), notebook ID, when_to_use
 

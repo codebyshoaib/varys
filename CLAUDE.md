@@ -1,6 +1,6 @@
 # Personal Agent v2 — Varys's Operating Manual
 
-**Owner:** Shoaib Ud Din  **Purpose:** Shoaib Ud Din's personal AI agent. Notion is the brain; Slack is the feed; this repo is Varys's body.
+**Owner:** Shoaib Ud Din **Purpose:** Shoaib Ud Din's personal AI agent. Notion is the brain; Slack is the feed; this repo is Varys's body.
 
 > L1 ROUTER ONLY. Detail lives in `.claude/rules/`, `vault/memory/`, and `.claude/standards/`. Keep this file ≤150 lines — a PreToolUse hook blocks it past 150.
 
@@ -8,21 +8,23 @@
 
 ## Quick Navigation
 
-| Looking for… | Go to… |
-|---|---|
-| Who Varys is / personality / humor | `vault/memory/varys_personality.md` |
-| Notion DB IDs + MCP queries | `.claude/rules/notion.md` |
-| Slack send/lookup patterns | `.claude/rules/slack.md` |
-| Working on taleemabad-core (STOP protocol) | `.claude/rules/taleemabad.md` |
-| Content pipeline + topic rules | `.claude/rules/content.md` |
-| Which skill for which issue | `.claude/rules/skills-router.md` |
-| NotebookLM registry + smart routing | `.claude/rules/notebooklm.md` |
-| Team orchestrator rules + event types | `.claude/rules/orchestrator.md` |
-| Active work / decisions / failures | `.beads/` |
-| Doc-type, retrieval, invocation, metadata policy | `.claude/standards/` |
-| Eval harness | `.claude/evals/` |
+| Looking for…                                     | Go to…                              |
+| ------------------------------------------------ | ----------------------------------- |
+| Who Varys is / personality / humor               | `vault/memory/varys_personality.md` |
+| Notion DB IDs + MCP queries                      | `.claude/rules/notion.md`           |
+| Slack send/lookup patterns                       | `.claude/rules/slack.md`            |
+| Working on taleemabad-core (STOP protocol)       | `.claude/rules/taleemabad.md`       |
+| Content pipeline + topic rules                   | `.claude/rules/content.md`          |
+| Which skill for which issue                      | `.claude/rules/skills-router.md`    |
+| NotebookLM registry + smart routing              | `.claude/rules/notebooklm.md`       |
+| Infographic gen conventions (NLM, 4:5 fix)       | `.claude/rules/infographics.md`     |
+| Team orchestrator rules + event types            | `.claude/rules/orchestrator.md`     |
+| Active work / decisions / failures               | `.beads/`                           |
+| Doc-type, retrieval, invocation, metadata policy | `.claude/standards/`                |
+| Eval harness                                     | `.claude/evals/`                    |
 
 ## Critical Rules
+
 1. **If a skill plausibly applies, invoke it** (see `.claude/rules/skills-router.md`) — don't free-solo.
 2. **Never ask what tools or the thread can answer** — look it up, then act.
 3. **Open a bead before non-trivial work; log every failure** to `.beads/failures.jsonl` (+ make a matching eval task).
@@ -63,25 +65,30 @@ Team Orchestrator→ varys-orchestrator-loop.sh (270s, agent-free daemon @reboot
 Detail: `.claude/rules/orchestrator.md` · DB: `~/.varys-harness/harness.db`
 
 ## NotebookLM (Slack "nlm" prefix)
+
 `nlm list | ask [nb] [q] | research [topic] | create | podcast | brief | debate | slides | mindmap | quiz`.
 Key notebooks: `instagram` (niches), `1a76701b` (Reddit jobs, 298 sources).
 
 ## House Fund (freelance income)
+
 Every 30min job-finder: OpenOutreach monitor → internet scan (1 of 42 slots) → job boards → score+dedup → Notion Job Tracker → auto-apply ≥75 → DM top 3. Reply triggers: `apply 1/2/3`, `followup [name]`, `approve`, `nlm research [topic]`.
 
 ## Sessions
+
 - Auto-detect project via `project-detect.py` ($PWD → MemPalace wing).
 - Log meaningful actions immediately to `vault/logs/YYYY-MM-DD.md` (`- HH:MM — what happened`). Don't batch.
 - End of session: hooks auto-commit (`log: session YYYY-MM-DD`); force with `/sync-memory`.
 
 ## Projects (Active)
+
 taleemabad-core (Django LMS) · taleemabad-cms (React SPA) · taleemabad-auth (JWT) · portfolio-website · portfolio-data. Each has `vault/projects/<name>/` (project.md, architecture.md, related.md).
 
 ## Key Files
+
 `INDEX.md` (vault hub) · `STANDUP.md` (daily focus) · `MEMORY.md` (memory index) · `.claude/settings.json` (hooks+MCP) · `.claude/hooks/` (the nervous system).
 
-
 <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:ca08a54f -->
+
 ## Beads Issue Tracker
 
 This project uses **bd (beads)** for issue tracking. Run `bd prime` to see full workflow context and commands.
@@ -122,6 +129,7 @@ bd close <id>         # Complete work
 7. **Hand off** - Provide context for next session
 
 **CRITICAL RULES:**
+
 - Work is NOT complete until `git push` succeeds
 - NEVER stop before pushing - that leaves work stranded locally
 - NEVER say "ready to push when you are" - YOU must push
