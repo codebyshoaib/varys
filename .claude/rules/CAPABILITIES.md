@@ -1,3 +1,11 @@
+---
+type: reference
+last_verified: 2026-06-19
+owner: varys
+paths:
+  - ".claude/hooks/image_generator.py"
+---
+
 # {{AGENT_NAME}} Capability Manifest
 
 ## WHAT VARYS CANNOT DO

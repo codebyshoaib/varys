@@ -1,3 +1,11 @@
+---
+type: config
+last_verified: 2026-06-19
+owner: varys
+paths:
+  - ".claude/hooks/proactive-watch.py"
+---
+
 # Proactive Slack Channel Watch Config
 
 Format per line: `#channel-name | mode | keywords`

@@ -27,7 +27,7 @@ done
 echo "== Tier-1: freshness (rules within 31 days of last_verified) =="
 python3 - <<'PY' || FAIL=1
 import glob, datetime, re, sys
-today = datetime.date(2026,6,1)
+today = datetime.date.today()
 bad=0
 for f in glob.glob(".claude/rules/*.md"):
     m=re.search(r'last_verified:\s*(\d{4}-\d{2}-\d{2})', open(f).read())
