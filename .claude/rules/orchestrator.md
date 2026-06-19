@@ -51,6 +51,12 @@ and handles it autonomously — but never writes code without human approval of 
 10. **E2E gate before every PR** — no `gh pr create` without running e2e tests.
     Pass → open PR normally. Fail after 5 attempts → open PR with failure report + Status=Blocked.
 
+11. **Sync repo clone before ANY work** — before every agent dispatch that targets a repo,
+    `varys-manager.py` MUST run `git fetch origin && git checkout <base> && git reset --hard origin/<base>`.
+    This prevents stale-branch PRs and divergence from `develop`. Enforced in code for all agents
+    (product-lead handles it separately via branch setup; all others via the sync block above it).
+    Never skip this step — working on a stale clone is a silent bug factory.
+
 ## Event Type Taxonomy
 
 ```

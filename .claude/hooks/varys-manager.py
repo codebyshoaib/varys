@@ -316,6 +316,13 @@ def run_worker_phase(context_key: str, session_id: str, cfg: dict) -> None:
     if not slack_channel:
         slack_channel, slack_thread_ts = SHOAIB_DM, None
 
+    # RULE: always sync the repo clone before any work (enforced for all agents with a repo)
+    if repo_info and Path(repo_info["abs_path"]).exists() and chosen_agent != "product-lead":
+        _base = repo_info.get("branch", "main")
+        _git(work_cwd, "fetch", "origin", timeout=120)
+        _git(work_cwd, "checkout", _base)
+        _git(work_cwd, "reset", "--hard", f"origin/{_base}")
+
     # For product-lead: create a fresh branch in the target repo before running
     branch = None
     if chosen_agent == "product-lead" and repo_info:
