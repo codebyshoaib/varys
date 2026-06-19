@@ -896,18 +896,17 @@ def main():
     # Freelancer.com RSS
     raw_jobs += fetch_freelancer_rss("django")
     raw_jobs += fetch_freelancer_rss("python")
-    # Indeed — browser cookies + curl_cffi. Space requests to avoid Cloudflare
-    # rate-limiting (bursts get 403'd). 3 queries, ~3s apart, is the safe ceiling.
-    import time as _time
-    indeed_queries = [
-        ("python OR django OR react developer", "Pakistan"),
-        ("AI automation engineer python",       "Pakistan"),
-        ("remote python backend developer",     "Remote"),
-    ]
-    for _i, (_q, _loc) in enumerate(indeed_queries):
-        if _i:
-            _time.sleep(3)
-        raw_jobs += fetch_indeed(_q, _loc, bot_token)
+    # Indeed — DISABLED until Cloudflare blockage is solved. fetch_indeed() and
+    # _load_indeed_cookies() remain in place; re-enable this block when ready.
+    # import time as _time
+    # for _i, (_q, _loc) in enumerate([
+    #     ("python OR django OR react developer", "Pakistan"),
+    #     ("AI automation engineer python",       "Pakistan"),
+    #     ("remote python backend developer",     "Remote"),
+    # ]):
+    #     if _i:
+    #         _time.sleep(3)
+    #     raw_jobs += fetch_indeed(_q, _loc, bot_token)
 
     log(f"Fetched {len(raw_jobs)} raw jobs from all sources")
 
