@@ -49,6 +49,8 @@ PASS_THRESHOLD = 70          # score >= 70 -> Pass
 _NOTE_MAX = 120
 _TASK_MAX = 2000
 _NOTES_MAX = 2000
+_THREAD_MAX = 2000           # Notion rich_text caps a text chunk at 2000 chars
+_TOOLS_MAX = 500
 
 
 # ── Config / HTTP plumbing ──────────────────────────────────────────────────
@@ -82,20 +84,27 @@ def _score_to_pass(score) -> bool:
 
 
 def _row_to_props(sender_name: str, request: str, reply: str,
-                  source: str, mode: str, today: str) -> dict:
+                  source: str, mode: str, today: str,
+                  thread: str = "", tools: str = "") -> dict:
     """
     Build the Notion `properties` object for a new Eval Log row.
     Maps ONLY to the real schema. Score and Pass are deliberately left UNSET
     (absent) so the row reads as unjudged.
+
+    `thread` is the full conversation history (so the judge can see whether the
+    user had to correct or re-ask); `tools` is a comma-joined list of the tools
+    Varys actually called (so "used tools" is verifiable, not inferred).
     """
     title = f"{sender_name}: {request[:60]}"
     agent = f"{source}/{mode}" if mode else (source or "")
     return {
-        "Name":  {"title": [{"text": {"content": title}}]},
-        "Task":  {"rich_text": [{"text": {"content": (request or "")[:_TASK_MAX]}}]},
-        "Agent": {"rich_text": [{"text": {"content": agent[:200]}}]},
-        "Notes": {"rich_text": [{"text": {"content": (reply or "")[:_NOTES_MAX]}}]},
-        "Date":  {"date": {"start": today}},
+        "Name":   {"title": [{"text": {"content": title}}]},
+        "Task":   {"rich_text": [{"text": {"content": (request or "")[:_TASK_MAX]}}]},
+        "Agent":  {"rich_text": [{"text": {"content": agent[:200]}}]},
+        "Notes":  {"rich_text": [{"text": {"content": (reply or "")[:_NOTES_MAX]}}]},
+        "Thread": {"rich_text": [{"text": {"content": (thread or "")[:_THREAD_MAX]}}]},
+        "Tools":  {"rich_text": [{"text": {"content": (tools or "")[:_TOOLS_MAX]}}]},
+        "Date":   {"date": {"start": today}},
     }
 
 
@@ -171,6 +180,8 @@ def _props_to_row(page: dict) -> dict:
         "task":    _read_text_prop(props.get("Task", {})),
         "agent":   _read_text_prop(props.get("Agent", {})),
         "notes":   _read_text_prop(props.get("Notes", {})),
+        "thread":  _read_text_prop(props.get("Thread", {})),
+        "tools":   _read_text_prop(props.get("Tools", {})),
         "score":   score_prop.get("number"),
         "pass":    bool(pass_prop.get("checkbox")),
     }
@@ -268,20 +279,25 @@ def log_to_eval(
     mode: str,
     source: str,
     latency_s: float,
+    thread: str = "",
+    tools: str = "",
 ):
     """
     Write a conversation row to the Eval Log DB (Score unset = unjudged).
-    Runs in a background thread — never blocks the reply. Signature is unchanged
-    so the listener call site does not need to change.
+    Runs in a background thread — never blocks the reply. `thread` (full history)
+    and `tools` (comma-joined tool names actually called) default to "" so any
+    older call site keeps working.
     """
     threading.Thread(
         target=_write_eval_entry,
-        args=(conv_id, sender_name, request, reply, mode, source, latency_s),
+        args=(conv_id, sender_name, request, reply, mode, source, latency_s,
+              thread, tools),
         daemon=True,
     ).start()
 
 
-def _write_eval_entry(conv_id, sender_name, request, reply, mode, source, latency_s):
+def _write_eval_entry(conv_id, sender_name, request, reply, mode, source,
+                      latency_s, thread="", tools=""):
     today = datetime.now().strftime("%Y-%m-%d")
 
     # Buffer locally first (instant, survives a Notion outage).
@@ -289,6 +305,7 @@ def _write_eval_entry(conv_id, sender_name, request, reply, mode, source, latenc
         "conv_id": conv_id, "sender": sender_name, "request": request,
         "reply": reply, "mode": mode, "source": source,
         "latency_s": latency_s, "date": today, "written": False,
+        "thread": thread, "tools": tools,
     }
     try:
         with open(EVAL_LOG_FILE, "a") as f:
@@ -300,7 +317,8 @@ def _write_eval_entry(conv_id, sender_name, request, reply, mode, source, latenc
     if not api_key:
         return
     try:
-        props = _row_to_props(sender_name, request, reply, source, mode, today)
+        props = _row_to_props(sender_name, request, reply, source, mode, today,
+                              thread=thread, tools=tools)
         _create_page(api_key, props)
     except Exception:
         # Best-effort; the local buffer already holds the row.
@@ -386,10 +404,19 @@ Rate each conversation on a 0-100 score using this rubric:
   30  — incomplete, hedged/slow, or asked a clarifying question a tool could answer.
   0   — wrong answer, had to be corrected, asked the user to do what a tool does,
         or did not address the request.
+
+GROUND-TRUTH SIGNALS — do not score on the reply text alone:
+  - `tools`: the tools Varys ACTUALLY called. If the reply claims/implies it looked
+    something up but `tools` is empty, that is a fabrication → score <= 30. Only credit
+    "answered with tools" when `tools` is non-empty and relevant.
+  - `thread`: the full conversation AFTER this reply. If the user re-asked, corrected,
+    repeated the request, or showed frustration in a later message, the reply FAILED
+    regardless of how good it reads → score <= 30. The user's reaction outranks your
+    own opinion of the answer.
 Also give a short failure_type slug (e.g. "wrong-intent", "asked-clarifying-question",
-"missing-context", "too-slow", "off-topic") and a one-line note (<=120 chars, NO
-newlines, NO double-quotes). For a clearly good answer use failure_type "" and an
-empty note."""
+"missing-context", "too-slow", "off-topic", "fabricated-tool-use", "user-corrected")
+and a one-line note (<=120 chars, NO newlines, NO double-quotes). For a clearly good
+answer use failure_type "" and an empty note."""
 
 
 def _build_judge_prompt(rows: list) -> str:
@@ -399,7 +426,8 @@ def _build_judge_prompt(rows: list) -> str:
     """
     payload = [
         {"page_id": r["page_id"], "task": (r.get("task") or "")[:600],
-         "reply": (r.get("notes") or "")[:600], "agent": r.get("agent", "")}
+         "reply": (r.get("notes") or "")[:600], "agent": r.get("agent", ""),
+         "tools": (r.get("tools") or ""), "thread": (r.get("thread") or "")[:1500]}
         for r in rows
     ]
     return f"""You are a strict, disinterested QA reviewer with no stake in these answers
@@ -409,7 +437,8 @@ Default to a LOW score unless the reply clearly resolved the request. Rate these
 {_JUDGE_RUBRIC}
 
 Here are the rows (JSON). Each has page_id, task (the request), reply (Varys's answer),
-and agent (source/mode):
+agent (source/mode), tools (the tools Varys actually called — may be empty), and thread
+(the full conversation, including any later messages from the user):
 {json.dumps(payload, ensure_ascii=False)}
 
 Return ONLY one JSON object on the LAST line of your output, keyed by page_id:

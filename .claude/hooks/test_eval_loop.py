@@ -338,18 +338,26 @@ def test_build_scored_and_low_queries():
 
 
 def test_row_to_props_maps_real_schema_only():
-    """New rows map to Name/Task/Agent/Notes/Date and leave Score+Pass UNSET."""
+    """New rows map to Name/Task/Agent/Notes/Thread/Tools/Date, Score+Pass UNSET."""
     import varys_eval
     props = varys_eval._row_to_props(
         "Mahnoor", "fix the login bug", "Here is the fix.",
-        "slack", "dm", "2026-06-19")
-    assert set(props) == {"Name", "Task", "Agent", "Notes", "Date"}, \
+        "slack", "dm", "2026-06-19",
+        thread="Mahnoor: fix the login bug\nVarys: Here is the fix.",
+        tools="Bash, Edit")
+    assert set(props) == {"Name", "Task", "Agent", "Notes", "Thread", "Tools", "Date"}, \
         f"only the real schema fields may be written, got {set(props)}"
     assert "Score" not in props and "Pass" not in props, "unjudged rows leave Score/Pass unset"
     assert props["Name"]["title"][0]["text"]["content"] == "Mahnoor: fix the login bug"
     assert props["Task"]["rich_text"][0]["text"]["content"] == "fix the login bug"
     assert props["Agent"]["rich_text"][0]["text"]["content"] == "slack/dm"
+    assert props["Tools"]["rich_text"][0]["text"]["content"] == "Bash, Edit"
+    assert "Varys: Here is the fix." in props["Thread"]["rich_text"][0]["text"]["content"]
     assert props["Date"]["date"]["start"] == "2026-06-19"
+    # thread/tools default to "" so any older call site keeps working
+    bare = varys_eval._row_to_props("X", "q", "a", "slack", "dm", "2026-06-19")
+    assert bare["Thread"]["rich_text"][0]["text"]["content"] == ""
+    assert bare["Tools"]["rich_text"][0]["text"]["content"] == ""
     print("PASS test_row_to_props_maps_real_schema_only")
 
 

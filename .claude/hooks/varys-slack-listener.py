@@ -478,15 +478,57 @@ def log(msg: str):
         f.write(line + "\n")
 
 
+def _parse_stream_json(stdout: str) -> tuple:
+    """
+    Parse `claude --output-format stream-json` (newline-delimited JSON events).
+    Returns (final_text, tool_names). Falls back to raw stdout as the text if the
+    stream can't be parsed, so a format change can never blank a reply.
+    """
+    final_text, texts, tools = "", [], []
+    for line in stdout.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            ev = json.loads(line)
+        except Exception:
+            continue
+        et = ev.get("type")
+        if et == "result" and isinstance(ev.get("result"), str):
+            final_text = ev["result"]
+        elif et == "assistant":
+            for block in (ev.get("message", {}) or {}).get("content", []) or []:
+                if block.get("type") == "tool_use" and block.get("name"):
+                    tools.append(block["name"])
+                elif block.get("type") == "text" and block.get("text"):
+                    texts.append(block["text"])
+    text = final_text or "\n".join(texts).strip() or stdout.strip()
+    # de-dupe tool names, keep first-seen order
+    seen, ordered = set(), []
+    for t in tools:
+        if t not in seen:
+            seen.add(t); ordered.append(t)
+    return text, ordered
+
+
 def run_claude(prompt: str, cwd: str = None, timeout: int = 240,
-               event_context: str = "unknown") -> str:
+               event_context: str = "unknown", return_tools: bool = False):
+    """
+    Run `claude -p`. Default returns the reply string (back-compat).
+    With return_tools=True, runs in stream-json mode and returns
+    (reply_str, [tool_names]) — the tool names are the ones Varys ACTUALLY
+    called, used by the eval judge to catch fabricated tool-use claims.
+    """
     env = os.environ.copy()
     env["VARYS_PROMPT"] = prompt
+    cmd = [CLAUDE_BIN, "--dangerously-skip-permissions", "--print"]
+    if return_tools:
+        cmd += ["--output-format", "stream-json", "--verbose"]
+    cmd += ["-p", prompt]
     t0 = time.time()
     try:
         result = subprocess.run(
-            [CLAUDE_BIN, "--dangerously-skip-permissions", "--print", "-p", prompt],
-            capture_output=True, text=True,
+            cmd, capture_output=True, text=True,
             cwd=cwd or str(VARYS_DIR),
             timeout=timeout, env=env,
         )
@@ -494,16 +536,21 @@ def run_claude(prompt: str, cwd: str = None, timeout: int = 240,
         if result.returncode == 0 and result.stdout.strip():
             klog_claude_call(context=event_context, latency_s=latency, status="ok",
                              prompt_len=len(prompt), response_len=len(result.stdout))
+            if return_tools:
+                return _parse_stream_json(result.stdout)
             return result.stdout.strip()
         klog_claude_call(context=event_context, latency_s=latency, status="error",
                          error=result.stderr.strip()[:200])
-        return f"⚠️ I hit an issue: {result.stderr.strip()[:150] or 'no output'}"
+        err = f"⚠️ I hit an issue: {result.stderr.strip()[:150] or 'no output'}"
+        return (err, []) if return_tools else err
     except subprocess.TimeoutExpired:
         klog_claude_call(context=event_context, latency_s=timeout, status="timeout")
-        return "⏱️ That took too long. Try again or break it into smaller steps."
+        msg = "⏱️ That took too long. Try again or break it into smaller steps."
+        return (msg, []) if return_tools else msg
     except Exception as e:
         klog_error(context=f"run_claude-{event_context}", exc=e)
-        return f"⚠️ Error: {e}"
+        msg = f"⚠️ Error: {e}"
+        return (msg, []) if return_tools else msg
 
 
 HUMOR_LOG = Path("/tmp/varys-humor-log.jsonl")
@@ -881,7 +928,8 @@ Source: {source}
 Reply now. Do NOT output any mode label, header, or internal reasoning — just the response itself. Sign off: 🕷️ {AGENT_NAME}"""
 
     t0 = time.time()
-    answer = run_claude(prompt, cwd=str(VARYS_DIR), timeout=300, event_context=source)
+    answer, tools_used = run_claude(prompt, cwd=str(VARYS_DIR), timeout=300,
+                                    event_context=source, return_tools=True)
     # Honesty gate: catches false delivery claims before sending
     if _honesty_gate_available:
         answer = honesty_check(answer, uploaded=False, request=text)
@@ -945,6 +993,8 @@ Reply now. Do NOT output any mode label, header, or internal reasoning — just 
         mode        = mode,
         source      = source,
         latency_s   = latency,
+        thread      = thread_history,
+        tools       = ", ".join(tools_used),
     )
 
     # Self-critique: did Varys ask a clarifying question it could have answered itself?
