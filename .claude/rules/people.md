@@ -1,3 +1,11 @@
+---
+type: reference
+last_verified: 2026-06-19
+owner: varys
+paths:
+  - ".claude/hooks/slack-intel-digest.py"
+---
+
 # People Intelligence — Auto-Save Rule
 
 **Any time a person is mentioned in conversation with Shoaib, save or update their entry in the People Intelligence DB immediately.**
