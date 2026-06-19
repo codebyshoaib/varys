@@ -156,7 +156,7 @@ gh pr create \
 - `confidence.md` — score breakdown
 - `bugs.md` — all bugs found + status
 
-🕷️ Delivered by Varys (personal-agent-v2)
+🕷️ Delivered by Varys
 EOF
 )"
 ```
