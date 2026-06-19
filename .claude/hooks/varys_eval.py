@@ -402,7 +402,9 @@ def _build_judge_prompt(rows: list) -> str:
          "reply": (r.get("notes") or "")[:600], "agent": r.get("agent", "")}
         for r in rows
     ]
-    return f"""You are Varys, acting as a strict eval judge. Rate these conversations.
+    return f"""You are a strict, disinterested QA reviewer with no stake in these answers
+(they were written by an agent called Varys; you are NOT Varys and owe it nothing).
+Default to a LOW score unless the reply clearly resolved the request. Rate these conversations.
 
 {_JUDGE_RUBRIC}
 
