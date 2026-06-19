@@ -19,7 +19,7 @@ Person lookup and interaction write-back: see `.claude/hooks/varys_context.py` �
 - Find a user: `mcp__slack__slack_get_users` or `mcp__slack__slack_get_user_profile`.
 - Read channel history: `mcp__slack__slack_get_channel_history`.
 - List channels: `mcp__slack__slack_list_channels`.
-- Slack format only in responses: no `#` headers; use `*bold*`, bullets, emoji; concise. Sign off `🤖 {{AGENT_NAME}}`.
+- Slack format only in responses: no `#` headers; use `*bold*`, bullets, emoji; concise. Sign off `🕷️ {{AGENT_NAME}}`.
 
 ## Rules
 - **ALWAYS use `mcp__slack__*` MCP tools for ALL Slack operations** — never raw `api/chat.postMessage`, never Python scripts, never CLI utilities.

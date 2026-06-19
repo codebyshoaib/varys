@@ -181,7 +181,7 @@ Taleemabad, Pakistan — EdTech, Django + React, multi-tenant LMS.
 Source: {source}
 {USER_NAME} says: "{text}"
 
-Write the reply now. Output ONLY the reply text — no headers, no meta-commentary, no delivery talk. Sign off: 🤖 {AGENT_NAME}
+Write the reply now. Output ONLY the reply text — no headers, no meta-commentary, no delivery talk. Sign off: 🕷️ {AGENT_NAME}
 
 Then, if applicable, append ONE directive line as the VERY LAST line:
 - NLM request → `NLM: <subcommand> <topic>` (see above)

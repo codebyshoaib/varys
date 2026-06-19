@@ -335,7 +335,7 @@ def run_worker_phase(context_key: str, session_id: str, cfg: dict) -> None:
         if co.returncode != 0:
             if bot_token and slack_channel:
                 slack_post(bot_token, slack_channel,
-                           f"⛔ Branch setup failed: {co.stderr[:200]}\n🤖 Varys", slack_thread_ts)
+                           f"⛔ Branch setup failed: {co.stderr[:200]}\n🕷️ Varys", slack_thread_ts)
             db.execute("UPDATE sessions SET status='cancelled', updated_at=datetime('now') WHERE id=?",
                        (session_id,))
             db.execute("UPDATE events SET status='pending' WHERE context_key=? AND status='processing'",

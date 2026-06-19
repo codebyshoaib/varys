@@ -179,7 +179,7 @@ Reply only "sent" when done."""
             f"✉️ *Applied (email):* {job['title'][:70]}\n"
             f"Sent to: `{email}`\n"
             f"Score: {job.get('score',0)}/100\n"
-            f"🔗 {job['url'][:80]}\n🤖 Varys")
+            f"🔗 {job['url'][:80]}\n🕷️ Varys")
 
     return success
 
@@ -228,7 +228,7 @@ def apply_via_github(job: dict, token: str) -> bool:
             f"💬 *Applied (GitHub):* {job['title'][:70]}\n"
             f"Commented on: `{owner}/{repo}#{issue_num}`\n"
             f"Score: {job.get('score',0)}/100\n"
-            f"🔗 {job['url']}\n🤖 Varys")
+            f"🔗 {job['url']}\n🕷️ Varys")
 
     return success
 
@@ -269,7 +269,7 @@ def process_job(job: dict, token: str) -> str:
             f"🤔 *Approval needed:* {title[:70]}\n"
             f"Score: {score}/100 | Method: {method}\n"
             f"🔗 {url}\n"
-            f'_Reply "approve" to apply, "skip" to pass._\n🤖 Varys')
+            f'_Reply "approve" to apply, "skip" to pass._\n🕷️ Varys')
         mark_applied(url, "pending", title)
         return "pending_approval"
 
@@ -290,7 +290,7 @@ def process_job(job: dict, token: str) -> str:
                 f"Score: {score}/100\n"
                 f"🔗 {url}\n\n"
                 f"```{proposal[:800]}```\n"
-                f"🤖 Varys")
+                f"🕷️ Varys")
             applied = True
 
     if applied:

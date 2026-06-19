@@ -91,7 +91,7 @@ def test_honesty_gate_flags_false_claim_no_upload():
 def test_honesty_gate_passes_with_confirmed_upload():
     sys.path.insert(0, str(Path(__file__).parent.parent / ".claude" / "hooks"))
     from honesty_gate import check
-    result = check("Here's the infographic you requested! 🤖 Varys", uploaded=True,
+    result = check("Here's the infographic you requested! 🕷️ Varys", uploaded=True,
                    request="make infographic")
     assert "Here's the infographic" in result
 
@@ -117,11 +117,11 @@ def test_honesty_gate_rewrites_false_claim():
     sys.path.insert(0, str(Path(__file__).parent.parent / ".claude" / "hooks"))
     import honesty_gate
 
-    fake_rewrite = "I wasn't able to upload that image. Try `nlm slides pullups` instead. 🤖 Varys"
+    fake_rewrite = "I wasn't able to upload that image. Try `nlm slides pullups` instead. 🕷️ Varys"
 
     with mock.patch.object(honesty_gate, "_rewrite_honest", return_value=fake_rewrite):
         result = honesty_gate.check(
-            draft="Here's the infographic you requested! 🤖 Varys",
+            draft="Here's the infographic you requested! 🕷️ Varys",
             uploaded=False,
             request="make infographic about pullups",
         )

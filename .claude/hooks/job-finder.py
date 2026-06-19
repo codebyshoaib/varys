@@ -586,7 +586,7 @@ def _indeed_warn(bot_token: str, reason: str):
         "text": (
             f"⚠️ *Indeed down* — {reason}\n"
             "_Log into indeed.com in Chrome or Firefox → cookies refresh automatically next run._\n"
-            "🤖 Varys"
+            "🕷️ Varys"
         ),
     })
 
@@ -977,7 +977,7 @@ def main():
         # Still tell Shoaib what we explored
         if slots_explored:
             slack_post(bot_token, {"channel": SHOAIB_DM,
-                "text": f"🔍 *Explored:* {slots_explored}\n_No new qualifying work found this pass. Back in 30 min._\n🤖 Varys"})
+                "text": f"🔍 *Explored:* {slots_explored}\n_No new qualifying work found this pass. Back in 30 min._\n🕷️ Varys"})
         log("No new qualifying jobs this run — skipping DM.")
         return 0
 
@@ -1005,7 +1005,7 @@ def main():
         lines.append("")
 
     lines.append('_Reply `apply 1`, `apply 2`, or `apply 3` → I\'ll write the proposal._')
-    lines.append("🤖 Varys")
+    lines.append("🕷️ Varys")
 
     msg    = "\n".join(lines)
     result = slack_post(bot_token, {"channel": SHOAIB_DM, "text": msg})

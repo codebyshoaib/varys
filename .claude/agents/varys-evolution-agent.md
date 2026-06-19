@@ -76,7 +76,7 @@ For approval-required changes: post proposed diff to Slack thread, set status=aw
    ```
    🧠 Self-update: I updated [filename] because [1 sentence reason].
    Change: [what was added/changed in ≤ 2 lines]
-   🤖 {{AGENT_NAME}}
+   🕷️ {{AGENT_NAME}}
    ```
 
 ## Output Format

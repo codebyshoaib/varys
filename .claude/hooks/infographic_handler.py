@@ -125,11 +125,11 @@ def handle(
     topic = extract_topic(text)
     if not topic:
         _post_text(web, channel, thread_ts,
-                   "What topic should the infographic cover? 🤖 Varys")
+                   "What topic should the infographic cover? 🕷️ Varys")
         return
 
     _post_text(web, channel, thread_ts,
-               f"🖼️ Generating infographic: *{topic}*... (1–2 min)\n🤖 Varys")
+               f"🖼️ Generating infographic: *{topic}*... (1–2 min)\n🕷️ Varys")
 
     # Step 1: Resolve NLM notebook
     try:
@@ -140,7 +140,7 @@ def handle(
         klog_error("infographic_import_fail", component="infographic_handler", error=str(e))
         _log_gap("inline_image_arbitrary", text, "import_notebooklm", "none")
         _post_text(web, channel, thread_ts,
-                   "⚠️ NotebookLM module not available. Can't generate infographic right now.\n🤖 Varys")
+                   "⚠️ NotebookLM module not available. Can't generate infographic right now.\n🕷️ Varys")
         return
 
     keywords = topic.lower().split()
@@ -156,7 +156,7 @@ def handle(
             _post_text(web, channel, thread_ts,
                        f"⚠️ NotebookLM isn't responding right now. "
                        f"Can't create a notebook for *{topic}*.\n"
-                       f"Try `nlm research {topic}` later, or I can give you a text summary. Which?\n🤖 Varys")
+                       f"Try `nlm research {topic}` later, or I can give you a text summary. Which?\n🕷️ Varys")
             return
 
     # Step 2: Query for structured key points
@@ -168,7 +168,7 @@ def handle(
         _log_gap("inline_image_arbitrary", text, "nlm_query", "text_summary")
         _post_text(web, channel, thread_ts,
                    f"⚠️ Got the notebook but couldn't extract points for *{topic}*.\n"
-                   f"Try: `nlm ask {topic} \"{query}\"`\n🤖 Varys")
+                   f"Try: `nlm ask {topic} \"{query}\"`\n🕷️ Varys")
         return
 
     import json as _json
@@ -184,7 +184,7 @@ def handle(
         _post_text(web, channel, thread_ts,
                    f"⚠️ Couldn't extract enough points from the research on *{topic}* "
                    f"(got {len(points)}).\n"
-                   f"Here's the raw research:\n```{answer_raw[:600]}```\n🤖 Varys")
+                   f"Here's the raw research:\n```{answer_raw[:600]}```\n🕷️ Varys")
         return
 
     # Step 3: Render PNG via direct import (avoids CLI separator issues)
@@ -211,12 +211,12 @@ def handle(
         lines = [f"🖼️ *{topic}* — research points (image render failed)\n"]
         for i, p in enumerate(points, 1):
             lines.append(f"{i}. {p}")
-        lines.append("\n_Pillow or font missing — install with `pip install Pillow`_\n🤖 Varys")
+        lines.append("\n_Pillow or font missing — install with `pip install Pillow`_\n🕷️ Varys")
         _post_text(web, channel, thread_ts, "\n".join(lines))
         return
 
     # Step 4: Upload to Slack
-    comment = f"🖼️ *{topic}* — sourced from NotebookLM\n🤖 Varys"
+    comment = f"🖼️ *{topic}* — sourced from NotebookLM\n🕷️ Varys"
     ok = upload_file_to_slack(bot_token, channel, outfile,
                                title=f"Infographic: {topic}", comment=comment)
     try:
@@ -226,7 +226,7 @@ def handle(
                        f"🖼️ Generated the infographic for *{topic}* but can't upload it — "
                        f"Varys app needs `files:write` scope.\n"
                        f"Fix: api.slack.com/apps → Varys → OAuth Scopes → add `files:write` → Reinstall.\n"
-                       f"File saved at: `{outfile}`\n🤖 Varys")
+                       f"File saved at: `{outfile}`\n🕷️ Varys")
             return
         klog("infographic_posted", component="infographic_handler",
              topic=topic, nb_id=nb_id, palette=palette, points=len(points))

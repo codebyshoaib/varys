@@ -267,7 +267,7 @@ def _format_slack_message(created: list[dict], learning_names: list[str]) -> str
         lines.append(f"  > {g.get('why','')[:120]}")
         if notion_url:
             lines.append(f"  <{notion_url}|Open in Notion>")
-    lines.append(f"\n{len(created)} ticket(s) created — Varys will build these.\n🤖 Varys")
+    lines.append(f"\n{len(created)} ticket(s) created — Varys will build these.\n🕷️ Varys")
     return "\n".join(lines)
 
 
