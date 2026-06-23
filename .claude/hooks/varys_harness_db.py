@@ -141,6 +141,21 @@ CREATE TABLE IF NOT EXISTS slack_queue (
     bead_id         TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_slack_queue_status_enq ON slack_queue(status, enqueued_at);
+
+CREATE TABLE IF NOT EXISTS meeting_queue (
+    id              TEXT PRIMARY KEY,
+    meeting_name    TEXT NOT NULL,
+    audio_path      TEXT NOT NULL,
+    output_dir      TEXT NOT NULL,
+    channel         TEXT NOT NULL,
+    thread_ts       TEXT NOT NULL,
+    status          TEXT NOT NULL DEFAULT 'pending',
+    retry_count     INTEGER NOT NULL DEFAULT 0,
+    enqueued_at     TEXT NOT NULL DEFAULT (datetime('now')),
+    processed_at    TEXT,
+    failure_context TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_meeting_queue_status ON meeting_queue(status, enqueued_at);
 """
 
 _db_lock = threading.Lock()
@@ -183,9 +198,14 @@ def migrate_db(db: sqlite3.Connection) -> None:
             db.execute("ALTER TABLE slack_queue ADD COLUMN failure_context TEXT")
         if "bead_id" not in sq_cols:
             db.execute("ALTER TABLE slack_queue ADD COLUMN bead_id TEXT NOT NULL DEFAULT ''")
+        # Migration 005: meeting_queue table (schema already has CREATE IF NOT EXISTS)
+        # Reset any items stuck in 'processing' from a crashed worker
+        db.execute(
+            "UPDATE meeting_queue SET status='pending' "
+            "WHERE status='processing' "
+            "AND enqueued_at < datetime('now', '-60 minutes')"
+        )
         db.commit()
-
-
 
 
 # ── Tick lock ─────────────────────────────────────────────────────────────────
@@ -484,6 +504,83 @@ def mark_slack_retry(
         _bd("note", bead_id, note)
         if exhausted:
             _bd("label", bead_id, "add", "status:failed")
+
+
+# ── Meeting queue ─────────────────────────────────────────────────────────────
+
+def enqueue_meeting(
+    db: sqlite3.Connection,
+    meeting_name: str,
+    audio_path: str,
+    output_dir: str,
+    channel: str,
+    thread_ts: str,
+) -> str:
+    """Insert a meeting transcription job. Returns the new job id (uuid4)."""
+    import uuid as _uuid
+    job_id = str(_uuid.uuid4())
+    with _db_lock:
+        db.execute(
+            "INSERT INTO meeting_queue "
+            "(id, meeting_name, audio_path, output_dir, channel, thread_ts) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (job_id, meeting_name, audio_path, output_dir, channel, thread_ts),
+        )
+        db.commit()
+    return job_id
+
+
+def dequeue_pending_meeting(db: sqlite3.Connection) -> tuple | None:
+    """Return one pending meeting row (FIFO) or None if queue is empty."""
+    return db.execute(
+        "SELECT id, meeting_name, audio_path, output_dir, channel, thread_ts, "
+        "retry_count, failure_context "
+        "FROM meeting_queue WHERE status='pending' ORDER BY enqueued_at ASC LIMIT 1"
+    ).fetchone()
+
+
+def mark_meeting_processing(db: sqlite3.Connection, row_id: str) -> None:
+    with _db_lock:
+        db.execute(
+            "UPDATE meeting_queue SET status='processing' WHERE id=?", (row_id,)
+        )
+        db.commit()
+
+
+def mark_meeting_done(db: sqlite3.Connection, row_id: str) -> None:
+    with _db_lock:
+        db.execute(
+            "UPDATE meeting_queue SET status='done', processed_at=datetime('now') WHERE id=?",
+            (row_id,),
+        )
+        db.commit()
+
+
+def mark_meeting_retry(
+    db: sqlite3.Connection,
+    row_id: str,
+    max_retries: int = 3,
+    failure_context: str = "",
+) -> None:
+    """On error: store failure context, retry up to max_retries, then mark failed."""
+    with _db_lock:
+        row = db.execute(
+            "SELECT retry_count FROM meeting_queue WHERE id=?", (row_id,)
+        ).fetchone()
+        exhausted = row and row[0] >= max_retries
+        if exhausted:
+            db.execute(
+                "UPDATE meeting_queue SET status='failed', processed_at=datetime('now'), "
+                "failure_context=? WHERE id=?",
+                (failure_context, row_id),
+            )
+        else:
+            db.execute(
+                "UPDATE meeting_queue SET status='pending', retry_count=retry_count+1, "
+                "failure_context=? WHERE id=?",
+                (failure_context, row_id),
+            )
+        db.commit()
 
 
 if __name__ == "__main__":
