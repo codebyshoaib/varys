@@ -490,8 +490,15 @@ def main():
     _persist_context(channel_summaries, now_label)
     _update_people_map(channel_summaries, name_map, datetime.now().strftime("%Y-%m-%d"), notion_key)
 
-    STATE_FILE.write_text(json.dumps({"last_run_ts": str(datetime.now().timestamp()),
-                                      "last_run_label": now_label}))
+    # Advance the window ONLY on a delivered DM. If the DM failed (network /
+    # Slack outage / rate limit), DON'T move last_run_ts — otherwise this
+    # window's messages fall outside the next run's lookback and are lost
+    # forever. Preserving it lets the retry/catch-up re-deliver the same window.
+    if ok:
+        STATE_FILE.write_text(json.dumps({"last_run_ts": str(datetime.now().timestamp()),
+                                          "last_run_label": now_label}))
+    else:
+        log("DM FAILED — NOT advancing last_run_ts; window preserved for retry/catch-up.")
     klog("intel-digest", component="intel", action="digest",
          channels=len(channel_summaries), dm_ok=ok)
     log("Done.")
