@@ -7,7 +7,7 @@ After every conversation:
    rate the batch (0-100 + a one-line note per page_id), then HTTP-PATCHes each row:
    Score=<n>, Pass=(score>=70), Notes appended with the judge note.
 3. Pass=false rows are minted into .beads/failures.jsonl (deduped by Notion page_id)
-   to fuel varys-evolution-agent.py.
+   to fuel the proactive evolution loop (varys-proactive-evolve.py) + varys-reflect.py.
 4. confidence_score() reports pass_pct / avg_score over all scored rows.
 
 All DB reads/writes go through varys_notion.notion_request() (the mandated rate-limited
@@ -398,7 +398,7 @@ def _mint_failures(wrong_rows: list) -> int:
     """
     Append one failures.jsonl line per failing row, deduped by Notion page_id.
 
-    Each entry carries a `ts` (ISO) so varys-evolution-agent's counter sees it.
+    Each entry carries a `ts` (ISO) so the evolution loop's trajectory sees it.
     The minted entry depends ONLY on structured, sanitised fields (page_id,
     failure_type, capped note) — never on free-form task text, which could carry
     newlines/quotes that corrupt the JSON line. Returns the count of new entries.

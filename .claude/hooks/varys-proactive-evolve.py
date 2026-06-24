@@ -22,7 +22,7 @@ disturbed.
     1. FENCE     — every changed/created file is inside the fence & not denylisted
     2. COMPILE   — every changed *.py byte-compiles (py_compile)
     3. TEST      — all test_*.py under .claude/hooks pass; Tier-1 grader for rules/agents
-    4. SEMANTIC  — LLM judge (imported from varys-evolution-agent) vetoes harmful diffs
+    4. SEMANTIC  — LLM judge (varys_semantic_gate) vetoes harmful diffs
 
 The gates run BEFORE the PR is opened, so a reviewer never sees a diff that doesn't
 compile or pass tests. Varys's own failures.jsonl records an auto-fix loop that
@@ -32,7 +32,6 @@ plus the PR itself is a second, human gate before anything reaches master.
 Cron: 0 */8 * * * cd ~/varys && .claude/hooks/cron-wrap.sh varys-proactive-evolve python3 .claude/hooks/varys-proactive-evolve.py >> /tmp/varys-evolve.log 2>&1
 """
 
-import importlib.util
 import json
 import os
 import re
@@ -61,7 +60,6 @@ LOCK_FILE     = HARNESS_DIR / "proactive-evolve.lock"
 LAST_RUN_FILE = HARNESS_DIR / "proactive-evolve-last-run.txt"
 RECOVERY_DIR  = HARNESS_DIR / "proactive-evolve-recovery"
 TIER1_GRADER  = VARYS_DIR / ".claude" / "evals" / "graders" / "run-tier1.sh"
-EVOLUTION_AGENT_PY = HOOKS_DIR / "varys-evolution-agent.py"
 
 MODEL          = "claude-opus-4-8"
 RUN_GAP_HOURS  = 8
@@ -81,7 +79,7 @@ DENYLIST_FRAGMENTS = (
     ".slack", ".notion", ".env", "crontab",
     "varys-slack-listener",            # the Socket Mode daemon — never auto-edit
     "varys-proactive-evolve.py",       # this loop must not edit itself
-    "varys-evolution-agent.py",        # nor its sibling gate
+    "varys_semantic_gate.py",          # nor its own safety judge
     "agent_config.py",                 # config plumbing — fenced off
 )
 
@@ -95,30 +93,11 @@ def _is_allowed(rel_path: str) -> bool:
 # ── Import the evolution agent's semantic judge (single-source the safety veto) ──
 
 def _load_semantic_judge():
-    """Import _build_semantic_judge_prompt / _run_semantic_judge / _parse_semantic_verdict
-    from varys-evolution-agent.py (hyphenated → importlib by path). Returns a callable
-    semantic_gate(diff) -> verdict str ('keep'|'revert'), or a fail-safe stub that
-    returns 'revert' if the import fails (doubt biases toward reverting)."""
+    """Return the shared semantic_gate(diff) callable, or a fail-safe stub that
+    reverts if the module can't be imported (doubt biases toward reverting)."""
     try:
-        spec = importlib.util.spec_from_file_location("varys_evolution_agent",
-                                                      str(EVOLUTION_AGENT_PY))
-        mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
-
-        def judge(diff: str) -> dict:
-            if not diff or not diff.strip():
-                return {"verdict": "keep", "reason": "empty diff", "gate": "semantic-noop"}
-            try:
-                raw = mod._run_semantic_judge(mod._build_semantic_judge_prompt(diff))
-                if not raw:
-                    return {"verdict": "revert", "reason": "judge produced no output",
-                            "gate": "semantic-error"}
-                verdict, reason, risk = mod._parse_semantic_verdict(raw)
-                return {"verdict": verdict, "reason": reason, "gate": "semantic"}
-            except Exception as e:
-                return {"verdict": "revert", "reason": f"judge error: {e}",
-                        "gate": "semantic-error"}
-        return judge
+        from varys_semantic_gate import semantic_gate
+        return semantic_gate
     except Exception as e:
         klog_error("proactive-evolve-judge-import", e, component="proactive-evolve")
         return lambda diff: {"verdict": "revert",
@@ -300,7 +279,7 @@ Then IMPLEMENT it. Hard constraints:
 {fence}
   - NEVER touch: settings.json, any .slack/.notion/.env secret, crontab, the Slack
     listener daemon, agent_config.py, or the evolution gate scripts
-    (varys-proactive-evolve.py, varys-evolution-agent.py).
+    (varys-proactive-evolve.py, varys_semantic_gate.py).
   - If you edit or create a .py hook, it MUST byte-compile AND you MUST add a sibling
     `test_<module>.py` in .claude/hooks/ (matching the repo convention — see
     test_eval_loop.py, test_varys_tick.py). It must `import` the module you changed,

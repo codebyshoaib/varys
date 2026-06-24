@@ -34,7 +34,7 @@ owner: varys
 | Claude API / Anthropic SDK work | `claude-api` |
 | taleemabad-core bug/feature/white-screen/crash | `taleemabad-bug-agent` |
 | stuck/blocked 2+ ticks / confidence < 40 | `escalation-broker` |
-| {{AGENT_NAME}} keeps getting X wrong / "fix your behavior" / "varys evolve" | `varys-evolution-agent` |
+| {{AGENT_NAME}} keeps getting X wrong / "fix your behavior" / "varys evolve" | Autonomous: `varys-proactive-evolve.py` (8h cron) reads learnings+failures → branch off master → gate → PR. Force now: `FORCE_RUN=1 python3 .claude/hooks/varys-proactive-evolve.py`. |
 | job / freelance / "apply 1/2/3" / proposal / "what jobs came in" | `job-agent` |
 
 If unsure which applies, prefer invoking the closest match over guessing — an invoked skill that turns out wrong can be dropped; a skipped skill is lost capability.

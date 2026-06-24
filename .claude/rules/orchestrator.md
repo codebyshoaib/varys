@@ -151,5 +151,7 @@ Dispatcher processes it on the NEXT available tick (not waiting 270s)
 12. **{{USER_NAME}} replies are fast-pathed.** When the listener detects a reply in a thread
     where the linked Notion ticket is `Blocked`, it inserts the event with
     `priority='high'` and the dispatcher skips the 270s wait for that context_key.
-13. **Evolution fires on failure accumulation.** After every tick, `varys-evolution-agent.py`
-    checks failures.jsonl. If 3+ new entries since last run → fires the evolution agent.
+13. **Evolution is autonomous and proactive.** `varys-proactive-evolve.py` (own 8h cron,
+    NOT the tick) reads active_learnings + failures, branches off master, implements one
+    improvement, gates it (fence+compile+test+semantic), and opens a PR. The old reactive
+    on-3-failures editor (`varys-evolution-agent.py`) was retired.

@@ -497,16 +497,9 @@ def main() -> int:
     except Exception as e:
         print(f"[dispatch] escalation-broker check failed: {e}", file=sys.stderr)
 
-    # ── Evolution agent: fire if 3+ new failures ──
-    try:
-        evo_script = Path(__file__).parent / "varys-evolution-agent.py"
-        if evo_script.exists():
-            subprocess.run(
-                ["python3", str(evo_script)],
-                cwd=str(VARYS_DIR), capture_output=True, text=True, timeout=60,
-            )
-    except Exception as e:
-        print(f"[dispatch] evolution-agent check failed: {e}", file=sys.stderr)
+    # Evolution is now owned by the proactive loop (varys-proactive-evolve.py, on its
+    # own 8h cron): it reads learnings + failures, branches off master, gates, and opens
+    # a PR. The old reactive on-3-failures editor was retired; the tick no longer fires it.
 
     print(f"[dispatch] Done. {spawned}/{len(context_keys)} subagents spawned.")
     klog("dispatch-complete", component="orchestrator",

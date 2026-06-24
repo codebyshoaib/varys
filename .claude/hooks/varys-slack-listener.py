@@ -786,7 +786,7 @@ Work with scope (code, bug, feature, content, research, jobs, memory, analysis):
 → Pick the right agent. Post a 1-line plan. Dispatch. You coordinate — you don't implement.
 → Agent fleet: bug-agent, content-agent, research-agent, brain-agent,
   slack-agent, notion-agent, people-agent, character-agent, job-agent,
-  evolution-agent, escalation-broker.
+  escalation-broker.
 → Routing table: .claude/rules/skills-router.md
 
 THE ONE GOVERNING RULE:
