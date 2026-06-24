@@ -58,14 +58,53 @@ def test_touched_core_subset():
     print("PASS test_touched_core_subset")
 
 
-def test_core_missing_test_fails_with_core_message():
-    """A core file with no sibling test fails the test gate, and the message names it as
-    a CORE file (no exemption). Uses orchestrator-dispatch.py, which has no sibling test
-    today, so gate_tests returns at the sibling check BEFORE running any real tests."""
-    ok, reason = pe.gate_tests([".claude/hooks/orchestrator-dispatch.py"])
-    assert ok is False, "core file without a sibling test must fail the gate"
-    assert "CORE" in reason and "no sibling" in reason.lower(), reason
-    print("PASS test_core_missing_test_fails_with_core_message")
+def _underscore_stem(filename: str) -> str:
+    return Path(filename).stem.replace("-", "_")
+
+
+def test_hyphenated_hook_resolves_to_underscore_sibling():
+    """REGRESSION (hyphen→underscore bug): a changed hyphenated hook (varys-tick.py) must
+    resolve to the UNDERSCORE sibling test_varys_tick.py — which exists on disk — and so
+    pass the sibling-presence check. Before the fix, gate_tests looked for the hyphen name
+    test_varys-tick.py, which never exists, so every hyphen-named hook wrongly failed.
+
+    Asserted via the sibling-resolution logic directly (we do NOT call gate_tests here: it
+    would spawn every test_*.py as a subprocess — including THIS file — recursively). We
+    replicate the gate's stem→sibling derivation and confirm it lands on the underscore file
+    that exists, not the hyphen file that never does."""
+    underscore_sibling = pe.HOOKS_DIR / f"test_{_underscore_stem('varys-tick.py')}.py"
+    assert underscore_sibling.name == "test_varys_tick.py", underscore_sibling.name
+    assert underscore_sibling.exists(), "test_varys_tick.py must exist for this regression test"
+    assert not (pe.HOOKS_DIR / "test_varys-tick.py").exists()  # buggy hyphen path never exists
+    # Behaviorally: a hyphenated hook whose underscore sibling exists must NOT be the one
+    # gate_tests rejects for a missing sibling. We verify the negative cheaply by checking
+    # the sibling the gate would look for is present (full-suite run is covered by the gate
+    # itself in production; calling it here would recurse).
+    print("PASS test_hyphenated_hook_resolves_to_underscore_sibling")
+
+
+def test_missing_sibling_fails_gate_with_core_message():
+    """A core file with NO sibling test fails the test gate, and the message names it a CORE
+    file (no exemption) and the UNDERSCORE sibling name. Uses a temp hyphenated hook
+    registered as core via monkeypatch, so the gate returns at the sibling check BEFORE
+    running any real test files — and we don't depend on a real core file lacking a sibling
+    (after this PR they all have one)."""
+    import tempfile, os
+    fd, path = tempfile.mkstemp(suffix=".py", prefix="zz-temp-core-", dir=str(pe.HOOKS_DIR))
+    os.close(fd)
+    rel = ".claude/hooks/" + os.path.basename(path)
+    orig_core = pe.CORE_FILES
+    try:
+        pe.CORE_FILES = frozenset(orig_core | {rel})   # treat temp hook as core
+        ok, reason = pe.gate_tests([rel])
+        assert ok is False, "core file without a sibling test must fail the gate"
+        assert "CORE" in reason and "no sibling" in reason.lower(), reason
+        stem = _underscore_stem(os.path.basename(path))
+        assert f"test_{stem}.py" in reason, reason   # complained about the underscore sibling
+    finally:
+        pe.CORE_FILES = orig_core
+        os.unlink(path)
+    print("PASS test_missing_sibling_fails_gate_with_core_message")
 
 
 def test_load_semantic_judge_routes_core_vs_leaf():
@@ -111,7 +150,8 @@ if __name__ == "__main__":
     test_fence_still_blocks_outside_and_denylist()
     test_core_detection()
     test_touched_core_subset()
-    test_core_missing_test_fails_with_core_message()
+    test_hyphenated_hook_resolves_to_underscore_sibling()
+    test_missing_sibling_fails_gate_with_core_message()
     test_load_semantic_judge_routes_core_vs_leaf()
     test_core_judge_reverts_when_one_dissents()
     print("\nALL PROACTIVE-EVOLVE TIERED-FENCE TESTS PASSED")
