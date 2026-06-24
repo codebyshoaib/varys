@@ -132,7 +132,7 @@ blunt, specific, forward-looking, never blaming. The closing line is a quiet, co
 def _solution_policy(user_id):
     return f"""Tailor the relief to WHO the person is — this is not optional:
 - SHOAIB (slack_id = {user_id}) is the king Varys serves. ONLY for him may you offer to take the
-  work on directly — "leave it with me", "pass it to me". Varys does that chore himself.
+  work on directly — "leave it with me, my Lord", "pass it to me,my Lord". Varys does that chore himself.
 - EVERYONE ELSE: Varys does NOT do their job for them. He hands them leverage they own and run.
   Offer a concrete tool, automation, or process THAT PERSON operates. Never "Varys will do it".
 
@@ -208,9 +208,9 @@ a specific solution. If nobody is genuinely stuck, return {{"affected": []}}."""
 
 def compose_message(affected, day_label):
     lines = [
-        f"*A few whispers from the Punjab channels — {day_label}*",
-        "My little birds noticed some of you carrying more than you should. "
-        "Not a nudge to do more — an offer to make the load lighter. Ignore any that miss the mark.",
+        f"*My Little birds heard a few whispers from the Punjab channels, today — {day_label}*",
+        "They noticed some of you carrying more than you should. "
+        "Not a nudge to do more — an offer to make the load lighter.",
         "",
     ]
     for p in affected:
@@ -304,17 +304,29 @@ def main():
                       f"{'✅ Posted to' if ok else '⚠️ FAILED to post to'} #{POST_CHANNEL}:\n\n{channel_text}")
         log(f"posted to channel: {ok}")
     else:
+        # Register the pending message so a DM reply ("post" / "amend ..." / "cancel") can act on it.
+        # slack-worker.py picks up the reply and calls friction_approval.maybe_handle().
+        try:
+            (Path.home() / ".varys-harness" / "friction-pending.json").write_text(json.dumps({
+                "channel_target": POST_CHANNEL,
+                "channel_id": chan_ids[POST_CHANNEL],
+                "message": channel_text,
+                "approver_id": user_id,
+                "at": day_label,
+            }, indent=1))
+        except Exception as e:
+            log(f"could not write pending state: {e}")
         detail = "\n".join(
             f"• *{p['name']}* (conf {p.get('confidence')}): {p.get('root_cause', '').strip()}\n   evidence: {p.get('evidence', '').strip()[:200]}"
             for p in affected)
         preview = (
-            f"*🧭 Region Friction Coach — PREVIEW (not posted)*\n"
-            f"Would post the message below to #{POST_CHANNEL}. Re-run with `--post` "
-            f"(or set REGION_COACH_AUTOPOST=1) to send it for real.\n"
+            f"*🧭 Region Friction Coach — awaiting your word*\n"
+            f"Reply *post* to send the message below to #{POST_CHANNEL}, *amend …* (or *add …* / "
+            f"*remove …*) to change it — I'll revise and ask again — or *cancel* to drop it.\n"
             f"\n*Why each (your eyes only):*\n{detail}\n"
             f"\n———  message that would post  ———\n{channel_text}")
         _d._dm_shoaib(bot_token, user_id, preview)
-        log(f"DM'd preview of {len(affected)} findings to Shoaib")
+        log(f"DM'd preview of {len(affected)} findings to Shoaib; pending registered")
     return 0
 
 
