@@ -19,6 +19,7 @@
 | NotebookLM registry + smart routing              | `.claude/rules/notebooklm.md`       |
 | Infographic gen conventions (NLM, 4:5 fix)       | `.claude/rules/infographics.md`     |
 | Team orchestrator rules + event types            | `.claude/rules/orchestrator.md`     |
+| Delegated implementer / worktree handoff protocol | `.claude/rules/worktree-handoff.md` |
 | Active work / decisions / failures               | `.beads/`                           |
 | Doc-type, retrieval, invocation, metadata policy | `.claude/standards/`                |
 | Eval harness                                     | `.claude/evals/`                    |
