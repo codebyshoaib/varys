@@ -244,6 +244,7 @@ Use mcp__claude_ai_Notion__notion-create-pages with parent page id $VL_PARENT:
         auto-applied and that Shoaib was already DMed the summary.
 
 Do NOT DM or post anything. End by printing a one-line summary of beads created.
+(Self-reflection / learnings are NOT this run's job — varys-reflect.py owns that loop.)
 PROMPT
 )" 2>&1 || echo "[varys-learn] WARN: proposal subprocess returned nonzero" >&2
 

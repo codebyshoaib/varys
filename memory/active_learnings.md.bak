@@ -1,0 +1,52 @@
+# Active Learnings
+
+Self-reflection — what Varys has learned about how it works, what it values, and how it's growing.
+
+## Lesson: Duplicate hook files with hyphen/underscore spellings coexist in .claude/hooks/
+**Session:** varys-2026-06-01 | **Date:** 2026-06-01 | **Source:** failure-log
+
+**Context:** Files were copied/renamed without removing the old spelling: auto-apply.py vs auto_apply.py, internet-scanner.py vs internet_scanner.py, openoutreach-monitor.py vs openoutreach_monitor.py, trend-scanner.py vs trend_scanner.py
+
+Before deleting any duplicate, grep crontab AND all .py imports for BOTH spellings. Underscore versions are likely the importable module names (varys_log etc. use underscores).
+
+## Lesson: Varys had no PreToolUse hooks — nothing mechanically blocked dangerous commands
+**Session:** varys-2026-06-01 | **Date:** 2026-06-01 | **Source:** failure-log
+
+**Context:** settings.json only wired SessionStart/UserPromptSubmit/PostToolUse/Stop; the feedback/enforcement half of the harness was missing.
+
+Guides without sensors = a style guide nobody enforces. Enforcement must be mechanical (exit 2), not a CLAUDE.md request.
+
+## Lesson: Self-healing loop became a noise/damage source
+**Session:** varys-2026-06-01 | **Date:** 2026-06-01 | **Source:** failure-log
+
+**Context:** varys-self-healer.py used bare `pgrep -f` (false-negative/self-match flapping), observer queries stale Axiom errors with no idempotency, and auto-fix shells `claude -p` with no diff review, test, or verification of the underlying diagnosis.
+
+A feedback/healing system needs idempotency and verification MORE than a feature does. Never let an auto-fixer edit+commit on an unverified, possibly-stale diagnosis. Detection must not self-match (pgrep -f matches the checker's own cmdline).
+
+## Lesson: Verify a claimed error is CURRENT before acting
+**Session:** varys-2026-06-01 | **Date:** 2026-06-01 | **Source:** failure-log
+
+**Context:** Real bug was the feedback LOOP (varys-self-healer.py: false-positive down, always-DM, Claude re-diagnosing stale errors every 10min with no idempotency), not content-scheduler code itself. Initial blame was misplaced.
+
+Before acting on a diagnosis, re-run/re-compile to confirm the error is current. Don't auto-commit unverified edits. When alarmed, check the actual diff before calling something 'damage' — false attribution wastes energy and erodes trust in feedback systems.
+
+## Lesson: Local .beads/*.jsonl is the source of truth for work tracking
+**Session:** varys-2026-06-01 | **Date:** 2026-06-01 | **Source:** architecture-decision
+
+**Context:** Slack/cron Varys runs offline-ish and MCP can be unavailable mid-session; append-only local JSONL survives context resets with no network dependency.
+
+Notion Harness DB is a mirror, not the authoritative source. **Revisit when:** If the Notion mirror proves unreliable or Shoaib stops using the dashboard.
+
+## Lesson: Make Varys skill-aware via skills-router.md + listener prompt injection
+**Session:** varys-2026-06-01 | **Date:** 2026-06-01 | **Source:** architecture-decision
+
+**Context:** Every Slack/cron Varys runs `claude -p` in this repo but never learns its own installed skill arsenal, so it free-solos research/debugging/UI/slides instead of routing to proven skills.
+
+Route skill-aware work early. **Revisit when:** When the installed skill set changes materially.
+
+## Lesson: Observability = extend varys_log (OTel envelope) → Axiom + Notion signals
+**Session:** varys-2026-06-01 | **Date:** 2026-06-01 | **Source:** architecture-decision
+
+**Context:** Shoaib wants every event logged industry-standard (OTel envelopes), mirrored to Notion with explicit issue status, and a loop that solves/improves itself based on patterns.
+
+**Revisit when:** If Axiom volume/cost spikes or auto-fix produces a bad edit.

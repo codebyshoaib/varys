@@ -22,6 +22,7 @@ except Exception:
     _k = None
 
 INBOX_FILE = Path("/tmp/agent-slack-inbox.json")
+VARYS_DIR  = Path(__file__).parent.parent.parent
 
 # Notion DB page IDs — used by Claude's MCP fetch calls
 from agent_config import cfg
@@ -252,6 +253,24 @@ def build_system_message() -> str:
         lines.append("")
     except Exception:
         pass  # live context is best-effort
+
+    # Inject active_learnings.md + trajectory (yoyo-style accumulated self-knowledge)
+    try:
+        active_l = VARYS_DIR / "memory" / "active_learnings.md"
+        if active_l.exists():
+            content = active_l.read_text().strip()
+            if content and "No entries yet" not in content:
+                lines.append("## 🧠 SELF-WISDOM (accumulated learnings — read before acting)")
+                lines.append(content)
+                lines.append("")
+        traj = VARYS_DIR / "memory" / "trajectory.md"
+        if traj.exists():
+            content = traj.read_text().strip()
+            if content and "no trajectory data yet" not in content:
+                lines.append(content)
+                lines.append("")
+    except Exception:
+        pass
 
     # Surface recent learnings from brain.db
     try:
