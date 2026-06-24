@@ -4,9 +4,12 @@ varys-proactive-evolve.py — Varys's proactive evolution loop. The yoyo action 
 
 This is the half that ACTS on learnings (the reflection loop only records them).
 Every ~8h Varys wakes up, reads what it has learned about itself + its trajectory +
-open beads, picks ONE concrete improvement traceable to a learning, implements it
-INSIDE THE FENCE, gates it hard, and — on a clean pass — commits to master, pushes,
-and DMs Shoaib. On any gate failure it reverts to the pre-run SHA and logs it.
+open beads, BRANCHES OFF the latest master, picks ONE concrete improvement traceable
+to a learning, implements it INSIDE THE FENCE (adding tests), gates it hard, and — on
+a clean pass — pushes the branch and opens a PR, then DMs Shoaib the link. The PR is
+the human gate: nothing merges to master without Shoaib's review. On any gate failure
+the branch is discarded and the failure logged. The user's working branch is never
+disturbed.
 
   Fence (the ONLY paths it may touch):
     .claude/rules/  .claude/agents/  .claude/hooks/  .claude/skills/
@@ -21,11 +24,10 @@ and DMs Shoaib. On any gate failure it reverts to the pre-run SHA and logs it.
     3. TEST      — all test_*.py under .claude/hooks pass; Tier-1 grader for rules/agents
     4. SEMANTIC  — LLM judge (imported from varys-evolution-agent) vetoes harmful diffs
 
-Auto-commit to master is deliberate (Shoaib chose full-yoyo, no human gate) — which
-is exactly why the gates are strict. Varys's own failures.jsonl records an auto-fix
-loop that committed confident-wrong edits with NO test gate; this loop is the
-corrective: nothing reaches master that didn't compile, pass tests, and survive an
-adversarial semantic review.
+The gates run BEFORE the PR is opened, so a reviewer never sees a diff that doesn't
+compile or pass tests. Varys's own failures.jsonl records an auto-fix loop that
+committed confident-wrong edits with NO test gate; this loop is the corrective —
+plus the PR itself is a second, human gate before anything reaches master.
 
 Cron: 0 */8 * * * cd ~/varys && .claude/hooks/cron-wrap.sh varys-proactive-evolve python3 .claude/hooks/varys-proactive-evolve.py >> /tmp/varys-evolve.log 2>&1
 """
@@ -419,6 +421,45 @@ def _release_lock() -> None:
     LOCK_FILE.unlink(missing_ok=True)
 
 
+# ── branch / PR plumbing ───────────────────────────────────────────────────
+
+def _slugify(title: str) -> str:
+    s = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
+    return s[:48] or "improvement"
+
+
+def _current_branch() -> str:
+    return _git(["rev-parse", "--abbrev-ref", "HEAD"]).stdout.strip()
+
+
+def _resolve_base() -> tuple[str, str]:
+    """Fetch origin (best effort) and pick the base ref to branch from.
+    Returns (base_ref_name, base_sha). Prefers origin/master, then origin/main,
+    then local master/main, then current HEAD as a last resort."""
+    _git(["fetch", "origin"], timeout=120)
+    for ref in ("origin/master", "origin/main", "master", "main"):
+        r = _git(["rev-parse", "--verify", "--quiet", ref])
+        if r.returncode == 0 and r.stdout.strip():
+            return ref, r.stdout.strip()
+    return "HEAD", _head_sha()
+
+
+def _open_pr(branch: str, base: str, title: str, body: str) -> str:
+    """Open a PR via gh. Returns the PR URL, or '' on failure."""
+    # base for the PR is the bare branch name (strip any origin/ prefix)
+    base_branch = base.split("/", 1)[1] if base.startswith("origin/") else base
+    if base_branch in ("HEAD",):
+        base_branch = "master"
+    r = subprocess.run(
+        ["gh", "pr", "create", "--base", base_branch, "--head", branch,
+         "--title", title, "--body", body],
+        cwd=str(VARYS_DIR), capture_output=True, text=True, timeout=120,
+    )
+    out = (r.stdout + r.stderr).strip()
+    m = re.search(r"https://github\.com/\S+/pull/\d+", out)
+    return m.group(0) if m else ""
+
+
 # ── main ─────────────────────────────────────────────────────────────────
 
 def main() -> int:
@@ -430,6 +471,22 @@ def main() -> int:
         print("[evolve] another run holds the lock — skipping.")
         return 0
 
+    original_branch = ""
+    evolve_branch   = ""
+    base_ref        = ""
+    base_sha        = ""
+
+    def _return_home():
+        """Reset any uncommitted work and switch back to the user's branch.
+        Deletes the evolve branch if it was created and not the current HEAD."""
+        _git(["reset", "--hard"])
+        for prefix in FENCE_PREFIXES:
+            _git(["clean", "-fd", "--", prefix])
+        if original_branch and _current_branch() != original_branch:
+            _git(["checkout", original_branch])
+        if evolve_branch:
+            _git(["branch", "-D", evolve_branch])
+
     try:
         print(f"[evolve] Starting at {started.isoformat()}")
 
@@ -438,17 +495,29 @@ def main() -> int:
             print("[evolve] working tree dirty at start — skipping (won't risk a bad revert).")
             return 0
 
-        # Refresh trajectory BEFORE taking the start SHA, then restore the file:
-        # build_prompt() reads the fresh content into the prompt string, but the
-        # on-disk artifact (memory/trajectory.md, outside the fence) must not be
-        # left dirty or change-detection would flag it and revert the agent's work.
+        original_branch = _current_branch()
+
+        # Build the prompt off fresh trajectory, then discard the artifact write.
         _refresh_trajectory()
         prompt = build_prompt()
-        _git(["checkout", "--", "memory/trajectory.md"])  # discard our artifact write
+        _git(["checkout", "--", "memory/trajectory.md"])
 
-        start_sha = _head_sha()
+        # ── Branch off the latest master (clean, isolated PR base) ──
+        base_ref, base_sha = _resolve_base()
+        ts = started.strftime("%Y%m%d-%H%M%S")
+        evolve_branch = f"evolve/{ts}"
+        co = _git(["checkout", "-b", evolve_branch, base_ref])
+        if co.returncode != 0:
+            print(f"[evolve] could not branch off {base_ref}: {co.stderr[:200]} — aborting.")
+            evolve_branch = ""   # not created
+            _return_home()
+            _mark_run()
+            return 0
+        print(f"[evolve] branched {evolve_branch} off {base_ref} ({base_sha[:8]})")
+
         semantic_judge = _load_semantic_judge()
-        recovery = _capture_recovery(start_sha)  # belt-and-suspenders (tree is clean, so usually "")
+
+        # ── Spawn the implement agent on the clean branch ──
         try:
             result = subprocess.run(
                 ["claude", "--dangerously-skip-permissions", "--print", "-p", prompt,
@@ -456,8 +525,8 @@ def main() -> int:
                 cwd=str(VARYS_DIR), capture_output=True, text=True, timeout=900,
             )
         except subprocess.TimeoutExpired:
-            print("[evolve] agent timed out (900s) — reverting any partial work.")
-            _hard_revert(start_sha)
+            print("[evolve] agent timed out (900s) — discarding branch.")
+            _return_home()
             _mark_run()
             return 0
 
@@ -465,85 +534,111 @@ def main() -> int:
         title = meta.get("title", "")
         if not title:
             print(f"[evolve] no improvement this run: {meta.get('summary', '(no json)')}")
-            _hard_revert(start_sha)   # clean up any stray edits the agent left
+            _return_home()
             _mark_run()
             return 0
 
-        changed = _changed_files(start_sha)
+        changed = _changed_files(base_sha)
         if not changed:
-            print(f"[evolve] agent claimed '{title}' but changed no files — nothing to gate.")
+            print(f"[evolve] agent claimed '{title}' but changed no files — discarding branch.")
+            _return_home()
             _mark_run()
             return 0
 
         print(f"[evolve] proposal: {title}")
         print(f"[evolve] changed: {', '.join(changed)}")
 
-        # ── Gates (any failure → hard revert) ──
+        # ── Gates (any failure → discard branch, log, DM) ──
+        def _fail(gate_name: str, reason: str):
+            print(f"[evolve] GATE FAIL ({gate_name}): {reason}")
+            _return_home()
+            _log_failure(title, reason, gate_name)
+            _dm_shoaib(f"🕷️ Evolution discarded — *{title}*\n{gate_name} gate: {reason}\n"
+                       f"No PR opened.")
+            klog("proactive-evolve", component="proactive-evolve",
+                 result="discarded", gate=gate_name, title=title)
+            _mark_run()
+
         for gate_name, gate_fn in [("fence", gate_fence), ("compile", gate_compile),
                                    ("test", gate_tests)]:
             ok, reason = gate_fn(changed)
             if not ok:
-                print(f"[evolve] GATE FAIL ({gate_name}): {reason}")
-                _hard_revert(start_sha)
-                _log_failure(title, reason, gate_name)
-                _dm_shoaib(f"🕷️ Evolution reverted — *{title}*\n{gate_name} gate: {reason}\n"
-                           f"Nothing reached master.")
-                klog("proactive-evolve", component="proactive-evolve",
-                     result="reverted", gate=gate_name, title=title)
-                _mark_run()
+                _fail(gate_name, reason)
                 return 0
 
-        # Semantic gate (on the full diff vs start)
-        diff = _git(["diff", start_sha]).stdout
+        diff = _git(["diff", base_sha]).stdout
         verdict = semantic_judge(diff)
         if verdict["verdict"] == "revert":
-            print(f"[evolve] GATE FAIL (semantic): {verdict['reason']}")
-            _hard_revert(start_sha)
-            _log_failure(title, verdict["reason"], "semantic")
-            _dm_shoaib(f"🕷️ Evolution reverted — *{title}*\nsemantic judge vetoed: "
-                       f"{verdict['reason']}\nNothing reached master.")
-            klog("proactive-evolve", component="proactive-evolve",
-                 result="reverted", gate="semantic", title=title)
-            _mark_run()
+            _fail("semantic", verdict["reason"])
             return 0
 
-        # ── All gates passed → commit to master + push ──
+        # ── All gates passed → commit on branch, push, open PR ──
         _git(["add", "--", *FENCE_PREFIXES])
-        msg = (f"evolve: {title}\n\n{meta.get('summary', '')}\n\n"
-               f"Driven by learning: {meta.get('learning', 'n/a')}\n"
-               f"Test: {meta.get('test', 'n/a')}\n\n"
-               f"🕷️ Autonomous evolution (gated: fence+compile+test+semantic)\n"
-               f"Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>")
-        commit = _git(["commit", "--no-verify", "-m", msg])
+        commit_msg = (
+            f"evolve: {title}\n\n{meta.get('summary', '')}\n\n"
+            f"Driven by learning: {meta.get('learning', 'n/a')}\n"
+            f"Test: {meta.get('test', 'n/a')}\n\n"
+            f"🕷️ Autonomous evolution (gated: fence+compile+test+semantic)\n"
+            f"Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>")
+        commit = _git(["commit", "--no-verify", "-m", commit_msg])
         if commit.returncode != 0:
-            print(f"[evolve] commit failed: {commit.stderr[:200]} — reverting.")
-            _hard_revert(start_sha)
+            print(f"[evolve] commit failed: {commit.stderr[:200]} — discarding.")
+            _return_home()
             _mark_run()
             return 0
 
+        # rename branch to a descriptive slug now that we know the title
+        slug_branch = f"evolve/{started.strftime('%Y%m%d')}-{_slugify(title)}"
+        if _git(["branch", "-m", slug_branch]).returncode == 0:
+            evolve_branch = slug_branch
         new_sha = _head_sha()
-        push = _git(["push"], timeout=120)
-        pushed = push.returncode == 0
-        _log_success(meta, new_sha)
 
-        files_str = ", ".join(meta.get("files", changed))
+        push = _git(["push", "-u", "origin", evolve_branch], timeout=120)
+        if push.returncode != 0:
+            print(f"[evolve] push failed: {push.stderr[:200]}")
+            _dm_shoaib(f"🕷️ Evolution committed but PUSH FAILED — *{title}*\n"
+                       f"Branch `{evolve_branch}` exists locally only.\n{push.stderr[:200]}")
+            _return_home()  # branch stays? no — it's local only; return home, leave branch
+            evolve_branch = ""   # don't delete — keep the local branch for inspection
+            _mark_run()
+            return 0
+
+        pr_body = (
+            f"## 🕷️ Autonomous self-evolution\n\n"
+            f"**What changed:** {meta.get('summary', '')}\n\n"
+            f"**Driven by learning:** {meta.get('learning', 'n/a')}\n\n"
+            f"**Test added/run:** {meta.get('test', 'n/a')}\n\n"
+            f"**Files:** {', '.join(meta.get('files', changed))}\n\n"
+            f"**Gates passed:** fence ✅ · compile ✅ · test ✅ · semantic ✅\n\n"
+            f"Branched off `{base_ref}`. Reviewed by you before merge — this is the "
+            f"human gate.\n\n"
+            f"🤖 Generated with [Claude Code](https://claude.com/claude-code)")
+        pr_url = _open_pr(evolve_branch, base_ref, f"evolve: {title}", pr_body)
+
+        _log_success({**meta, "pr": pr_url, "branch": evolve_branch}, new_sha)
+        evolve_branch = ""   # shipped — do NOT delete it in _return_home
+        _return_home()       # back to the user's branch, working tree clean
+
         _dm_shoaib(
             f"🕷️ *Evolved myself* — {title}\n"
             f"{meta.get('summary', '')}\n"
             f"_Driven by:_ {meta.get('learning', 'n/a')}\n"
-            f"_Files:_ {files_str}\n"
+            f"_Files:_ {', '.join(meta.get('files', changed))}\n"
             f"_Gates:_ fence ✅ compile ✅ test ✅ semantic ✅\n"
-            f"_Commit:_ `{new_sha[:8]}` {'(pushed)' if pushed else '(push failed — committed locally)'}"
-        )
+            + (f"_PR:_ {pr_url}" if pr_url else "_PR:_ (gh pr create failed — branch pushed, open it manually)"))
         klog("proactive-evolve", component="proactive-evolve",
-             result="applied", title=title, sha=new_sha, pushed=pushed)
-        print(f"[evolve] APPLIED {new_sha[:8]} — {title} (pushed={pushed})")
+             result="pr-opened", title=title, sha=new_sha, pr=pr_url)
+        print(f"[evolve] PR OPENED — {title}\n  {pr_url or '(branch pushed; PR creation failed)'}")
         _mark_run()
         return 0
 
     except Exception as e:
         klog_error("proactive-evolve-main", e, component="proactive-evolve", severity="ERROR")
         print(f"[evolve] ERROR: {e}")
+        try:
+            _return_home()
+        except Exception:
+            pass
         return 1
     finally:
         dur = (datetime.now(timezone.utc) - started).total_seconds() * 1000
