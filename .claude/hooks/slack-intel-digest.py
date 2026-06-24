@@ -96,40 +96,63 @@ def slack_get(token: str, endpoint: str, params: dict = None) -> dict:
         return {}
 
 
-def list_member_channels(token: str):
-    """Every non-archived channel the bot is a member of → {id: name}. Mirrors the listener scan.
-    Returns None on a HARD API failure (no network / bad token) so the caller can abort WITHOUT
-    advancing the watermark — otherwise a failed catch-up run would silently burn the missed window."""
-    channels, cursor, any_ok = {}, None, False
+def _list(token: str, types: str, member_only: bool):
+    """Paginate conversations.list. Returns {id: '#name'} or None on first-call failure."""
+    out, cursor, any_ok = {}, None, False
     while True:
-        params = {"types": "public_channel,private_channel", "exclude_archived": "true", "limit": 200}
+        params = {"types": types, "exclude_archived": "true", "limit": 200}
         if cursor:
             params["cursor"] = cursor
         resp = slack_get(token, "conversations.list", params)
         if not resp.get("ok"):
-            log(f"conversations.list error: {resp.get('error', 'unknown')}")
-            return channels if any_ok else None   # first-call failure → None (don't advance)
+            log(f"conversations.list({types}) error: {resp.get('error', 'unknown')}")
+            return out if any_ok else None
         any_ok = True
         for c in resp.get("channels", []):
-            if c.get("is_member"):
-                channels[c["id"]] = f"#{c.get('name', c['id'])}"
+            if not member_only or c.get("is_member"):
+                out[c["id"]] = f"#{c.get('name', c['id'])}"
         cursor = (resp.get("response_metadata") or {}).get("next_cursor")
         if not cursor:
             break
-    return channels
+    return out
 
 
-def sweep_channel(token: str, ch_id: str, ch_name: str, since_ts: str) -> list[dict]:
-    """Read-only history sweep since `since_ts`. GET only."""
+def list_channels(bot_token: str, user_token: str | None):
+    """Channels to sweep → {id: name}. With a user token we read EVERY public channel's history
+    without the bot joining (proven: bot token returns not_in_channel; user token reads it fine),
+    so coverage is the whole workspace, not just the 5 the bot was invited to. Private channels
+    still require membership, so we add the ones the bot is in. No user token → fall back to the
+    bot's own memberships (old behavior). Returns None on a HARD API failure so the caller can
+    abort WITHOUT advancing the watermark."""
+    # Enumeration always uses the bot token (the user token lacks channels:read). The user token's
+    # value is reading HISTORY of channels the bot never joined — that happens in sweep_channel.
+    if user_token:
+        public = _list(bot_token, "public_channel", member_only=False)     # all public (sweep via user token)
+        private = _list(bot_token, "private_channel", member_only=True)    # bot's private
+        if public is None:
+            return None
+        return {**public, **(private or {})}
+    return _list(bot_token, "public_channel,private_channel", member_only=True)
+
+
+def sweep_channel(token: str, ch_id: str, ch_name: str, since_ts: str, fallback: str = None) -> list[dict]:
+    """Read-only history sweep since `since_ts`. GET only. Tries `token` (user token — reads any
+    public channel without joining); on not_in_channel/missing access retries once with `fallback`
+    (bot token), which covers private channels the user token can't see."""
     messages, cursor = [], None
+    tried_fallback = False
     while True:
         params = {"channel": ch_id, "oldest": since_ts, "limit": 200}
         if cursor:
             params["cursor"] = cursor
         result = slack_get(token, "conversations.history", params)
         if not result.get("ok"):
-            if result.get("error") not in ("", "not_in_channel"):
-                log(f"{ch_name}: {result.get('error', 'unknown')}")
+            err = result.get("error", "")
+            if fallback and not tried_fallback and err in ("not_in_channel", "channel_not_found", "missing_scope"):
+                token, tried_fallback = fallback, True   # private channel → retry with bot token
+                continue
+            if err not in ("", "not_in_channel"):
+                log(f"{ch_name}: {err or 'unknown'}")
             break
         for msg in result.get("messages", []):
             text = msg.get("text", "")
@@ -390,6 +413,7 @@ def main():
     dry_run   = "--dry-run" in sys.argv
     slack_cfg  = load_config(SLACK_CONFIG)
     bot_token  = slack_cfg.get("BOT_TOKEN") or os.environ.get("BOT_TOKEN")
+    user_token = slack_cfg.get("SLACK_USER_TOKEN") or os.environ.get("SLACK_USER_TOKEN")
     user_id    = cfg("USER_SLACK_ID", "")
     notion_key = load_config(NOTION_CFG).get("NOTION_API_KEY") or os.environ.get("NOTION_API_KEY")
 
@@ -406,7 +430,9 @@ def main():
     now_label = datetime.now().strftime("%a %d %b, %H:%M")
     log(f"Sweeping since {datetime.fromtimestamp(float(since_ts)).strftime('%Y-%m-%d %H:%M')}")
 
-    channels = list_member_channels(bot_token)
+    if not user_token:
+        log("no SLACK_USER_TOKEN — falling back to bot-membership channels only (limited coverage)")
+    channels = list_channels(bot_token, user_token)
     if channels is None:
         log("ABORT: could not list channels (no network / bad token). NOT advancing watermark — "
             "this window will be retried on the next run (e.g. the post-listener startup catch-up).")
@@ -416,7 +442,7 @@ def main():
 
     channel_msgs, all_uids = {}, set()
     for ch_id, ch_name in channels.items():
-        msgs = sweep_channel(bot_token, ch_id, ch_name, since_ts)
+        msgs = sweep_channel(user_token or bot_token, ch_id, ch_name, since_ts, fallback=bot_token)
         if msgs:
             channel_msgs[ch_name] = msgs
             all_uids |= {m["uid"] for m in msgs if m.get("uid")}
