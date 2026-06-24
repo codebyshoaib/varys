@@ -207,7 +207,23 @@ def gate_compile(changed: list[str]) -> tuple[bool, str]:
 
 
 def gate_tests(changed: list[str]) -> tuple[bool, str]:
-    """Run every test_*.py under .claude/hooks (bounded). Tier-1 grader if rules/agents touched."""
+    """Run every test_*.py under .claude/hooks (bounded). Tier-1 grader if rules/agents touched.
+
+    Also REQUIRES that every changed non-test .py hook has a sibling test_<module>.py —
+    otherwise the gate would pass vacuously (it only runs tests that exist) and an
+    untested code edit would ship. A changed hook with no sibling test fails here."""
+    changed_hooks = [f for f in changed
+                     if f.startswith(".claude/hooks/") and f.endswith(".py")
+                     and not Path(f).name.startswith("test_")]
+    for rel in changed_hooks:
+        if not (VARYS_DIR / rel).exists():   # deleted — no test needed
+            continue
+        stem = Path(rel).stem
+        sibling = HOOKS_DIR / f"test_{stem}.py"
+        if not sibling.exists():
+            return False, (f"{rel} changed but has no sibling test_{stem}.py — "
+                           f"untested code edits are not allowed (gate cannot run an "
+                           f"inline __main__ check).")
     # hook tests
     for test_file in sorted(HOOKS_DIR.glob("test_*.py")):
         r = subprocess.run(["python3", str(test_file)],
@@ -285,10 +301,15 @@ Then IMPLEMENT it. Hard constraints:
   - NEVER touch: settings.json, any .slack/.notion/.env secret, crontab, the Slack
     listener daemon, agent_config.py, or the evolution gate scripts
     (varys-proactive-evolve.py, varys-evolution-agent.py).
-  - If you edit or create a .py hook, it MUST byte-compile AND you MUST add or extend
-    a runnable check: a `test_*.py` in .claude/hooks/ OR an assert-based `demo()` under
-    `if __name__ == "__main__":` that fails loudly if your logic breaks. Untested code
-    edits will be REVERTED by the gate, wasting this whole run.
+  - If you edit or create a .py hook, it MUST byte-compile AND you MUST add a sibling
+    `test_<module>.py` in .claude/hooks/ (matching the repo convention — see
+    test_eval_loop.py, test_varys_tick.py). It must `import` the module you changed,
+    exercise the new behavior, and `exit(1)` on failure (plain asserts in a
+    `if __name__ == "__main__":` block are fine — no pytest). The gate RUNS every
+    test_*.py in .claude/hooks/; a check placed only inside the changed module's own
+    `__main__` will NOT be run and your edit will be treated as untested and REVERTED.
+    Do NOT rely on an inline self-check in the module itself — the gate cannot run it
+    (many hooks do real I/O in `__main__`).
   - Make the SMALLEST change that delivers the improvement. One focused diff.
 
 ## HARD RULES
