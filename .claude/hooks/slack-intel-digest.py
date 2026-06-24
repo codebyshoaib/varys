@@ -152,6 +152,14 @@ def sweep_channel(token: str, ch_id: str, ch_name: str, since_ts: str) -> list[d
     return messages[:MAX_MSGS_PER_CHANNEL]
 
 
+MENTION_RE = re.compile(r"<@([UW][A-Z0-9]+)>")
+
+
+def sub_mentions(text: str, name_map: dict) -> str:
+    """Rewrite inline <@Uxxx> mentions to display names so the LLM never sees raw IDs."""
+    return MENTION_RE.sub(lambda m: f"@{name_map.get(m.group(1), m.group(1))}", text)
+
+
 def resolve_names(token: str, uids: set) -> dict:
     names = {}
     for uid in uids:
@@ -197,7 +205,7 @@ def _extract_json(raw: str):
 
 
 def summarise_channel(ch_name: str, messages: list[dict], name_map: dict) -> dict | None:
-    lines = [f"{m.get('name') or name_map.get(m['uid'], m['uid'])}: {m['text'][:300]}" for m in messages]
+    lines = [f"{m.get('name') or name_map.get(m['uid'], m['uid'])}: {sub_mentions(m['text'], name_map)[:300]}" for m in messages]
     prompt = (
         f"You are reading recent Slack messages from {ch_name} at Taleemabad (EdTech company).\n\n"
         f"MESSAGES:\n{chr(10).join(lines)}\n\n{CHANNEL_SCHEMA_HINT}"
@@ -412,6 +420,8 @@ def main():
         if msgs:
             channel_msgs[ch_name] = msgs
             all_uids |= {m["uid"] for m in msgs if m.get("uid")}
+            for m in msgs:  # mentioned users, not just authors — else <@Uxxx> leaks into the digest
+                all_uids |= set(MENTION_RE.findall(m["text"]))
             log(f"{ch_name}: {len(msgs)} messages")
 
     if not channel_msgs:
@@ -420,7 +430,7 @@ def main():
             STATE_FILE.write_text(json.dumps({"last_run_ts": str(datetime.now().timestamp())}))
         return 0
 
-    name_map = resolve_names(bot_token, all_uids - {user_id})
+    name_map = resolve_names(bot_token, all_uids)
 
     channel_summaries = {}
     for ch_name, msgs in channel_msgs.items():
