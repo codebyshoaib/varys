@@ -247,7 +247,10 @@ def gate_tests(changed: list[str]) -> tuple[bool, str]:
     for rel in changed_hooks:
         if not (VARYS_DIR / rel).exists():   # deleted — no test needed
             continue
-        stem = Path(rel).stem
+        # Test files use underscores by convention (test_varys_tick.py), so a hyphenated
+        # hook stem (varys-tick) must be normalized to underscores before resolving the
+        # sibling — otherwise EVERY hyphen-named hook fails the sibling-test gate.
+        stem = Path(rel).stem.replace("-", "_")
         sibling = HOOKS_DIR / f"test_{stem}.py"
         if not sibling.exists():
             if _is_core(rel):
