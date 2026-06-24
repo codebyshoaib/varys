@@ -21,8 +21,18 @@ disturbed.
   Gates, in order — ANY failure → hard revert to start SHA:
     1. FENCE     — every changed/created file is inside the fence & not denylisted
     2. COMPILE   — every changed *.py byte-compiles (py_compile)
-    3. TEST      — all test_*.py under .claude/hooks pass; Tier-1 grader for rules/agents
+    3. TEST      — all test_*.py under .claude/hooks pass; Tier-1 grader for rules/agents;
+                   a changed hook (and ALWAYS a CORE file) must have a sibling test
     4. SEMANTIC  — LLM judge (varys_semantic_gate) vetoes harmful diffs
+
+  Tiered fence (CORE vs leaf): editing a load-bearing orchestration file (CORE_FILES —
+  the tick, dispatcher, manager, harness DB, Notion rate-limiter, Slack workers,
+  session/stop hooks, pollers) gets STRICTER gating on top of the above: a mandatory
+  sibling test (no exemption), a core-strict semantic judge that also enforces the
+  documented orchestrator invariants, and a 2-of-2 DOUBLE judge (kept only if BOTH
+  independent judge calls return keep). A core run is flagged with a `core-evolution`
+  PR label + a ⚠️ banner on the PR/DM. The hard DENYLIST (settings, secrets, crontab,
+  the Slack listener daemon, the gate scripts) is never editable at all.
 
 The gates run BEFORE the PR is opened, so a reviewer never sees a diff that doesn't
 compile or pass tests. Varys's own failures.jsonl records an auto-fix loop that
@@ -90,19 +100,57 @@ def _is_allowed(rel_path: str) -> bool:
     return any(rel_path.startswith(p) for p in FENCE_PREFIXES)
 
 
+# ── Tiered fence: CORE vs leaf ───────────────────────────────────────────
+# CORE files are load-bearing orchestration code — they run on EVERY tick and a bug in
+# them breaks every ticket Varys touches. Editing them is far higher-risk than editing
+# a leaf hook (e.g. friction_signals.py), so a core edit gets STRICTER gating ON TOP of
+# the normal gates: a mandatory sibling test (no exemption), a core-strict semantic
+# judge that also enforces the documented orchestrator invariants, and a 2-of-2 double
+# judge (kept only if BOTH independent judge calls return keep). A run that touches any
+# core file is also flagged on the PR for careful human review. These remain inside the
+# fence; the hard DENYLIST still wins over everything (the listener daemon and the gate
+# scripts themselves stay denylisted — never auto-edited at all).
+CORE_FILES = frozenset({
+    ".claude/hooks/orchestrator-dispatch.py",   # dispatcher — groups events, spawns subagents
+    ".claude/hooks/varys-manager.py",           # phase-1 router + repo-sync before every dispatch
+    ".claude/hooks/varys-tick.py",              # the tick loop itself
+    ".claude/hooks/varys_harness_db.py",        # DB + tick lock + entity registry
+    ".claude/hooks/varys_notion.py",            # 350ms Notion rate-limit utility
+    ".claude/hooks/slack-worker.py",            # Slack reply / bead-minting worker
+    ".claude/hooks/slack-queue-drain.py",       # drains slack_queue into the worker
+    ".claude/hooks/session-start.py",           # SessionStart hook (surfaces Slack/Notion)
+    ".claude/hooks/stop.py",                    # Stop hook (work-log + commit)
+    ".claude/hooks/poll-beads.py",              # active tick poller (bd ready → events)
+    ".claude/hooks/poll-taleemabad-github.py",  # active tick poller (PRs → events)
+})
+
+
+def _is_core(rel_path: str) -> bool:
+    """True iff this changed path is a load-bearing orchestration file (stricter gating)."""
+    return rel_path in CORE_FILES
+
+
+def _touched_core(changed: list[str]) -> list[str]:
+    """The subset of changed files that are core orchestration files (sorted, stable)."""
+    return sorted(f for f in changed if _is_core(f))
+
+
 # ── Import the evolution agent's semantic judge (single-source the safety veto) ──
 
 def _load_semantic_judge():
-    """Return the shared semantic_gate(diff) callable, or a fail-safe stub that
-    reverts if the module can't be imported (doubt biases toward reverting)."""
+    """Return (leaf_gate, core_gate) from the shared module:
+      - leaf_gate(diff)  → the normal single-judge veto for non-core edits
+      - core_gate(diff)  → the 2-of-2 double judge for core-orchestration edits
+    On import failure return fail-safe stubs that REVERT (doubt biases toward reverting)."""
     try:
-        from varys_semantic_gate import semantic_gate
-        return semantic_gate
+        from varys_semantic_gate import semantic_gate, core_semantic_gate
+        return semantic_gate, core_semantic_gate
     except Exception as e:
         klog_error("proactive-evolve-judge-import", e, component="proactive-evolve")
-        return lambda diff: {"verdict": "revert",
+        stub = lambda diff: {"verdict": "revert",
                              "reason": "semantic judge unavailable — failing safe",
-                             "gate": "semantic-error"}
+                             "risk": "high", "gate": "semantic-error"}
+        return stub, stub
 
 
 # ── git helpers ──────────────────────────────────────────────────────────
@@ -190,7 +238,9 @@ def gate_tests(changed: list[str]) -> tuple[bool, str]:
 
     Also REQUIRES that every changed non-test .py hook has a sibling test_<module>.py —
     otherwise the gate would pass vacuously (it only runs tests that exist) and an
-    untested code edit would ship. A changed hook with no sibling test fails here."""
+    untested code edit would ship. A changed hook with no sibling test fails here. CORE
+    orchestration files (CORE_FILES) get NO exemption from this — an untested core edit
+    is the highest-risk thing this loop could ship, so the message calls it out."""
     changed_hooks = [f for f in changed
                      if f.startswith(".claude/hooks/") and f.endswith(".py")
                      and not Path(f).name.startswith("test_")]
@@ -200,6 +250,10 @@ def gate_tests(changed: list[str]) -> tuple[bool, str]:
         stem = Path(rel).stem
         sibling = HOOKS_DIR / f"test_{stem}.py"
         if not sibling.exists():
+            if _is_core(rel):
+                return False, (f"{rel} is a CORE orchestration file and has no sibling "
+                               f"test_{stem}.py — core files get NO test exemption; an "
+                               f"untested edit to load-bearing tick code is never allowed.")
             return False, (f"{rel} changed but has no sibling test_{stem}.py — "
                            f"untested code edits are not allowed (gate cannot run an "
                            f"inline __main__ check).")
@@ -252,6 +306,7 @@ def build_prompt() -> str:
     recent_block = ("\n".join(f"  - {t}" for t in recent)
                     if recent else "  (none — this is an early run)")
     fence = "\n".join(f"  - {p}" for p in FENCE_PREFIXES)
+    core_block = "\n".join(f"  - {p}" for p in sorted(CORE_FILES))
 
     return f"""You are Varys's proactive evolution agent. This is your autonomous \
 self-improvement session — you improve your OWN body (this repo, ~/varys).
@@ -290,6 +345,33 @@ Then IMPLEMENT it. Hard constraints:
     Do NOT rely on an inline self-check in the module itself — the gate cannot run it
     (many hooks do real I/O in `__main__`).
   - Make the SMALLEST change that delivers the improvement. One focused diff.
+
+## CORE ORCHESTRATION (you MAY improve it now — but it faces a HIGHER bar)
+You are allowed to improve the load-bearing orchestration code, not just leaf hooks.
+These are the CORE files (a bug here breaks EVERY tick):
+{core_block}
+If your one improvement touches ANY core file, expect STRICTER gating:
+  - A sibling `test_<module>.py` is MANDATORY (no exemption) — an untested core edit is
+    auto-reverted.
+  - The diff faces a 2-of-2 DOUBLE semantic judge (two independent strict reviewers); it
+    is kept only if BOTH say keep, and the strict judge ALSO reverts any edit that breaks
+    a documented orchestrator invariant. So your core edit MUST preserve ALL of these
+    (from .claude/rules/orchestrator.md):
+      1. Tick atomicity — if any poller fails, release the tick lock, do NOT update
+         last_sync_at, abort (retry next tick).
+      2. Status=Done is written LAST (the commit signal).
+      3. 350ms between Notion API calls via varys_notion.notion_request() — never call
+         urllib against Notion directly.
+      4. Deterministic event IDs (notion-<page_id>, slack-<channel>-<ts>,
+         github-taleemabad-core-<pr>-<type>) so re-polling is idempotent.
+      5. Two-query event pattern (distinct context_keys, then rows per key) — never
+         GROUP_CONCAT JSON payloads.
+      6. Tick interval = 270s — never change it.
+      7. One session per context_key — skip if a 'running' session exists.
+      8. Plan-first — subagents never write code without human approval.
+      9. context_key is ALWAYS a ticket entity ID, never a Slack thread ts / PR number.
+  - The PR is flagged `core-evolution` for careful human review. Only touch a core file
+    if the learning genuinely points there; otherwise prefer a leaf-hook or rules change.
 
 ## HARD RULES
   - Do NOT run git add / git commit / git push. Do NOT post to Slack. Do NOT DM anyone.
@@ -444,20 +526,46 @@ def _resolve_base() -> tuple[str, str]:
     return "HEAD", _head_sha()
 
 
-def _open_pr(branch: str, base: str, title: str, body: str) -> str:
-    """Open a PR via gh. Returns the PR URL, or '' on failure."""
+def _ensure_label(label: str) -> None:
+    """Create a repo label if it doesn't already exist (tolerate any failure —
+    a missing label must not block opening the PR)."""
+    try:
+        subprocess.run(["gh", "label", "create", label,
+                        "--description", "Auto-evolution PR touching CORE orchestration",
+                        "--color", "B60205"],
+                       cwd=str(VARYS_DIR), capture_output=True, text=True, timeout=30)
+    except Exception:
+        pass
+
+
+def _open_pr(branch: str, base: str, title: str, body: str, label: str = "") -> str:
+    """Open a PR via gh. Returns the PR URL, or '' on failure.
+    If label is set (e.g. 'core-evolution'), ensure it exists and attach it; a label
+    failure is tolerated — gh ignores --label retries and we still want the PR."""
     # base for the PR is the bare branch name (strip any origin/ prefix)
     base_branch = base.split("/", 1)[1] if base.startswith("origin/") else base
     if base_branch in ("HEAD",):
         base_branch = "master"
-    r = subprocess.run(
-        ["gh", "pr", "create", "--base", base_branch, "--head", branch,
-         "--title", title, "--body", body],
-        cwd=str(VARYS_DIR), capture_output=True, text=True, timeout=120,
-    )
+    args = ["gh", "pr", "create", "--base", base_branch, "--head", branch,
+            "--title", title, "--body", body]
+    if label:
+        _ensure_label(label)
+        args += ["--label", label]
+    r = subprocess.run(args, cwd=str(VARYS_DIR), capture_output=True, text=True, timeout=120)
     out = (r.stdout + r.stderr).strip()
     m = re.search(r"https://github\.com/\S+/pull/\d+", out)
-    return m.group(0) if m else ""
+    if m:
+        return m.group(0)
+    # A label that doesn't exist (race / insufficient perms) makes gh error before
+    # creating the PR. Retry once WITHOUT the label so the PR still opens.
+    if label:
+        r2 = subprocess.run(
+            ["gh", "pr", "create", "--base", base_branch, "--head", branch,
+             "--title", title, "--body", body],
+            cwd=str(VARYS_DIR), capture_output=True, text=True, timeout=120)
+        m2 = re.search(r"https://github\.com/\S+/pull/\d+", (r2.stdout + r2.stderr).strip())
+        return m2.group(0) if m2 else ""
+    return ""
 
 
 # ── main ─────────────────────────────────────────────────────────────────
@@ -515,7 +623,7 @@ def main() -> int:
             return 0
         print(f"[evolve] branched {evolve_branch} off {base_ref} ({base_sha[:8]})")
 
-        semantic_judge = _load_semantic_judge()
+        leaf_judge, core_judge = _load_semantic_judge()
 
         # ── Spawn the implement agent on the clean branch ──
         try:
@@ -545,8 +653,13 @@ def main() -> int:
             _mark_run()
             return 0
 
+        core_touched = _touched_core(changed)
+        is_core_run = bool(core_touched)
         print(f"[evolve] proposal: {title}")
         print(f"[evolve] changed: {', '.join(changed)}")
+        if is_core_run:
+            print(f"[evolve] ⚠️ touches CORE orchestration: {', '.join(core_touched)} "
+                  f"— stricter gating (mandatory test + 2-of-2 core judge)")
 
         # ── Gates (any failure → discard branch, log, DM) ──
         def _fail(gate_name: str, reason: str):
@@ -566,19 +679,32 @@ def main() -> int:
                 _fail(gate_name, reason)
                 return 0
 
+        # Core edits face the 2-of-2 double judge (strict prompt + invariant checks);
+        # leaf edits face the normal single judge. Both fail-safe to revert.
         diff = _git(["diff", base_sha]).stdout
-        verdict = semantic_judge(diff)
+        if is_core_run:
+            verdict = core_judge(diff)
+        else:
+            verdict = leaf_judge(diff)
         if verdict["verdict"] == "revert":
             _fail("semantic", verdict["reason"])
             return 0
 
         # ── All gates passed → commit on branch, push, open PR ──
+        # A core run is flagged everywhere: stricter gate descriptor, a banner on the
+        # PR body + DM, and a `core-evolution` label so a reviewer can't miss it.
+        gate_descriptor = ("fence+compile+test+semantic-core-2of2" if is_core_run
+                           else "fence+compile+test+semantic")
+        gates_line = ("fence ✅ · compile ✅ · test ✅ · semantic-core (2-of-2) ✅"
+                      if is_core_run else "fence ✅ · compile ✅ · test ✅ · semantic ✅")
+        core_banner = (f"> ⚠️ **touches CORE orchestration — review carefully** "
+                       f"({', '.join(core_touched)})\n\n" if is_core_run else "")
         _git(["add", "--", *FENCE_PREFIXES])
         commit_msg = (
             f"evolve: {title}\n\n{meta.get('summary', '')}\n\n"
             f"Driven by learning: {meta.get('learning', 'n/a')}\n"
             f"Test: {meta.get('test', 'n/a')}\n\n"
-            f"🕷️ Autonomous evolution (gated: fence+compile+test+semantic)\n"
+            f"🕷️ Autonomous evolution (gated: {gate_descriptor})\n"
             f"Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>")
         commit = _git(["commit", "--no-verify", "-m", commit_msg])
         if commit.returncode != 0:
@@ -605,26 +731,30 @@ def main() -> int:
 
         pr_body = (
             f"## 🕷️ Autonomous self-evolution\n\n"
+            f"{core_banner}"
             f"**What changed:** {meta.get('summary', '')}\n\n"
             f"**Driven by learning:** {meta.get('learning', 'n/a')}\n\n"
             f"**Test added/run:** {meta.get('test', 'n/a')}\n\n"
             f"**Files:** {', '.join(meta.get('files', changed))}\n\n"
-            f"**Gates passed:** fence ✅ · compile ✅ · test ✅ · semantic ✅\n\n"
+            f"**Gates passed:** {gates_line}\n\n"
             f"Branched off `{base_ref}`. Reviewed by you before merge — this is the "
             f"human gate.\n\n"
             f"🤖 Generated with [Claude Code](https://claude.com/claude-code)")
-        pr_url = _open_pr(evolve_branch, base_ref, f"evolve: {title}", pr_body)
+        pr_url = _open_pr(evolve_branch, base_ref, f"evolve: {title}", pr_body,
+                          label="core-evolution" if is_core_run else "")
 
         _log_success({**meta, "pr": pr_url, "branch": evolve_branch}, new_sha)
         evolve_branch = ""   # shipped — do NOT delete it in _return_home
         _return_home()       # back to the user's branch, working tree clean
 
         _dm_shoaib(
-            f"🕷️ *Evolved myself* — {title}\n"
+            (f"⚠️ *touches CORE orchestration — review carefully* "
+             f"({', '.join(core_touched)})\n" if is_core_run else "")
+            + f"🕷️ *Evolved myself* — {title}\n"
             f"{meta.get('summary', '')}\n"
             f"_Driven by:_ {meta.get('learning', 'n/a')}\n"
             f"_Files:_ {', '.join(meta.get('files', changed))}\n"
-            f"_Gates:_ fence ✅ compile ✅ test ✅ semantic ✅\n"
+            f"_Gates:_ {gates_line}\n"
             + (f"_PR:_ {pr_url}" if pr_url else "_PR:_ (gh pr create failed — branch pushed, open it manually)"))
         klog("proactive-evolve", component="proactive-evolve",
              result="pr-opened", title=title, sha=new_sha, pr=pr_url)
