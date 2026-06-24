@@ -396,6 +396,21 @@ def main() -> int:
         return rc
     # ── End recording commands ────────────────────────────────────────────────
 
+    # ── Region-friction-coach approval loop (DM only) ─────────────────────────
+    # Coach DMs Shoaib a preview + registers friction-pending.json. His reply
+    # ("post" / "amend …" / "cancel") is consumed here before the normal pipeline.
+    if is_dm:
+        import friction_approval
+        handled = friction_approval.maybe_handle(
+            text=text, sender_id=sender_id, bot_token=bot_token,
+            post_fn=lambda t: _slack_post(bot_token, channel, thread_ts, t),
+            claude_bin=_claude_bin(), approver_id=SHOAIB_USER_ID,
+        )
+        if handled:
+            mark_slack_done(db, row_id)
+            return 0
+    # ── End friction approval ─────────────────────────────────────────────────
+
     # ── PR review fast-path ───────────────────────────────────────────────────
     _PR_TRIGGERS = ("review this pr", "review the pr", "review pr", "code review")
     if not is_third_party and any(t in text_lower for t in _PR_TRIGGERS):
