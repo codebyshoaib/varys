@@ -396,6 +396,45 @@ def main() -> int:
         return rc
     # ── End recording commands ────────────────────────────────────────────────
 
+    # ── PR review fast-path ───────────────────────────────────────────────────
+    _PR_TRIGGERS = ("review this pr", "review the pr", "review pr", "code review")
+    if not is_third_party and any(t in text_lower for t in _PR_TRIGGERS):
+        _pr_match = re.search(
+            r'https://github\.com/[^\s>]+/pull/\d+',
+            text + "\n" + (thread_history or ""),
+        )
+        if not _pr_match:
+            _slack_post(bot_token, channel, thread_ts,
+                        "I couldn't find a PR URL in this thread — share the link and I'll review it. 🕷️ Varys")
+            mark_slack_done(db, row_id)
+            return 0
+
+        pr_url = _pr_match.group(0).rstrip(")")
+        ts_clean = thread_ts.replace(".", "")
+        slack_thread_url = f"https://{WORKSPACE}.slack.com/archives/{channel}/p{ts_clean}"
+
+        _u = pr_url.lower()
+        if "compliancetracker" in _u:
+            skill_cmd = f"/compliancetracker-pr-reviewer {pr_url} {slack_thread_url}"
+        elif "taleemabad-core" in _u:
+            skill_cmd = f"/taleemabad-pr-review-lite {pr_url}"
+        else:
+            skill_cmd = None
+
+        if skill_cmd:
+            _slack_post(bot_token, channel, thread_ts,
+                        f"On it — running `{skill_cmd.split()[0]}` on {pr_url} 🔍")
+            subprocess.run(
+                [_claude_bin(), "--dangerously-skip-permissions", "--print", "-p", skill_cmd],
+                capture_output=True, text=True,
+                cwd=str(REPO), timeout=900,
+            )
+            # skill posted inline GitHub comments + Slack summary itself (Step 3)
+            mark_slack_done(db, row_id)
+            return 0
+        # unknown repo — fall through to generic handler
+    # ── End PR review fast-path ───────────────────────────────────────────────
+
     prompt = _build_prompt(
         text=text,
         thread_history=thread_history or "",
