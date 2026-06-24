@@ -151,6 +151,9 @@ def _changed_files(since_sha: str) -> list[str]:
             path = path.split(" -> ", 1)[1]
         if path:
             files.add(path)
+    # memory/trajectory.md is a generated artifact owned by the trajectory extractor,
+    # not the agent — never count it as the agent's change.
+    files.discard("memory/trajectory.md")
     return sorted(files)
 
 
@@ -435,13 +438,17 @@ def main() -> int:
             print("[evolve] working tree dirty at start — skipping (won't risk a bad revert).")
             return 0
 
-        start_sha = _head_sha()
+        # Refresh trajectory BEFORE taking the start SHA, then restore the file:
+        # build_prompt() reads the fresh content into the prompt string, but the
+        # on-disk artifact (memory/trajectory.md, outside the fence) must not be
+        # left dirty or change-detection would flag it and revert the agent's work.
         _refresh_trajectory()
+        prompt = build_prompt()
+        _git(["checkout", "--", "memory/trajectory.md"])  # discard our artifact write
+
+        start_sha = _head_sha()
         semantic_judge = _load_semantic_judge()
         recovery = _capture_recovery(start_sha)  # belt-and-suspenders (tree is clean, so usually "")
-
-        # ── Spawn the implement agent ──
-        prompt = build_prompt()
         try:
             result = subprocess.run(
                 ["claude", "--dangerously-skip-permissions", "--print", "-p", prompt,
