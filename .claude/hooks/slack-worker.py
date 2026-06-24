@@ -10,10 +10,11 @@ Exit 0 = done. Exit 1 = failed (drain caller will mark retry with stderr as fail
 """
 import argparse
 import glob
-import shutil
 import json
 import os
+import re
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -24,7 +25,11 @@ HOOKS = Path(__file__).resolve().parent
 REPO  = HOOKS.parent.parent
 sys.path.insert(0, str(HOOKS))
 
-from varys_harness_db import get_db, mark_slack_processing, mark_slack_done
+from varys_harness_db import (
+    get_db, mark_slack_processing, mark_slack_done,
+    enqueue_meeting,
+)
+from varys_log import klog_error
 from varys_eval import log_to_eval, parse_stream_json
 from agent_config import cfg
 
@@ -196,6 +201,149 @@ Then, if applicable, append ONE directive line as the VERY LAST line:
   Only emit WORK for a genuine code-change request, never for questions or discussion."""
 
 
+_ACTIVE_RECORDING_FILE = Path.home() / ".varys-harness" / "active_recording.json"
+
+
+def _handle_start_recording(
+    db, bot_token: str,
+    channel: str, thread_ts: str,
+    name_hint: str,
+) -> int:
+    """Handle 'start recording [name]' command. Returns exit code."""
+    import datetime
+
+    if _ACTIVE_RECORDING_FILE.exists():
+        try:
+            state = json.loads(_ACTIVE_RECORDING_FILE.read_text())
+            existing_name = state.get("meeting_name", "unknown")
+        except Exception:
+            existing_name = "unknown"
+        _slack_post(bot_token, channel, thread_ts,
+                    f"Already recording *{existing_name}*. Reply `stop recording` to finish first.")
+        return 0
+
+    now = datetime.datetime.now()
+    date_slug = now.strftime("%Y-%m-%d_%H-%M")
+    meeting_name = name_hint if name_hint else date_slug
+    # Sanitise meeting_name for filesystem use
+    meeting_name_fs = re.sub(r'[^\w\-]', '_', meeting_name).strip('_') or date_slug
+
+    output_dir = REPO / "vault" / "projects" / "meeting-notes" / "recordings" / date_slug
+    output_dir.mkdir(parents=True, exist_ok=True)
+    audio_path = str(output_dir / f"{meeting_name_fs}.flac")
+
+    try:
+        proc = subprocess.Popen(
+            [
+                "ffmpeg", "-f", "pulse", "-i", "default.monitor",
+                "-f", "pulse", "-i", "default",
+                "-filter_complex", "amix=inputs=2:normalize=0",
+                "-ar", "16000", "-ac", "1", "-c:a", "flac",
+                audio_path,
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except Exception as exc:
+        klog_error("start_recording", exc, component="slack-worker")
+        _slack_post(bot_token, channel, thread_ts,
+                    f"Failed to start ffmpeg: {exc}. Is ffmpeg installed?")
+        return 1
+
+    state = {
+        "pid":          proc.pid,
+        "meeting_name": meeting_name,
+        "audio_path":   audio_path,
+        "output_dir":   str(output_dir),
+        "channel":      channel,
+        "thread_ts":    thread_ts,
+        "started_at":   now.isoformat(),
+    }
+    _ACTIVE_RECORDING_FILE.parent.mkdir(parents=True, exist_ok=True)
+    _ACTIVE_RECORDING_FILE.write_text(json.dumps(state, indent=2))
+
+    _slack_post(bot_token, channel, thread_ts,
+                f"🎙️ Recording *{meeting_name}* started. Reply `stop recording` to finish.")
+    print(f"[slack-worker] recording started: pid={proc.pid} name={meeting_name}")
+    return 0
+
+
+def _handle_stop_recording(
+    db, bot_token: str,
+    channel: str, thread_ts: str,
+) -> int:
+    """Handle 'stop recording' command. Returns exit code."""
+    if not _ACTIVE_RECORDING_FILE.exists():
+        _slack_post(bot_token, channel, thread_ts,
+                    "No active recording. Use `start recording [name]` to begin.")
+        return 0
+
+    try:
+        state = json.loads(_ACTIVE_RECORDING_FILE.read_text())
+    except Exception as exc:
+        klog_error("stop_recording_read_state", exc, component="slack-worker")
+        _ACTIVE_RECORDING_FILE.unlink(missing_ok=True)
+        _slack_post(bot_token, channel, thread_ts,
+                    "Active recording state was corrupt — cleaned up. No audio was enqueued.")
+        return 1
+
+    pid          = state.get("pid")
+    meeting_name = state.get("meeting_name", "unknown")
+    audio_path   = state.get("audio_path", "")
+    output_dir   = state.get("output_dir", "")
+    orig_channel = state.get("channel", channel)
+    orig_thread  = state.get("thread_ts", thread_ts)
+
+    pid_alive = False
+    if pid:
+        try:
+            os.kill(pid, signal.SIGINT)
+            # Wait up to 5s for graceful exit
+            for _ in range(10):
+                try:
+                    os.kill(pid, 0)   # probe — raises if dead
+                    time.sleep(0.5)
+                except ProcessLookupError:
+                    break
+            pid_alive = False
+        except ProcessLookupError:
+            # PID was already dead (stale crash scenario)
+            pid_alive = False
+        except Exception as exc:
+            klog_error("stop_recording_kill", exc, component="slack-worker")
+
+    _ACTIVE_RECORDING_FILE.unlink(missing_ok=True)
+
+    # Enqueue even if PID was stale — partial audio is better than nothing
+    audio_exists = Path(audio_path).exists() if audio_path else False
+    if not audio_exists:
+        _slack_post(bot_token, orig_channel, orig_thread,
+                    f"Recording *{meeting_name}* stopped but no audio file found at `{audio_path}`. "
+                    "Nothing to transcribe.")
+        return 0
+
+    try:
+        job_id = enqueue_meeting(
+            db,
+            meeting_name=meeting_name,
+            audio_path=audio_path,
+            output_dir=output_dir,
+            channel=orig_channel,
+            thread_ts=orig_thread,
+        )
+    except Exception as exc:
+        klog_error("stop_recording_enqueue", exc, component="slack-worker")
+        _slack_post(bot_token, orig_channel, orig_thread,
+                    f"Recording *{meeting_name}* stopped but failed to queue transcription: {exc}")
+        return 1
+
+    _slack_post(bot_token, orig_channel, orig_thread,
+                f"✅ Recording *{meeting_name}* stopped. Transcription queued (job `{job_id[:8]}`) — "
+                "I'll post the summary here when done. (~2–4× realtime on CPU so be patient 🐢)")
+    print(f"[slack-worker] recording stopped and enqueued: {job_id} name={meeting_name}")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--job-id", required=True)
@@ -223,6 +371,84 @@ def main() -> int:
     if not bot_token:
         print("[slack-worker] no BOT_TOKEN found", file=sys.stderr)
         return 1
+
+    # ── Recording commands — handled before the normal claude -p pipeline ─────
+    text_lower = (text or "").lower().strip()
+    _start_match = re.search(r'\bstart recording\s*(.*)', text_lower)
+    _stop_match  = re.search(r'\bstop recording\b', text_lower)
+
+    if _start_match:
+        rc = _handle_start_recording(
+            db=db, bot_token=bot_token,
+            channel=channel, thread_ts=thread_ts,
+            name_hint=_start_match.group(1).strip(),
+        )
+        if rc == 0:
+            mark_slack_done(db, row_id)
+        return rc
+    if _stop_match:
+        rc = _handle_stop_recording(
+            db=db, bot_token=bot_token,
+            channel=channel, thread_ts=thread_ts,
+        )
+        if rc == 0:
+            mark_slack_done(db, row_id)
+        return rc
+    # ── End recording commands ────────────────────────────────────────────────
+
+    # ── Region-friction-coach approval loop (DM only) ─────────────────────────
+    # Coach DMs Shoaib a preview + registers friction-pending.json. His reply
+    # ("post" / "amend …" / "cancel") is consumed here before the normal pipeline.
+    if is_dm:
+        import friction_approval
+        handled = friction_approval.maybe_handle(
+            text=text, sender_id=sender_id, bot_token=bot_token,
+            post_fn=lambda t: _slack_post(bot_token, channel, thread_ts, t),
+            claude_bin=_claude_bin(), approver_id=SHOAIB_USER_ID,
+        )
+        if handled:
+            mark_slack_done(db, row_id)
+            return 0
+    # ── End friction approval ─────────────────────────────────────────────────
+
+    # ── PR review fast-path ───────────────────────────────────────────────────
+    _PR_TRIGGERS = ("review this pr", "review the pr", "review pr", "code review")
+    if not is_third_party and any(t in text_lower for t in _PR_TRIGGERS):
+        _pr_match = re.search(
+            r'https://github\.com/[^\s>]+/pull/\d+',
+            text + "\n" + (thread_history or ""),
+        )
+        if not _pr_match:
+            _slack_post(bot_token, channel, thread_ts,
+                        "I couldn't find a PR URL in this thread — share the link and I'll review it. 🕷️ Varys")
+            mark_slack_done(db, row_id)
+            return 0
+
+        pr_url = _pr_match.group(0).rstrip(")")
+        ts_clean = thread_ts.replace(".", "")
+        slack_thread_url = f"https://{WORKSPACE}.slack.com/archives/{channel}/p{ts_clean}"
+
+        _u = pr_url.lower()
+        if "compliancetracker" in _u:
+            skill_cmd = f"/compliancetracker-pr-reviewer {pr_url} {slack_thread_url}"
+        elif "taleemabad-core" in _u:
+            skill_cmd = f"/taleemabad-pr-review-lite {pr_url}"
+        else:
+            skill_cmd = None
+
+        if skill_cmd:
+            _slack_post(bot_token, channel, thread_ts,
+                        f"On it — running `{skill_cmd.split()[0]}` on {pr_url} 🔍")
+            subprocess.run(
+                [_claude_bin(), "--dangerously-skip-permissions", "--print", "-p", skill_cmd],
+                capture_output=True, text=True,
+                cwd=str(REPO), timeout=900,
+            )
+            # skill posted inline GitHub comments + Slack summary itself (Step 3)
+            mark_slack_done(db, row_id)
+            return 0
+        # unknown repo — fall through to generic handler
+    # ── End PR review fast-path ───────────────────────────────────────────────
 
     prompt = _build_prompt(
         text=text,
