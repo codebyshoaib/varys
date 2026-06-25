@@ -42,7 +42,14 @@ _SCHEMA_VERSION = "1.0"
 _TRACE_ID = None  # set per-operation via start_trace()
 
 _AXIOM_CONFIG   = Path.home() / ".claude" / "hooks" / ".axiom"
-_FALLBACK_LOG   = Path("/tmp/varys-axiom-fallback.jsonl")
+# Persistent so reboots don't wipe telemetry (/tmp clears on boot). When no Axiom
+# token is configured this file is the ONLY sink, so it must survive restarts.
+# ponytail: append-only, grows unbounded; add size-based rotation if it gets large.
+_FALLBACK_LOG   = Path.home() / ".varys-harness" / "axiom-fallback.jsonl"
+try:
+    _FALLBACK_LOG.parent.mkdir(parents=True, exist_ok=True)
+except Exception:
+    _FALLBACK_LOG = Path("/tmp/varys-axiom-fallback.jsonl")  # last-resort fallback
 _SESSION_ID     = datetime.datetime.utcnow().strftime("%Y%m%d-%H%M%S")
 
 
