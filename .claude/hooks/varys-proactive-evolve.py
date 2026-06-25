@@ -73,6 +73,8 @@ TIER1_GRADER  = VARYS_DIR / ".claude" / "evals" / "graders" / "run-tier1.sh"
 
 MODEL          = "claude-opus-4-8"
 RUN_GAP_HOURS  = 8
+ASSESS_TIMEOUT = 400   # seconds for A1 self-assessment phase
+IMPL_TIMEOUT   = 700   # seconds for A2 plan+implement phase
 TRAJECTORY_PY  = HOOKS_DIR / "varys-extract-trajectory.py"
 WORKTREES_DIR  = HARNESS_DIR / "evolve-worktrees"
 
@@ -191,6 +193,8 @@ def _changed_files(since_sha: str) -> list[str]:
     # memory/trajectory.md is a generated artifact owned by the trajectory extractor,
     # not the agent — never count it as the agent's change.
     files.discard("memory/trajectory.md")
+    # session_plan/ is ephemeral A1 assessment output, not a fence-tracked change.
+    files = {f for f in files if not f.startswith("session_plan")}
     return sorted(files)
 
 
@@ -301,6 +305,151 @@ def _refresh_trajectory() -> None:
         pass
 
 
+def build_assess_prompt() -> str:
+    """Phase A1: read-only self-assessment. No file changes."""
+    wisdom = ACTIVE_L.read_text().strip() if ACTIVE_L.exists() else "(none yet)"
+    traj   = TRAJECTORY.read_text().strip() if TRAJECTORY.exists() else "(none yet)"
+    recent = _recent_evolution_titles()
+    recent_block = ("\n".join(f"  - {t}" for t in recent)
+                    if recent else "  (none — this is an early run)")
+
+    return f"""You are Varys's self-assessment agent. You are the FIRST of two phases
+in this evolution session. Your ONLY job is to assess the current state of Varys's
+codebase and return a structured assessment. Do NOT make any file changes.
+
+## YOUR ACCUMULATED SELF-WISDOM
+{wisdom}
+
+## YOUR TRAJECTORY (recent work, failures, eval confidence)
+{traj}
+
+## RECENT IMPROVEMENTS (don't re-assess things already fixed)
+{recent_block}
+
+## YOUR TASK — ASSESSMENT ONLY, NO CODE CHANGES
+
+Read the following, then write a structured assessment:
+
+1. **Hooks** — scan `.claude/hooks/*.py` for:
+   - Missing sibling `test_*.py` files
+   - Hooks not wired to crontab (compare `crontab -l` against the hook files)
+   - Obvious error paths with no logging
+
+2. **Rules** — scan `.claude/rules/` for:
+   - Rules that contradict each other
+   - Rules not surfaced in `session-start.py` (dead letter)
+   - Rules that describe a process but have no mechanical enforcement
+
+3. **Skills** — scan `.claude/skills/varys/` for:
+   - Skills not listed in `skills-router.md` (invisible to routing)
+   - Skills that are too long (>100 lines) and should be split
+   - Skill files that reference non-existent hooks/paths
+
+4. **Memory** — check `memory/active_learnings.md`:
+   - Lessons that have been in "Recent (Last 2 Weeks)" for more than 2 weeks
+   - Recurring themes that don't have a corresponding rule/skill
+
+5. **Failures** — read the last 10 entries in `.beads/failures.jsonl`:
+   - What gates are failing most?
+   - Is there a pattern (same file, same gate, same error)?
+
+Do NOT run any tests. Do NOT edit any files. Do NOT commit anything.
+
+## OUTPUT FORMAT
+
+Write a structured plain-text assessment ending with this exact marker:
+```
+ASSESSMENT-COMPLETE
+```
+
+Format your assessment as:
+```
+# Self-Assessment
+
+## Hooks Health
+[findings or "clean"]
+
+## Rules Health
+[findings or "clean"]
+
+## Skills Health
+[findings or "clean"]
+
+## Memory Health
+[findings or "clean"]
+
+## Failure Patterns
+[findings or "none in window"]
+
+## Top 3 Improvement Opportunities (ranked by impact)
+1. [HIGH/MEDIUM/LOW] Description — specific file or section
+2. ...
+3. ...
+```
+
+ASSESSMENT-COMPLETE
+"""
+
+
+def build_plan_prompt(assessment: str) -> str:
+    """Phase A2: plan+implement ONE improvement, informed by A1 assessment."""
+    wisdom = ACTIVE_L.read_text().strip() if ACTIVE_L.exists() else "(none yet)"
+    traj   = TRAJECTORY.read_text().strip() if TRAJECTORY.exists() else "(none yet)"
+    recent = _recent_evolution_titles()
+    recent_block = ("\n".join(f"  - {t}" for t in recent)
+                    if recent else "  (none — this is an early run)")
+    fence = "\n".join(f"  - {p}" for p in FENCE_PREFIXES)
+    core_block = "\n".join(f"  - {p}" for p in sorted(CORE_FILES))
+
+    return f"""You are Varys's evolution agent. You are the SECOND of two phases.
+Phase A1 has already assessed the codebase and identified improvement opportunities.
+Your job: pick ONE of them and implement it.
+
+## PHASE A1 ASSESSMENT
+{assessment}
+
+## YOUR ACCUMULATED SELF-WISDOM
+{wisdom}
+
+## YOUR TRAJECTORY
+{traj}
+
+## IMPROVEMENTS YOU'VE ALREADY MADE (do NOT repeat these)
+{recent_block}
+
+## YOUR TASK
+Pick the HIGHEST-IMPACT opportunity from the A1 assessment that is also TRACEABLE
+to a specific learning in your wisdom or a recurring failure in your trajectory.
+If nothing in the assessment is traceable to a learning, pick the one with the
+clearest mechanical fix and note why you chose it.
+
+Then IMPLEMENT it. Hard constraints:
+  - You may ONLY create/edit files under these paths (the fence):
+{fence}
+  - NEVER touch: settings.json, any .slack/.notion/.env secret, crontab, the Slack
+    listener daemon, agent_config.py, or the evolution gate scripts
+    (varys-proactive-evolve.py, varys_semantic_gate.py).
+  - If you edit or create a .py hook, it MUST byte-compile AND you MUST add a sibling
+    `test_<module>.py` in .claude/hooks/. The gate RUNS every test_*.py; inline checks
+    in `__main__` are NOT run by the gate — use a separate test file.
+  - Make the SMALLEST change that delivers the improvement. One focused diff.
+
+## CORE ORCHESTRATION
+{core_block}
+(Same stricter gating rules as before — 2-of-2 semantic judge + mandatory sibling test.)
+
+## HARD RULES
+  - Do NOT run git add / git commit / git push. Do NOT post to Slack.
+  - Do NOT edit memory/*.jsonl or memory/*.md.
+
+## OUTPUT (last line MUST be this JSON, nothing after it)
+{{"title": "<short improvement title>", "learning": "<the wisdom/failure that drove it>", \
+"files": ["<rel path>", ...], "summary": "<what you changed and why it helps>", \
+"test": "<the check you added/ran and its result>"}}
+If you genuinely find nothing worth improving, output: {{"title": "", "summary": "no improvement this run"}}"""
+
+
+# ponytail: retired — replaced by build_assess_prompt + build_plan_prompt (two-phase split)
 def build_prompt() -> str:
     wisdom = ACTIVE_L.read_text().strip() if ACTIVE_L.exists() else "(none yet)"
     traj   = TRAJECTORY.read_text().strip() if TRAJECTORY.exists() else "(none yet)"
@@ -401,36 +550,7 @@ def _parse_agent_json(stdout: str) -> dict:
     return {}
 
 
-# ── DM ───────────────────────────────────────────────────────────────────
-
-def _dm_shoaib(text: str) -> None:
-    user_id = cfg("USER_SLACK_ID", "")
-    token   = cfg("SLACK_BOT_TOKEN", "") or os.environ.get("SLACK_BOT_TOKEN", "")
-    if not token:
-        slack = Path.home() / ".claude" / "hooks" / ".slack"
-        if slack.exists():
-            for line in slack.read_text().splitlines():
-                if line.startswith(("BOT_TOKEN=", "SLACK_BOT_TOKEN=")):
-                    token = line.split("=", 1)[1].strip()
-    if not user_id or not token:
-        return
-    try:
-        import urllib.request
-        opened = urllib.request.urlopen(urllib.request.Request(
-            "https://slack.com/api/conversations.open",
-            data=json.dumps({"users": user_id}).encode(),
-            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"}),
-            timeout=10)
-        ch = json.loads(opened.read()).get("channel", {}).get("id")
-        if not ch:
-            return
-        urllib.request.urlopen(urllib.request.Request(
-            "https://slack.com/api/chat.postMessage",
-            data=json.dumps({"channel": ch, "text": text}).encode(),
-            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"}),
-            timeout=10)
-    except Exception:
-        pass
+from varys_dm import dm_shoaib as _dm_shoaib
 
 
 # ── failure / success logging ──────────────────────────────────────────────
@@ -603,10 +723,11 @@ def main() -> int:
     try:
         print(f"[evolve] Starting at {started.isoformat()}")
 
-        # Build the prompt off fresh trajectory (read from the main repo), then
-        # discard the regenerated artifact. Done before the worktree exists.
+        # Build the A1 assess prompt off fresh trajectory (reads from the main repo),
+        # then discard the regenerated artifact. Done before the worktree exists so
+        # A1 reads the real, committed codebase state (not an in-flight worktree).
         _refresh_trajectory()
-        prompt = build_prompt()
+        assess_prompt = build_assess_prompt()
         _git(["checkout", "--", "memory/trajectory.md"])
 
         # ── Isolated worktree off the latest master (no shared working tree) ──
@@ -630,15 +751,32 @@ def main() -> int:
 
         leaf_judge, core_judge = _load_semantic_judge()
 
-        # ── Spawn the implement agent inside the isolated worktree ──
+        # ── Phase A1: Self-assessment (read-only, no file changes) ──
+        try:
+            assess_result = subprocess.run(
+                ["claude", "--dangerously-skip-permissions", "--print", "-p", assess_prompt,
+                 "--model", MODEL],
+                cwd=str(_WORK_DIR), capture_output=True, text=True, timeout=ASSESS_TIMEOUT,
+            )
+            assessment = assess_result.stdout.strip()
+            # Extract text up to ASSESSMENT-COMPLETE marker if present
+            if "ASSESSMENT-COMPLETE" in assessment:
+                assessment = assessment[:assessment.index("ASSESSMENT-COMPLETE")].strip()
+            print(f"[evolve] A1 assessment: {len(assessment.splitlines())} lines")
+        except subprocess.TimeoutExpired:
+            print(f"[evolve] A1 assessment timed out ({ASSESS_TIMEOUT}s) — proceeding with empty assessment")
+            assessment = "(A1 assessment timed out)"
+
+        # ── Phase A2: Plan + Implement ──
+        plan_prompt = build_plan_prompt(assessment)
         try:
             result = subprocess.run(
-                ["claude", "--dangerously-skip-permissions", "--print", "-p", prompt,
+                ["claude", "--dangerously-skip-permissions", "--print", "-p", plan_prompt,
                  "--model", MODEL],
-                cwd=str(_WORK_DIR), capture_output=True, text=True, timeout=900,
+                cwd=str(_WORK_DIR), capture_output=True, text=True, timeout=IMPL_TIMEOUT,
             )
         except subprocess.TimeoutExpired:
-            print("[evolve] agent timed out (900s) — discarding branch.")
+            print(f"[evolve] A2 agent timed out ({IMPL_TIMEOUT}s) — discarding branch.")
             _return_home()
             _mark_run()
             return 0
