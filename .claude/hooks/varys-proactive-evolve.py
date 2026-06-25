@@ -74,6 +74,14 @@ TIER1_GRADER  = VARYS_DIR / ".claude" / "evals" / "graders" / "run-tier1.sh"
 MODEL          = "claude-opus-4-8"
 RUN_GAP_HOURS  = 8
 TRAJECTORY_PY  = HOOKS_DIR / "varys-extract-trajectory.py"
+WORKTREES_DIR  = HARNESS_DIR / "evolve-worktrees"
+
+# The working dir all work-phase git ops / gates / the agent run in. Defaults to
+# the main repo, but is redirected to an isolated git worktree during a run so the
+# agent NEVER shares the working tree with the human (closes the concurrent-edit
+# race; lets evolution run even when ~/varys is dirty). Inputs (learnings,
+# trajectory) and the success ledger stay in VARYS_DIR.
+_WORK_DIR = VARYS_DIR
 
 # ── Fence ────────────────────────────────────────────────────────────────
 # A path is ALLOWED iff it starts with one of these prefixes (repo-relative)…
@@ -156,7 +164,7 @@ def _load_semantic_judge():
 # ── git helpers ──────────────────────────────────────────────────────────
 
 def _git(args: list[str], timeout: int = 60) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", *args], cwd=str(VARYS_DIR),
+    return subprocess.run(["git", *args], cwd=str(_WORK_DIR),
                           capture_output=True, text=True, timeout=timeout)
 
 
@@ -214,7 +222,7 @@ def gate_compile(changed: list[str]) -> tuple[bool, str]:
     """Every changed .py must byte-compile."""
     py = [f for f in changed if f.endswith(".py")]
     for rel in py:
-        full = VARYS_DIR / rel
+        full = _WORK_DIR / rel
         if not full.exists():     # deleted — skip
             continue
         r = subprocess.run(["python3", "-m", "py_compile", str(full)],
@@ -232,14 +240,17 @@ def gate_tests(changed: list[str]) -> tuple[bool, str]:
     untested code edit would ship. A changed hook with no sibling test fails here. CORE
     orchestration files (CORE_FILES) get NO exemption from this — an untested core edit
     is the highest-risk thing this loop could ship, so the message calls it out."""
+    # All path bases resolve against _WORK_DIR so gates check the worktree's files.
+    hooks_dir = _WORK_DIR / ".claude" / "hooks"
+    tier1     = _WORK_DIR / ".claude" / "evals" / "graders" / "run-tier1.sh"
     changed_hooks = [f for f in changed
                      if f.startswith(".claude/hooks/") and f.endswith(".py")
                      and not Path(f).name.startswith("test_")]
     for rel in changed_hooks:
-        if not (VARYS_DIR / rel).exists():   # deleted — no test needed
+        if not (_WORK_DIR / rel).exists():   # deleted — no test needed
             continue
         stem = Path(rel).stem
-        sibling = HOOKS_DIR / f"test_{stem}.py"
+        sibling = hooks_dir / f"test_{stem}.py"
         if not sibling.exists():
             if _is_core(rel):
                 return False, (f"{rel} is a CORE orchestration file and has no sibling "
@@ -249,16 +260,16 @@ def gate_tests(changed: list[str]) -> tuple[bool, str]:
                            f"untested code edits are not allowed (gate cannot run an "
                            f"inline __main__ check).")
     # hook tests
-    for test_file in sorted(HOOKS_DIR.glob("test_*.py")):
+    for test_file in sorted(hooks_dir.glob("test_*.py")):
         r = subprocess.run(["python3", str(test_file)],
-                           cwd=str(VARYS_DIR), capture_output=True, text=True, timeout=120)
+                           cwd=str(_WORK_DIR), capture_output=True, text=True, timeout=120)
         if r.returncode != 0:
             return False, f"{test_file.name} failed: {(r.stdout + r.stderr).strip()[-200:]}"
     # Tier-1 structural grader if rules/agents changed
     if any(f.startswith((".claude/rules/", ".claude/agents/")) for f in changed):
-        if TIER1_GRADER.exists():
-            r = subprocess.run(["bash", str(TIER1_GRADER)],
-                               cwd=str(VARYS_DIR), capture_output=True, text=True, timeout=120)
+        if tier1.exists():
+            r = subprocess.run(["bash", str(tier1)],
+                               cwd=str(_WORK_DIR), capture_output=True, text=True, timeout=120)
             if r.returncode != 0:
                 fails = [l for l in r.stdout.splitlines() if l.strip().startswith("FAIL ")]
                 return False, f"Tier-1 grader failed: {'; '.join(fails[:5])[:200]}"
@@ -570,63 +581,61 @@ def main() -> int:
         print("[evolve] another run holds the lock — skipping.")
         return 0
 
-    original_branch = ""
+    global _WORK_DIR
+    wt_path         = None
     evolve_branch   = ""
     base_ref        = ""
     base_sha        = ""
 
     def _return_home():
-        """Revert the agent's edits and switch back to the user's branch.
-        Deletes the evolve branch if it was created and not the current HEAD.
-        Reverts ONLY the fence (the gate guarantees the agent edits nowhere else),
-        so unrelated uncommitted WIP elsewhere in the tree is never destroyed —
-        a blanket `git reset --hard` here once wiped a concurrent edit.
-        ponytail: still shares the working tree, so a human editing INSIDE the fence
-        mid-run can still collide; full isolation = run the loop in a git worktree."""
-        for prefix in FENCE_PREFIXES:
-            _git(["checkout", "--", prefix])   # revert tracked agent edits
-            _git(["clean", "-fd", "--", prefix])  # remove untracked agent files
-        if original_branch and _current_branch() != original_branch:
-            _git(["checkout", original_branch])
+        """Tear down the isolated worktree (and its branch unless shipped) and
+        point work ops back at the main repo. The human's checkout is NEVER
+        touched — the agent only ever ran inside the worktree, so concurrent WIP
+        in ~/varys (fence or not) can't collide with or be destroyed by a run."""
+        global _WORK_DIR
+        _WORK_DIR = VARYS_DIR
+        if wt_path:
+            _git(["worktree", "remove", "--force", str(wt_path)])
+            _git(["worktree", "prune"])
         if evolve_branch:
             _git(["branch", "-D", evolve_branch])
 
     try:
         print(f"[evolve] Starting at {started.isoformat()}")
 
-        # Don't run on a dirty tree we'd later mistake for the agent's edits.
-        if _git(["status", "--porcelain"]).stdout.strip():
-            print("[evolve] working tree dirty at start — skipping (won't risk a bad revert).")
-            return 0
-
-        original_branch = _current_branch()
-
-        # Build the prompt off fresh trajectory, then discard the artifact write.
+        # Build the prompt off fresh trajectory (read from the main repo), then
+        # discard the regenerated artifact. Done before the worktree exists.
         _refresh_trajectory()
         prompt = build_prompt()
         _git(["checkout", "--", "memory/trajectory.md"])
 
-        # ── Branch off the latest master (clean, isolated PR base) ──
+        # ── Isolated worktree off the latest master (no shared working tree) ──
+        # No dirty-tree guard needed: the worktree is branched off origin/master
+        # and lives outside ~/varys, so the main checkout's state is irrelevant.
         base_ref, base_sha = _resolve_base()
         ts = started.strftime("%Y%m%d-%H%M%S")
         evolve_branch = f"evolve/{ts}"
-        co = _git(["checkout", "-b", evolve_branch, base_ref])
-        if co.returncode != 0:
-            print(f"[evolve] could not branch off {base_ref}: {co.stderr[:200]} — aborting.")
-            evolve_branch = ""   # not created
+        WORKTREES_DIR.mkdir(parents=True, exist_ok=True)
+        wt_candidate = WORKTREES_DIR / ts
+        add = _git(["worktree", "add", str(wt_candidate), "-b", evolve_branch, base_ref])
+        if add.returncode != 0:
+            print(f"[evolve] could not create worktree off {base_ref}: {add.stderr[:200]} — aborting.")
+            evolve_branch = ""   # branch not created
             _return_home()
             _mark_run()
             return 0
-        print(f"[evolve] branched {evolve_branch} off {base_ref} ({base_sha[:8]})")
+        wt_path = wt_candidate
+        _WORK_DIR = wt_path      # all work-phase git/gates/agent now target the worktree
+        print(f"[evolve] worktree {wt_path} on {evolve_branch} off {base_ref} ({base_sha[:8]})")
 
         leaf_judge, core_judge = _load_semantic_judge()
 
-        # ── Spawn the implement agent on the clean branch ──
+        # ── Spawn the implement agent inside the isolated worktree ──
         try:
             result = subprocess.run(
                 ["claude", "--dangerously-skip-permissions", "--print", "-p", prompt,
                  "--model", MODEL],
-                cwd=str(VARYS_DIR), capture_output=True, text=True, timeout=900,
+                cwd=str(_WORK_DIR), capture_output=True, text=True, timeout=900,
             )
         except subprocess.TimeoutExpired:
             print("[evolve] agent timed out (900s) — discarding branch.")
@@ -720,8 +729,8 @@ def main() -> int:
             print(f"[evolve] push failed: {push.stderr[:200]}")
             _dm_shoaib(f"🕷️ Evolution committed but PUSH FAILED — *{title}*\n"
                        f"Branch `{evolve_branch}` exists locally only.\n{push.stderr[:200]}")
-            _return_home()  # branch stays? no — it's local only; return home, leave branch
-            evolve_branch = ""   # don't delete — keep the local branch for inspection
+            evolve_branch = ""   # clear FIRST so teardown keeps the local branch for inspection
+            _return_home()       # remove worktree only; the committed branch survives
             _mark_run()
             return 0
 
@@ -740,8 +749,8 @@ def main() -> int:
                           label="core-evolution" if is_core_run else "")
 
         _log_success({**meta, "pr": pr_url, "branch": evolve_branch}, new_sha)
-        evolve_branch = ""   # shipped — do NOT delete it in _return_home
-        _return_home()       # back to the user's branch, working tree clean
+        evolve_branch = ""   # shipped (pushed) — do NOT delete it during teardown
+        _return_home()       # remove the worktree; main checkout was never touched
 
         _dm_shoaib(
             (f"⚠️ *touches CORE orchestration — review carefully* "
