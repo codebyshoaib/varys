@@ -14,7 +14,7 @@ Channels:
 
 Every application is:
   - Logged to Notion Job Tracker (Status → "applied")
-  - Logged to Axiom
+  - Logged to the local telemetry log
   - Eval tracked (watches for response)
 
 Called by job-finder.py after finding new qualifying jobs.

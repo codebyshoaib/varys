@@ -3,7 +3,7 @@
 varys_health.py — Log health events locally via varys_log.
 
 Previously wrote to Notion Health Log DB via Claude MCP subprocess.
-Now local-only: all events go to Axiom + /tmp fallback via klog.
+Now local-only: all events go to the local telemetry log via klog.
 The public API (log_error, log_healed, log_critique, log_response_quality,
 log_health) is unchanged — callers require no updates.
 """

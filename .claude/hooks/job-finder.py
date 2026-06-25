@@ -962,7 +962,7 @@ def main():
     except Exception:
         pass
 
-    # Log to Axiom
+    # Log telemetry
     klog("job_finder_run",
          component="job-finder",
          raw_fetched=len(raw_jobs),

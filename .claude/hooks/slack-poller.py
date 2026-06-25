@@ -535,7 +535,7 @@ def _main_body() -> int:
 
         log(f"Done. Added {len(new_items)} new items. Total: {len(all_items)}.")
 
-        # Break down by type for Axiom
+        # Break down by type for telemetry
         by_type = {}
         for item in new_items:
             by_type[item["type"]] = by_type.get(item["type"], 0) + 1

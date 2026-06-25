@@ -13,7 +13,7 @@ Triggered when {{USER_NAME}} says:
   "nlm list"                  → list all notebooks
 
 All results DMed back to {{USER_NAME}} on Slack.
-Everything logged to Axiom.
+Everything logged to the local telemetry log.
 """
 
 import json

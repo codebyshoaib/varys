@@ -117,59 +117,6 @@ def slack_dm(token: str, text: str):
     ], capture_output=True)
 
 
-def query_axiom_errors(service_name: str, minutes: int = 15) -> list[str]:
-    """
-    Query Axiom for recent error events for this service.
-    Returns list of error strings. Falls back to local log on failure.
-    """
-    axiom_cfg = Path.home() / ".claude" / "hooks" / ".axiom"
-    token = ""
-    if axiom_cfg.exists():
-        for line in axiom_cfg.read_text().splitlines():
-            if line.startswith("AXIOM_TOKEN="):
-                token = line.split("=", 1)[1].strip()
-
-    if not token:
-        return []
-
-    import urllib.request
-    from datetime import timezone
-    start = (datetime.utcnow() - __import__("datetime").timedelta(minutes=minutes)).strftime("%Y-%m-%dT%H:%M:%SZ")
-    end   = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
-
-    payload = json.dumps({
-        "apl": f'varys-logs | where ["event"] == "error" | where ["context"] contains "{service_name.replace("-","_")}" or ["context"] contains "{service_name.replace("_","-")}" or ["component"] contains "{service_name}" | project _time, component, context, error, traceback | order by _time desc | limit 10',
-        "startTime": start,
-        "endTime":   end,
-    }).encode()
-
-    try:
-        req = urllib.request.Request(
-            "https://api.axiom.co/v1/datasets/varys-logs/query",
-            data=payload,
-            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-        )
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            data = json.loads(resp.read())
-
-        errors = []
-        for row in data.get("matches", []):
-            d = row.get("data", {})
-            if d.get("event") != "error":
-                continue
-            # Filter by service/component if possible
-            ctx = d.get("context", "") + d.get("component", "")
-            if service_name.replace("-", "_") in ctx or service_name.replace("_", "-") in ctx or not ctx:
-                tb  = d.get("traceback", "")
-                err = d.get("error", "")
-                errors.append(f"Error: {err}\n{tb}".strip())
-        return errors
-
-    except Exception as e:
-        log(f"Axiom query failed: {e} — falling back to local log")
-        return []
-
-
 def read_log_tail(log_path: str, lines: int = 80) -> str:
     p = Path(log_path)
     if not p.exists():
@@ -363,7 +310,7 @@ def check_service(service: dict, token: str | None) -> bool:
                         slack_dm(token, msg)
                     return False
 
-    # 2. Query Axiom for recent errors (primary) — local log as fallback
+    # 2. Scan the local log for recent errors for this service
     # Only look at errors AFTER the last known heal for this service
     state = {}
     if HEAL_STATE.exists():
@@ -372,8 +319,6 @@ def check_service(service: dict, token: str | None) -> bool:
         except Exception:
             pass
     last_healed_at = state.get(name, {}).get("last_healed_at")
-    # Use 15 min window but no earlier than last heal time
-    minutes = 15
     if last_healed_at:
         from datetime import timezone
         healed_dt  = datetime.fromisoformat(last_healed_at)
@@ -383,16 +328,13 @@ def check_service(service: dict, token: str | None) -> bool:
             log(f"✅ {name}: healthy (healed {round(age_minutes)}m ago)")
             return True
 
-    recent_errors = query_axiom_errors(name, minutes=minutes)
-    if not recent_errors:
-        # Fallback: scan local log file
-        log_tail     = read_log_tail(log_path, lines=80)
-        recent_errors = extract_errors(log_tail)
+    log_tail     = read_log_tail(log_path, lines=80)
+    recent_errors = extract_errors(log_tail)
     if not recent_errors:
         log(f"✅ {name}: healthy")
         return True
 
-    log(f"🔴 {name}: found {len(recent_errors)} error(s) via Axiom/log in last 15 min")
+    log(f"🔴 {name}: found {len(recent_errors)} error(s) in local log in last 15 min")
     # Log detection to Notion immediately
     log_error(service=name,
               error="\n".join(recent_errors[:2])[:500],

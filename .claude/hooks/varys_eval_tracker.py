@@ -11,7 +11,7 @@ Every action Varys takes gets logged with:
   - evidence:     what Varys actually did (request, answer, action)
 
 Previously wrote to Notion Health Log DB via Claude MCP subprocess.
-Now local-only: all events go to Axiom + /tmp fallback via klog.
+Now local-only: all events go to the local telemetry log via klog.
 Pending-reaction tracking continues via the local JSONL file.
 
 Scoring rubric (0-100):
@@ -129,7 +129,7 @@ def log_action(action_type: str, event: str, evidence: str,
                  INITIAL_SCORES.get((action_type, "sent"), 50))
     sid        = session_id or _SESSION_ID
 
-    # Log to Axiom synchronously — fast, always works
+    # Log telemetry synchronously — fast, always works
     klog("eval_action", component=service, action_type=action_type,
          action_id=action_id, score=score, signal=signal,
          summary=event[:100], evidence=evidence[:150],

@@ -1,5 +1,5 @@
 """
-varys_log.py — Structured Axiom logging for all Varys hooks.
+varys_log.py — Structured local telemetry logging for all Varys hooks.
 
 Design principles:
 - Every event has base fields: _time, component, event, session_id
@@ -31,7 +31,6 @@ import datetime
 import json
 import os
 import traceback
-import urllib.request
 from pathlib import Path
 import socket
 import uuid
@@ -41,24 +40,16 @@ _PID = os.getpid()
 _SCHEMA_VERSION = "1.0"
 _TRACE_ID = None  # set per-operation via start_trace()
 
-_AXIOM_CONFIG   = Path.home() / ".claude" / "hooks" / ".axiom"
-# Persistent so reboots don't wipe telemetry (/tmp clears on boot). When no Axiom
-# token is configured this file is the ONLY sink, so it must survive restarts.
+# The single telemetry sink: one JSON event per line. Persistent so reboots don't
+# wipe it (/tmp clears on boot). Read it with jq, or via varys-observer /
+# varys-self-healer, which scan it for recent ERROR/FATAL events.
 # ponytail: append-only, grows unbounded; add size-based rotation if it gets large.
-_FALLBACK_LOG   = Path.home() / ".varys-harness" / "axiom-fallback.jsonl"
+_FALLBACK_LOG   = Path.home() / ".varys-harness" / "telemetry.jsonl"
 try:
     _FALLBACK_LOG.parent.mkdir(parents=True, exist_ok=True)
 except Exception:
-    _FALLBACK_LOG = Path("/tmp/varys-axiom-fallback.jsonl")  # last-resort fallback
+    _FALLBACK_LOG = Path("/tmp/varys-telemetry.jsonl")  # last-resort path
 _SESSION_ID     = datetime.datetime.utcnow().strftime("%Y%m%d-%H%M%S")
-
-
-def _load_token() -> str:
-    if _AXIOM_CONFIG.exists():
-        for line in _AXIOM_CONFIG.read_text().splitlines():
-            if line.startswith("AXIOM_TOKEN="):
-                return line.split("=", 1)[1].strip()
-    return os.environ.get("AXIOM_TOKEN", "")
 
 
 def _now_iso() -> str:
@@ -67,37 +58,13 @@ def _now_iso() -> str:
 
 
 def _send(events: list):
-    """Send events to Axiom. Never raises."""
-    token = _load_token()
-
-    # Always write to local fallback with timestamp
+    """Append events to the local telemetry log, one JSON object per line. Never raises."""
     try:
         with open(_FALLBACK_LOG, "a") as f:
             for e in events:
                 f.write(json.dumps({**e, "_local_time": _now_iso()}) + "\n")
     except Exception:
         pass
-
-    if not token:
-        return
-
-    try:
-        # Do NOT send _time — let Axiom use ingest time as the index timestamp.
-        # Sending _time as a string field causes it to be stored but not indexed.
-        axiom_events = [{k: v for k, v in e.items() if k != "_time"} for e in events]
-        payload = json.dumps(axiom_events).encode()
-        req = urllib.request.Request(
-            "https://api.axiom.co/v1/datasets/varys-logs/ingest",
-            data=payload,
-            headers={
-                "Authorization": f"Bearer {token}",
-                "Content-Type": "application/json",
-            },
-        )
-        with urllib.request.urlopen(req, timeout=10) as r:
-            pass  # fire and forget
-    except Exception:
-        pass  # fallback file already has it
 
 
 def _base(component: str, event: str, severity: str = "INFO") -> dict:

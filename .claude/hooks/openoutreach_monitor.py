@@ -284,7 +284,7 @@ def run(token: str) -> int:
         lines.append("🕷️ Varys")
         slack_dm(token, "\n".join(lines))
 
-    # Log new connections and replies to Axiom
+    # Log new connections and replies to the local telemetry log
     if new_connections:
         for c in new_connections:
             name = f"{c.get('first_name','')} {c.get('last_name','')}".strip()

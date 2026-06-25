@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """varys-observer.py — self-healing loop.
-Hourly + on-ERROR. Detect anomalies in Axiom → diagnose → auto-fix (within fence) / escalate.
+Hourly + on-ERROR. Detect anomalies in the local telemetry log → diagnose → auto-fix (within fence) / escalate.
 Kill switch: ~/.claude/hooks/.observer-paused disables auto-fix."""
-import json, os, subprocess, sys, time, urllib.request
+import json, os, subprocess, sys, time
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import sys as _sys_obs
@@ -16,45 +17,43 @@ import importlib.util
 _spec = importlib.util.spec_from_file_location("notion_sink", ROOT/".claude/hooks/varys-notion-sink.py")
 notion_sink = importlib.util.module_from_spec(_spec); _spec.loader.exec_module(notion_sink)
 
-AXIOM_CFG = Path.home()/".claude"/"hooks"/".axiom"
 PAUSED = Path.home()/".claude"/"hooks"/".observer-paused"
 FAILURES = ROOT/".beads"/"failures.jsonl"
 
 # Hard-exclusion fence — auto-fix NEVER edits these; always escalate.
-FENCE = [".slack", ".axiom", ".env", ".notion", "settings.json", "crontab",
+FENCE = [".slack", ".env", ".notion", "settings.json", "crontab",
          "varys-slack-listener.py"]
 
-def _axiom_token():
-    if AXIOM_CFG.exists():
-        for line in AXIOM_CFG.read_text().splitlines():
-            if line.startswith("AXIOM_TOKEN="):
-                return line.split("=",1)[1].strip()
-    return ""
-
 def query_anomalies():
-    """APL: error events in the last hour grouped by component+error_type."""
-    token = _axiom_token()
-    if not token:
+    """ERROR/FATAL events in the local telemetry log from the last hour."""
+    log_path = k._FALLBACK_LOG
+    if not log_path.exists():
         return []
-    apl = ("varys-logs | where severity in ('ERROR','FATAL') "
-           "| where _time > ago(1h) "
-           "| summarize count() by component, error_type, context")
+    cutoff = datetime.utcnow() - timedelta(hours=1)
+    rows = []
+    # ponytail: reads the whole append-only log each run; fine while small, tail it if it grows.
     try:
-        payload = json.dumps({"apl": apl}).encode()
-        req = urllib.request.Request("https://api.axiom.co/v1/datasets/_apl?format=tabular",
-            data=payload, headers={"Authorization": f"Bearer {token}",
-            "Content-Type": "application/json"})
-        with urllib.request.urlopen(req, timeout=15) as r:
-            data = json.loads(r.read())
-        rows = []
-        for m in data.get("matches", []):
-            d = m.get("data", {})
+        for line in log_path.read_text().splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                d = json.loads(line)
+            except Exception:
+                continue
+            if d.get("severity") not in ("ERROR", "FATAL"):
+                continue
+            try:
+                when = datetime.strptime(d.get("_local_time", ""), "%Y-%m-%dT%H:%M:%S.%fZ")
+            except Exception:
+                continue
+            if when < cutoff:
+                continue
             rows.append({"component": d.get("component"), "error_type": d.get("error_type"),
                          "context": d.get("context"), "count": 1})
-        return rows
     except Exception as e:
         k.klog_error("observer.query", e, component="observer", severity="WARN")
-        return []
+    return rows
 
 def is_fenced(text: str) -> bool:
     return any(f in (text or "") for f in FENCE)
@@ -112,7 +111,7 @@ HANDLED = ROOT/".beads"/"observer-handled.jsonl"
 
 def already_handled(anom) -> bool:
     """Dedup against errors we've already escalated, so a lingering log entry in the
-    1h Axiom window is not re-acted every run."""
+    1h window is not re-acted every run."""
     import hashlib
     sig = hashlib.sha1(f"{anom.get('component')}|{anom.get('error_type')}|{anom.get('context')}".encode()).hexdigest()[:16]
     try:

@@ -39,7 +39,7 @@ Retrieval and write rules are defined in `.claude/hooks/varys_context.py` — do
 | Harness backlog | `{{config:NOTION_HARNESS_DB_ID}}` | {{AGENT_NAME}}'s feature backlog + self-evolution |
 | People Intelligence | `{{config:NOTION_PEOPLE_DB_ID}}` | Mood, needs, recurring topics, what works |
 | Job Tracker | `{{config:NOTION_JOBS_DB_ID}}` | Job finds + application status |
-| Observability | `{{config:NOTION_OBSERVABILITY_DB_ID}}` | Errors, self-heal actions, daily digest — Status: 🔴 Needs {{USER_NAME}} / 🟡 Pending / 🟢 Solved / ⚪ Monitoring. Firehose in Axiom `varys-logs`. |
+| Observability | `{{config:NOTION_OBSERVABILITY_DB_ID}}` | Errors, self-heal actions, daily digest — Status: 🔴 Needs {{USER_NAME}} / 🟡 Pending / 🟢 Solved / ⚪ Monitoring. Firehose in `~/.varys-harness/telemetry.jsonl`. |
 | Canva Designs | `{{config:NOTION_CANVA_DB_ID}}` | Canva design assets — topic, channel, format, eval scores, asset URLs, status (draft/approved/posted/Needs-{{USER_NAME}}). Under Social Media Growth Plan. |
 
 Other DBs referenced by name only: Projects, {{USER_NAME}}'s Todo, {{AGENT_NAME}}'s Learning Log.

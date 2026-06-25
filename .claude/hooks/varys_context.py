@@ -695,7 +695,7 @@ def log_suppression(
 ) -> None:
     """
     Record a suppressed/dropped inbound message.
-    Writes to SQLite suppression_log + Axiom via varys_log.
+    Writes to SQLite suppression_log + local telemetry via varys_log.
     Never raises.
     """
     import sys
@@ -728,7 +728,7 @@ def log_suppression(
             details=details,
         )
     except Exception as e:
-        print(f"[log_suppression] Axiom write failed: {e}", file=sys.stderr)
+        print(f"[log_suppression] telemetry write failed: {e}", file=sys.stderr)
 
 def log_milestone(
     job_id: str,
@@ -762,7 +762,7 @@ def log_milestone(
                  step_index=step_index, total_steps=total_steps,
                  status=status, details=details)
     except Exception as e:
-        print(f"[log_milestone] Axiom write failed: {e}", file=sys.stderr)
+        print(f"[log_milestone] telemetry write failed: {e}", file=sys.stderr)
 
 # ── Thread context enrichment ──────────────────────────────────────────────────
 
@@ -806,7 +806,7 @@ def tracked_thread(job_id: str, fn, *args, **kwargs):
     """
     Run fn(*args, **kwargs) in a daemon thread.
     On success: marks job delivered.
-    On exception: marks job failed, logs error to Axiom.
+    On exception: marks job failed, logs error to the local telemetry log.
     Returns the Thread object (already started).
     """
     import threading, sys

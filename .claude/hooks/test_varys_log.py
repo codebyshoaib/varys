@@ -2,7 +2,7 @@
 
 Covers the one thing that's actually broken if it regresses: the fallback log
 must be persistent (not under /tmp, which clears on reboot), since it's the ONLY
-telemetry sink when no Axiom token is configured.
+telemetry sink.
 """
 import sys
 from pathlib import Path
