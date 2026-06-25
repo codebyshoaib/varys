@@ -26,7 +26,7 @@ REPO  = HOOKS.parent.parent
 sys.path.insert(0, str(HOOKS))
 
 from varys_harness_db import (
-    get_db, mark_slack_processing, mark_slack_done,
+    get_db, mark_slack_processing, mark_slack_done, mark_slack_retry,
     enqueue_meeting,
 )
 from varys_log import klog_error
@@ -146,6 +146,7 @@ Your ONE job here: write the reply text to the Slack message below. Nothing else
 ## CRITICAL — how delivery works
 The system posts your output to Slack for you. You do NOT send anything yourself.
 - Do NOT call any Slack API, curl, or chat.postMessage. Just write the reply.
+- Do NOT call mcp__slack__slack_reply_to_thread, mcp__slack__slack_post_message, or ANY mcp__slack__* write tool. These are BLOCKED by a PreToolUse hook. If you call them, the hook denial becomes your reply instead of your actual answer — that is the bug the user sees.
 - Do NOT say "I sent", "I posted", "I DM'd", "sent as a DM", or anything about delivery.
 - Do NOT reason about channels, threads, DMs, or whether you're "in" a channel — that is the system's job, not yours.
 - Whatever text you output IS the message. Write it as the reply itself.
@@ -199,6 +200,34 @@ Then, if applicable, append ONE directive line as the VERY LAST line:
   "On it — I'll post a plan in this thread shortly."). Do NOT attempt the fix yourself here.
 - Anything else (chat, an info question you just answered, a joke) → append NOTHING.
   Only emit WORK for a genuine code-change request, never for questions or discussion."""
+
+
+def _parse_pre_tool_text(stdout: str) -> str:
+    """Return text from the first assistant message, stopping before any tool_use block.
+
+    When a drift-leak occurs Claude's *final* result is meta-commentary, but the
+    original good reply is in the first assistant event's text blocks (before it
+    tried to call mcp__slack__*). This extracts that pre-tool text for HTTP fallback.
+    """
+    for line in (stdout or "").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            ev = json.loads(line)
+        except Exception:
+            continue
+        if ev.get("type") != "assistant":
+            continue
+        texts = []
+        for block in (ev.get("message", {}) or {}).get("content", []) or []:
+            if block.get("type") == "text" and block.get("text"):
+                texts.append(block["text"])
+            elif block.get("type") == "tool_use":
+                break  # stop before the Slack tool call
+        if texts:
+            return "\n".join(texts).strip()
+    return ""
 
 
 _ACTIVE_RECORDING_FILE = Path.home() / ".varys-harness" / "active_recording.json"
@@ -483,6 +512,37 @@ def main() -> int:
 
     answer, tools_used = parse_stream_json(result.stdout)
     answer = answer.strip()
+
+    # Guard: if the final output is meta-commentary from a blocked Slack MCP tool call
+    # (drift hook fired, Claude then said "I don't have channel id" / "spawned harness" etc.)
+    # recover the actual reply from the stream and post it via raw HTTP.
+    _DRIFT_LEAK = re.compile(
+        r"don[''t]+ have.{0,40}channel|"
+        r"spawned harness agent|"
+        r"cannot post to Slack|"
+        r"I.{0,10}m unable to (send|post|reply)",
+        re.I,
+    )
+    if _DRIFT_LEAK.search(answer):
+        print(f"[slack-worker] drift-leak detected: {answer[:200]}", file=sys.stderr)
+        klog_error("drift_leak_suppressed", RuntimeError(f"drift leak: {answer[:200]}"), component="slack-worker")
+
+        # Recover the original text from the stream: first assistant message,
+        # text blocks only, stopping before any tool_use block appears.
+        recovered = _parse_pre_tool_text(result.stdout)
+        if recovered:
+            try:
+                _slack_post(bot_token, channel, thread_ts, recovered)
+                print(f"[slack-worker] drift-leak recovered via HTTP fallback: {len(recovered)} chars")
+                mark_slack_done(db, row_id)
+                return 0
+            except Exception as http_err:
+                klog_error("drift_leak_http_fallback_failed", http_err, component="slack-worker")
+                print(f"[slack-worker] HTTP fallback also failed: {http_err}", file=sys.stderr)
+
+        # Recovery unavailable or HTTP failed — leave as pending so drain retries.
+        mark_slack_retry(db, row_id, failure_context=f"drift-leak (no recovery): {answer[:200]}")
+        return 1
 
     # Extract trailing directive (NLM: or WORK:) if claude appended one.
     nlm_directive = None
