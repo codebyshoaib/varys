@@ -186,15 +186,6 @@ def _changed_files(since_sha: str) -> list[str]:
     return sorted(files)
 
 
-def _hard_revert(start_sha: str) -> None:
-    """Discard EVERYTHING back to start_sha — tracked resets + untracked cleaned
-    within the fence only (never nuke unrelated WIP outside the fence)."""
-    _git(["reset", "--hard", start_sha])
-    # clean only untracked files inside the fence
-    for prefix in FENCE_PREFIXES:
-        _git(["clean", "-fd", "--", prefix])
-
-
 def _capture_recovery(start_sha: str) -> str:
     diff = _git(["diff", start_sha]).stdout
     if not diff.strip():
@@ -585,11 +576,16 @@ def main() -> int:
     base_sha        = ""
 
     def _return_home():
-        """Reset any uncommitted work and switch back to the user's branch.
-        Deletes the evolve branch if it was created and not the current HEAD."""
-        _git(["reset", "--hard"])
+        """Revert the agent's edits and switch back to the user's branch.
+        Deletes the evolve branch if it was created and not the current HEAD.
+        Reverts ONLY the fence (the gate guarantees the agent edits nowhere else),
+        so unrelated uncommitted WIP elsewhere in the tree is never destroyed —
+        a blanket `git reset --hard` here once wiped a concurrent edit.
+        ponytail: still shares the working tree, so a human editing INSIDE the fence
+        mid-run can still collide; full isolation = run the loop in a git worktree."""
         for prefix in FENCE_PREFIXES:
-            _git(["clean", "-fd", "--", prefix])
+            _git(["checkout", "--", prefix])   # revert tracked agent edits
+            _git(["clean", "-fd", "--", prefix])  # remove untracked agent files
         if original_branch and _current_branch() != original_branch:
             _git(["checkout", original_branch])
         if evolve_branch:
