@@ -83,6 +83,53 @@ def _slack_post(token: str, channel: str, thread_ts: str, text: str) -> None:
         raise RuntimeError(f"Slack post failed: {resp.get('error')}")
 
 
+def _slack_react(token: str, channel: str, msg_ts: str, emoji: str) -> None:
+    payload = json.dumps({"channel": channel, "timestamp": msg_ts, "name": emoji}).encode()
+    req = urllib.request.Request(
+        "https://slack.com/api/reactions.add",
+        data=payload,
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(req, timeout=10) as r:
+        resp = json.loads(r.read())
+    if not resp.get("ok") and resp.get("error") != "already_reacted":
+        raise RuntimeError(f"Slack react failed: {resp.get('error')}")
+
+
+def _fetch_fresh_thread_history(token: str, channel: str, thread_ts: str, is_dm: bool) -> str:
+    """Re-fetch thread history from Slack just before building the prompt (always fresh)."""
+    try:
+        if is_dm:
+            url = f"https://slack.com/api/conversations.history?channel={channel}&limit=20"
+        else:
+            url = (f"https://slack.com/api/conversations.replies"
+                   f"?channel={channel}&ts={thread_ts}&limit=30")
+        req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            data = json.loads(r.read())
+        if not data.get("ok"):
+            return ""
+        messages = data.get("messages", [])
+        if is_dm:
+            messages = list(reversed(messages))
+        lines = []
+        for m in messages:
+            uid    = m.get("user", "")
+            bot_id = m.get("bot_id", "")
+            if bot_id:
+                who = AGENT_NAME
+            elif uid == SHOAIB_USER_ID:
+                who = USER_NAME
+            else:
+                who = f"<@{uid}>"
+            text = re.sub(r"<@[A-Z0-9]+>", "", m.get("text", "")).strip()
+            if text:
+                lines.append(f"{who}: {text}")
+        return "\n".join(lines)
+    except Exception:
+        return ""
+
+
 def _create_work_bead(work_directive, request_text, channel, thread_ts, sender_id, source):
     """
     Turn a Slack engineering request into a tracked, origin-linked bead.
@@ -198,6 +245,11 @@ Then, if applicable, append ONE directive line as the VERY LAST line:
   `WORK: <repo> | <≤10-word imperative title>`. The repo must be named or unmistakable from context.
   For a WORK item your reply text MUST be a SHORT acknowledgement only (1 line, e.g.
   "On it — I'll post a plan in this thread shortly."). Do NOT attempt the fix yourself here.
+- No text reply needed (someone said "thanks", "ok", sent an emoji, or the message is purely
+  informational and an emoji reaction is the right response) →
+  Output NOTHING except: `REACT: <emoji_name>`
+  e.g. `REACT: white_check_mark`, `REACT: thumbsup`, `REACT: eyes`, `REACT: raised_hands`, `REACT: fire`
+  The system adds that emoji reaction to their message — no text posted. Use this when a reaction is genuinely more natural than words.
 - Anything else (chat, an info question you just answered, a joke) → append NOTHING.
   Only emit WORK for a genuine code-change request, never for questions or discussion."""
 
@@ -394,12 +446,23 @@ def main() -> int:
      text, thread_history, is_dm, is_third_party, job_id, retry_count,
      priority, failure_context) = row
 
+    # Extract the original message ts from the row_id (format: "slack-{channel}-{msg_ts}")
+    # Used for reactions.add, which targets the specific message, not the thread root.
+    _prefix = f"slack-{channel}-"
+    msg_ts = row_id[len(_prefix):] if row_id.startswith(_prefix) else thread_ts
+
     mark_slack_processing(db, row_id)
 
     bot_token = _load_bot_token()
     if not bot_token:
         print("[slack-worker] no BOT_TOKEN found", file=sys.stderr)
         return 1
+
+    # Re-fetch thread history live — the enqueued snapshot may be stale if the
+    # thread grew between enqueue and drain. Fall back to stored value on failure.
+    fresh_history = _fetch_fresh_thread_history(bot_token, channel, thread_ts, bool(is_dm))
+    if fresh_history:
+        thread_history = fresh_history
 
     # ── Recording commands — handled before the normal claude -p pipeline ─────
     text_lower = (text or "").lower().strip()
@@ -544,9 +607,10 @@ def main() -> int:
         mark_slack_retry(db, row_id, failure_context=f"drift-leak (no recovery): {answer[:200]}")
         return 1
 
-    # Extract trailing directive (NLM: or WORK:) if claude appended one.
+    # Extract trailing directive (NLM:, WORK:, or REACT:) if claude appended one.
     nlm_directive = None
     work_directive = None
+    react_emoji = None
     lines = answer.splitlines()
     if lines and lines[-1].startswith("NLM:"):
         nlm_directive = lines[-1][4:].strip()
@@ -554,8 +618,26 @@ def main() -> int:
     elif lines and lines[-1].startswith("WORK:"):
         work_directive = lines[-1][5:].strip()
         answer = "\n".join(lines[:-1]).strip()
+    elif lines and lines[-1].startswith("REACT:"):
+        react_emoji = re.sub(r"[^a-z0-9_\-]", "", lines[-1][6:].strip().lower())
+        answer = "\n".join(lines[:-1]).strip()
 
-    _slack_post(bot_token, channel, thread_ts, answer)
+    if react_emoji and not answer:
+        # Pure reaction — no text reply needed
+        try:
+            _slack_react(bot_token, channel, msg_ts, react_emoji)
+            print(f"[slack-worker] reacted :{react_emoji}: to {msg_ts}")
+        except Exception as e:
+            print(f"[slack-worker] react failed ({e}), skipping", file=sys.stderr)
+    else:
+        if answer:
+            _slack_post(bot_token, channel, thread_ts, answer)
+        if react_emoji:
+            # Both a text reply and a reaction (model included text before REACT:)
+            try:
+                _slack_react(bot_token, channel, msg_ts, react_emoji)
+            except Exception:
+                pass
 
     # Eval Log: this is the LIVE reply path, so logging MUST happen here (the listener's
     # handle_message is not the runtime path). thread = full history, tools = what the
