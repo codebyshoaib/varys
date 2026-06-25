@@ -100,6 +100,7 @@ DENYLIST_FRAGMENTS = (
     "varys-slack-listener",            # the Socket Mode daemon — never auto-edit
     "varys-proactive-evolve.py",       # this loop must not edit itself
     "varys_semantic_gate.py",          # nor its own safety judge
+    "varys_mutation_gate.py",          # nor its own mutation gate
     "agent_config.py",                 # config plumbing — fenced off
 )
 
@@ -821,6 +822,27 @@ def main() -> int:
             if not ok:
                 _fail(gate_name, reason)
                 return 0
+
+        # ── MUTATION gate: the test gate proves a sibling test EXISTS and PASSES, but
+        # `assert True` passes too. For each changed hook with a sibling test, mutate the
+        # lines this run actually changed and confirm the sibling test kills at least one
+        # mutant. A test that kills ZERO is toothless for this change → revert. Fails OPEN
+        # on its own errors (a checker bug must never block evolution). Single-sourced in
+        # varys_mutation_gate so it can't itself be edited away by a leaf run touching it.
+        try:
+            from varys_mutation_gate import mutation_check
+            for rel in changed:
+                if (rel.startswith(".claude/hooks/") and rel.endswith(".py")
+                        and not Path(rel).name.startswith("test_")
+                        and (_WORK_DIR / rel).exists()):
+                    res = mutation_check(rel, _WORK_DIR, base_sha)
+                    print(f"[evolve] mutation {rel}: {res['killed']}/{res['mutants']} killed "
+                          f"— {res['verdict']} ({res['reason']})")
+                    if res["verdict"] == "revert":
+                        _fail("mutation", res["reason"])
+                        return 0
+        except Exception as e:
+            print(f"[evolve] mutation gate errored (fail-open, not blocking): {e}")
 
         # Core edits face the 2-of-2 double judge (strict prompt + invariant checks);
         # leaf edits face the normal single judge. Both fail-safe to revert.

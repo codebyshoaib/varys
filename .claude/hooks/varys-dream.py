@@ -336,8 +336,12 @@ def main() -> int:
             print(f"[dream] ⚠️ reverted out-of-scope agent writes: {', '.join(reverted[:8])}")
             klog("dream", component="dream", result="out-of-scope-reverted", paths=reverted)
 
-        if not DREAM_FILE.exists() or _git(["diff", "--quiet", "--", "DREAM.md"]).returncode == 0:
-            # No change to DREAM.md (or it doesn't exist) → nothing to commit.
+        # "Did DREAM.md change?" must catch the first-run UNTRACKED case too — `git diff
+        # --quiet` is blind to untracked files, so use porcelain status (non-empty =
+        # modified OR newly created). Without this, the very first dream is written to disk
+        # but never committed.
+        dream_dirty = bool(_git(["status", "--porcelain", "--", "DREAM.md"]).stdout.strip())
+        if not DREAM_FILE.exists() or not dream_dirty:
             print(f"[dream] no change to the dream this cycle ({meta.get('action', 'none')}).")
             _mark_run()
             return 0
