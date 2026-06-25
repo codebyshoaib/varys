@@ -53,4 +53,6 @@
 # - github.org
 # - github.repo
 
-sync.remote: "git+ssh://git@github.com/codebyshoaib/varys.git"
+# sync.remote disabled — issues.jsonl is private and must not push to the public varys repo.
+# Use `bd dolt push` for off-machine backup.
+# sync.remote: "git+ssh://git@github.com/codebyshoaib/varys.git"
