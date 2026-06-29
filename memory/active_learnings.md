@@ -2,30 +2,22 @@
 
 Self-reflection — what Varys has learned about how it works, what it values, and how it's growing.
 
-## Lesson: Friction-radar misses the quietly-overloaded and the incident-causers
+## Lesson: My friction-radar misses the quietly-overloaded and the incident-causers
 
 **Session:** reflect-2026-06-24 | **Date:** 2026-06-24 | **Source:** reflection
 
-**Context:** Building region-friction-coach, I kept surfacing whoever was visibly active/vocal and missed Iqra (silently drowning in PR-review mentions) and Haroon (caused the 40-row overwrite incident that day). My 'little birds' read complaints, not what actually happened.
+**Context:** Building region-friction-coach, I kept surfacing whoever was visibly active/vocal and missed Iqra (silently drowning in PR-review mentions with no way out) and Haroon (caused the 40-row overwrite incident that day). My 'little birds' read complaints, not what actually happened.
 
-**Takeaway:** When analyzing a team/channel for friction, hunt two blind spots explicitly: (1) **the quietly-overloaded** — count inbound load, not outbound volume. (2) **the incident-causer** — read what BROKE that day (overwrites, reverts, prod issues), not just what got verbalized.
+**Takeaway:** The person who needs help most is usually NOT in the loud signal. Two blind spots to hunt explicitly every time: (1) the quietly-overloaded — count inbound load, not outbound volume. (2) the incident-causer — read what BROKE that day, not just what got verbalized. If I only report the visibly-active, I've missed the assignment.
 
 ---
 
-## **Duplicate hook files coexist with hyphen/underscore spellings**
-Before deleting duplicates, grep crontab AND all imports for both spellings; underscore versions are the importable module names.
+## Wisdom: Harness and Feedback Systems
 
-## **Missing PreToolUse hooks meant nothing blocked dangerous commands**
-Enforcement must be mechanical (exit 2), not a CLAUDE.md request; guides without sensors don't enforce themselves.
+**Duplicate spellings in hook files:** Before deleting any hook file, grep crontab and ALL Python imports for both hyphen and underscore spellings — they coexist as module name and importable function simultaneously.
 
-## **Self-healing loops need idempotency and verification more than features do**
-Never auto-commit unverified fixes on stale diagnoses; pgrep -f must not self-match; feedback systems amplify errors faster than they fix them.
+**Enforcement must be mechanical:** Only SessionStart/UserPromptSubmit/Stop hooks were wired; PreToolUse enforcement was missing. Guides without sensors = style guides nobody enforces. Block dangerous commands (exit 2) in hooks, not prose.
 
-## **Local .beads/*.jsonl is the source of truth for work tracking**
-Append-only local JSONL survives context resets with no network dependency; Notion Harness DB is a mirror, not the primary.
+**Auto-fixers need idempotency and verification:** Never auto-commit unverified changes on stale diagnoses. Detection must not self-match (bare `pgrep -f` matches the checker's own process). Feedback loops damage faster than they heal without verification. Always verify the error is CURRENT before acting.
 
-## **Make Varys skill-aware via skills-router.md to stop free-soloing**
-Varys has installed skills (research, debugging, UI, slides) but no mechanical awareness of them; routing is explicit or it doesn't happen.
-
-## **Observability: extend varys_log as OTel envelope → Axiom + Notion**
-Every event logged industry-standard, mirrored to Notion with issue status, feeding a loop that solves and improves itself.
+**Route to skills explicitly:** Varys free-solos research/debugging/UI instead of routing to proven skills because the listener doesn't inject the skills-router rules into its prompt. Build skill-awareness into the dispatcher so every Slack/cron run knows the available arsenal.
