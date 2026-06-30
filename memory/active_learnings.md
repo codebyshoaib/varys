@@ -1,23 +1,22 @@
 # Active Learnings
 
-Self-reflection — what Varys has learned about how it works, what it values, and how it's growing.
-
-## Lesson: My friction-radar misses the quietly-overloaded and the incident-causers
-
+## Lesson: Friction-radar anchors on loud signals and misses the quietly-overloaded
 **Session:** reflect-2026-06-24 | **Date:** 2026-06-24 | **Source:** reflection
 
-**Context:** Building region-friction-coach, I kept surfacing whoever was visibly active/vocal and missed Iqra (silently drowning in PR-review mentions with no way out) and Haroon (caused the 40-row overwrite incident that day). My 'little birds' read complaints, not what actually happened.
+**Context:** When analyzing team friction, I surfaced visibly vocal people and missed Iqra (silently drowning in PR-review mentions) and Haroon (caused the 40-row incident that day).
 
-**Takeaway:** The person who needs help most is usually NOT in the loud signal. Two blind spots to hunt explicitly every time: (1) the quietly-overloaded — count inbound load, not outbound volume. (2) the incident-causer — read what BROKE that day, not just what got verbalized. If I only report the visibly-active, I've missed the assignment.
+**Takeaway:** The person who needs help most is usually NOT in the loud signal. Explicitly hunt: (1) the quietly-overloaded — count inbound load, not outbound volume. (2) the incident-causer — read what broke that day, not what got verbalized. Signal from activity volume misses both.
 
 ---
 
-## Wisdom: Harness and Feedback Systems
+## Feedback systems need idempotency and verification above all else
+**Session:** varys-2026-06-01 | **Date:** 2026-06-01 | **Source:** failure-log
 
-**Duplicate spellings in hook files:** Before deleting any hook file, grep crontab and ALL Python imports for both hyphen and underscore spellings — they coexist as module name and importable function simultaneously.
+A self-healing loop amplified bugs when it auto-diagnosed stale errors (no idempotency), auto-fixed unverified issues (no review), and self-matched on detection (bare `pgrep -f` false-positives). Detection must not match the observer's own process; diagnosis must verify the error is CURRENT before acting; edits must be reviewed before commit.
 
-**Enforcement must be mechanical:** Only SessionStart/UserPromptSubmit/Stop hooks were wired; PreToolUse enforcement was missing. Guides without sensors = style guides nobody enforces. Block dangerous commands (exit 2) in hooks, not prose.
+---
 
-**Auto-fixers need idempotency and verification:** Never auto-commit unverified changes on stale diagnoses. Detection must not self-match (bare `pgrep -f` matches the checker's own process). Feedback loops damage faster than they heal without verification. Always verify the error is CURRENT before acting.
+## Make Varys skill-aware
+**Session:** varys-2026-06-01 | **Date:** 2026-06-01 | **Source:** architecture-decision
 
-**Route to skills explicitly:** Varys free-solos research/debugging/UI instead of routing to proven skills because the listener doesn't inject the skills-router rules into its prompt. Build skill-awareness into the dispatcher so every Slack/cron run knows the available arsenal.
+Slack/cron Varys runs without learning its installed skill arsenal, so it free-solos research/debugging/design when proven skills could do it better. Inject `skills-router.md` into listener and cron-Varys prompts to route automatically.
