@@ -1,6 +1,6 @@
 # Personal Agent v2 — Varys's Operating Manual
 
-**Owner:** Shoaib Ud Din **Purpose:** Shoaib Ud Din's personal AI agent. Notion is the brain; Slack is the feed; this repo is Varys's body.
+**Owner:** Shoaib Ud Din **Purpose:** Shoaib Ud Din's personal AI agent. Slack is the feed; local beads (`.beads/`) is the memory; this repo is Varys's body. Notion holds team-facing state only (taleemabad Harness, Job Tracker, Observability) — it is not the core loop.
 
 > L1 ROUTER ONLY. Detail lives in `.claude/rules/`, `vault/memory/`, and `.claude/standards/`. Keep this file ≤150 lines — a PreToolUse hook blocks it past 150.
 
@@ -18,7 +18,7 @@
 | Which skill for which issue                      | `.claude/rules/skills-router.md`    |
 | NotebookLM registry + smart routing              | `.claude/rules/notebooklm.md`       |
 | Infographic gen conventions (NLM, 4:5 fix)       | `.claude/rules/infographics.md`     |
-| Team orchestrator rules + event types            | `.claude/rules/orchestrator.md`     |
+| Team orchestrator rules + event types (RETIRED — see Self-Evolution below) | `.claude/rules/orchestrator.md` |
 | Delegated implementer / worktree handoff protocol | `.claude/rules/worktree-handoff.md` |
 | Active work / decisions / failures               | `.beads/`                           |
 | Doc-type, retrieval, invocation, metadata policy | `.claude/standards/`                |
@@ -38,32 +38,30 @@
 ## Architecture
 
 ```
-Notion (brain)   → 8 DBs (see .claude/rules/notion.md)
-Slack (feed)     → slack-poller.py every 30min → /tmp/varys-slack-inbox.json → summary DM
-varys-listener   → Socket Mode daemon (@reboot); DMs + @Shoaib's PR Beacon mentions; runs `claude -p` IN THIS REPO
-                   → so this harness upgrades every Slack/cron Varys response
-SessionStart hook→ surfaces unsynced Slack items + tells Claude to fetch Notion via MCP
-Stop hook        → writes Work Log to Notion + commits vault/logs
+Slack (feed)     → varys-slack-listener.service (Socket Mode daemon, real-time — NOT polled)
+                   → slack_queue → drain-loop → slack-worker.py → reply in origin thread
+Beads (memory)   → .beads/ (bd CLI, dolt-backed) — issues, failures.jsonl, decisions.jsonl
+Notion           → team-facing state only: taleemabad Harness, Job Tracker, Observability (.claude/rules/notion.md)
+Stop hook        → writes Work Log + commits vault/logs
 Job Hunter       → job-finder.py cron; internet-scanner; auto-apply (score≥75); OpenOutreach monitor
 NotebookLM       → nlm CLI; trigger with "nlm ..." on Slack (list/ask/research/podcast/slides/mindmap/quiz)
-Team Orchestrator→ varys-orchestrator-loop.sh (270s, agent-free daemon @reboot) — see .claude/rules/orchestrator.md
+Self-Evolution   → 3 gated crons rewrite Varys itself, then PR + DM Shoaib — see below
 ```
 
-## Team Orchestrator (varys-orchestrator-loop.sh — 270s agent-free tick, never change interval without asking Shoaib Ud Din)
+## Self-Evolution (cron-driven, gated, PR-only)
 
-```
-1. varys_harness_db: acquire tick lock → read last_sync_at
-   (if lock held: exit immediately — another tick is running)
-2. poll-beads.py           → bd ready: local work tickets → ticket.created events
-3. poll-taleemabad-github.py → taleemabad-core: PRs on agent branches (entity-filtered)
-   (if ANY poller fails: release lock, abort — do NOT update last_sync_at)
-4. orchestrator-dispatch.py → group pending events by context_key → spawn subagents
-5. varys_harness_db: set last_sync_at=now → release tick lock
-```
+**The old Team Orchestrator (`varys-orchestrator-loop.sh`, 270s poll-and-dispatch tick) is retired.**
+No cron or systemd unit calls it anymore — `.claude/rules/orchestrator.md` describes a dead system.
+Real-time work now flows Slack listener → bead → on-demand code-agent dispatch when Shoaib asks.
+Self-improvement instead runs unattended on its own crons:
 
-**Slack is NOT polled.** The real-time listener (Socket Mode) owns ALL Slack intake → `slack_queue` → drain → `slack-worker.py` → reply in the origin thread. The tick only polls sources that can't push to this box (beads, GitHub). A Slack reply never auto-mints a bead — it stays a reply, not a ticket.
+| Cron | Interval | Changes | Gate |
+|---|---|---|---|
+| `varys-skill-evolve.py` | every 8h | `.claude/skills/varys/*.md` | fence + content + semantic judge |
+| `varys-proactive-evolve.py` | every 8h | code, branch off master | fence + compile + test + semantic |
+| `varys-dream.py` | weekly (Sun 6am) | self-chosen aspiration | — |
 
-Detail: `.claude/rules/orchestrator.md` · DB: `~/.varys-harness/harness.db`
+Any gate failure → hard revert, nothing ships. Clean pass → branch + PR + DM Shoaib the link.
 
 ## NotebookLM (Slack "nlm" prefix)
 
