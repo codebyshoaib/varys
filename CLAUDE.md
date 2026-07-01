@@ -21,6 +21,7 @@
 | Team orchestrator rules + event types (RETIRED — see Self-Evolution below) | `.claude/rules/orchestrator.md` |
 | Delegated implementer / worktree handoff protocol | `.claude/rules/worktree-handoff.md` |
 | Active work / decisions / failures               | `.beads/`                           |
+| Recall past lessons / decisions / people / events | `.claude/rules/memory.md`          |
 | Doc-type, retrieval, invocation, metadata policy | `.claude/standards/`                |
 | Eval harness                                     | `.claude/evals/`                    |
 

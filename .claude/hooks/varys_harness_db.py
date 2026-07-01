@@ -183,14 +183,7 @@ def migrate_db(db: sqlite3.Connection) -> None:
             db.execute("ALTER TABLE sessions ADD COLUMN completed_at TEXT")
         if "pr_url" not in cols:
             db.execute("ALTER TABLE sessions ADD COLUMN pr_url TEXT")
-        # Migration 003: slack_queue table (schema already has CREATE IF NOT EXISTS)
-        # Reset any items stuck in 'processing' from a crashed daemon
-        db.execute(
-            "UPDATE slack_queue SET status='pending' "
-            "WHERE status='processing' "
-            "AND enqueued_at < datetime('now', '-15 minutes')"
-        )
-        # Migration 004: priority + failure_context columns for slack_queue
+        # Migration 004: priority + failure_context + lease/ack columns for slack_queue
         sq_cols = [row[1] for row in db.execute("PRAGMA table_info(slack_queue)").fetchall()]
         if "priority" not in sq_cols:
             db.execute("ALTER TABLE slack_queue ADD COLUMN priority INTEGER NOT NULL DEFAULT 0")
@@ -198,6 +191,29 @@ def migrate_db(db: sqlite3.Connection) -> None:
             db.execute("ALTER TABLE slack_queue ADD COLUMN failure_context TEXT")
         if "bead_id" not in sq_cols:
             db.execute("ALTER TABLE slack_queue ADD COLUMN bead_id TEXT NOT NULL DEFAULT ''")
+        # lease_expires_at: real visibility timeout, set when a worker claims the job.
+        # ack_posted: idempotency flag so the "On it" ack is posted at most once, ever.
+        if "lease_expires_at" not in sq_cols:
+            db.execute("ALTER TABLE slack_queue ADD COLUMN lease_expires_at TEXT")
+        if "ack_posted" not in sq_cols:
+            db.execute("ALTER TABLE slack_queue ADD COLUMN ack_posted INTEGER NOT NULL DEFAULT 0")
+
+        # Migration 003: reclaim jobs whose LEASE has expired (a genuinely crashed/hung
+        # worker) — NOT on a clock counted from enqueue. A job in flight holds a live
+        # lease (renewed to now+SLACK_LEASE_SECONDS when claimed), so a slow-but-alive
+        # review is never re-dispatched under itself — retries fire only when needed.
+        # Each reclaim counts as a retry; after 3 the job dead-letters to 'failed' so a
+        # job that never succeeds can't loop forever (that was the infinite-ack bug).
+        db.execute(
+            "UPDATE slack_queue SET status='failed', processed_at=datetime('now') "
+            "WHERE status='processing' AND retry_count >= 3 "
+            "AND lease_expires_at IS NOT NULL AND lease_expires_at < datetime('now')"
+        )
+        db.execute(
+            "UPDATE slack_queue SET status='pending', retry_count=retry_count+1, lease_expires_at=NULL "
+            "WHERE status='processing' "
+            "AND lease_expires_at IS NOT NULL AND lease_expires_at < datetime('now')"
+        )
         # Migration 005: meeting_queue table (schema already has CREATE IF NOT EXISTS)
         # Reset any items stuck in 'processing' from a crashed worker
         db.execute(
@@ -455,19 +471,42 @@ def dequeue_pending_slack(db: sqlite3.Connection, limit: int = 50) -> list:
     ).fetchall()
 
 
+# Visibility timeout: how long a claimed job is considered alive before the reclaim
+# may re-queue it. MUST exceed the worker's longest run (900s PR-review backstop in
+# slack-worker.py) plus drain overhead, or a live review gets re-dispatched under itself.
+SLACK_LEASE_SECONDS = 1000
+
+
 def mark_slack_processing(db: sqlite3.Connection, row_id: str) -> None:
     with _db_lock:
-        db.execute("UPDATE slack_queue SET status='processing' WHERE id=?", (row_id,))
+        db.execute(
+            "UPDATE slack_queue SET status='processing', "
+            "lease_expires_at=datetime('now', ?) WHERE id=?",
+            (f"+{SLACK_LEASE_SECONDS} seconds", row_id),
+        )
         db.commit()
         bead_id = db.execute("SELECT bead_id FROM slack_queue WHERE id=?", (row_id,)).fetchone()
     if bead_id and bead_id[0]:
         _bd("update", bead_id[0], "--claim")
 
 
+def slack_try_ack(db: sqlite3.Connection, row_id: str) -> bool:
+    """Atomically claim the right to post the one-time 'On it' ack for this job.
+    Returns True exactly once per job — any retry/re-run gets False, so the ack is
+    never duplicated even if the job is dispatched more than once."""
+    with _db_lock:
+        db.execute(
+            "UPDATE slack_queue SET ack_posted=1 WHERE id=? AND ack_posted=0", (row_id,)
+        )
+        db.commit()
+        return db.execute("SELECT changes()").fetchone()[0] > 0
+
+
 def mark_slack_done(db: sqlite3.Connection, row_id: str) -> None:
     with _db_lock:
         db.execute(
-            "UPDATE slack_queue SET status='done', processed_at=datetime('now') WHERE id=?",
+            "UPDATE slack_queue SET status='done', processed_at=datetime('now'), "
+            "lease_expires_at=NULL WHERE id=?",
             (row_id,),
         )
         db.commit()
@@ -494,7 +533,7 @@ def mark_slack_retry(
         else:
             db.execute(
                 "UPDATE slack_queue SET status='pending', retry_count=retry_count+1, "
-                "failure_context=? WHERE id=?",
+                "failure_context=?, lease_expires_at=NULL WHERE id=?",
                 (failure_context, row_id),
             )
         db.commit()

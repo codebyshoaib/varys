@@ -28,11 +28,21 @@ def _run_job(row: tuple, db_path: str) -> None:
      text, thread_history, is_dm, is_third_party, job_id, retry_count,
      priority, failure_context) = row
 
-    result = subprocess.run(
-        ["python3", str(HOOKS / "slack-worker.py"), "--job-id", row_id],
-        capture_output=True, text=True,
-        cwd=str(REPO), timeout=360,
-    )
+    # Backstop timeout MUST exceed the worker's own longest timeout (900s for the
+    # PR-reviewer in slack-worker.py). If it's shorter, subprocess.run SIGKILLs the
+    # worker before it can mark the job done — leaving it 'processing' to be reclaimed
+    # and re-run forever. Let the worker own its lifecycle; this is only a last resort.
+    try:
+        result = subprocess.run(
+            ["python3", str(HOOKS / "slack-worker.py"), "--job-id", row_id],
+            capture_output=True, text=True,
+            cwd=str(REPO), timeout=960,
+        )
+    except subprocess.TimeoutExpired:
+        db = _get_db()
+        _retry(db, row_id, failure_context="drain backstop: worker exceeded 960s")
+        print(f"[drain] {row_id} hit 960s backstop, retry queued (capped)")
+        return
 
     if result.returncode != 0:
         ctx = (result.stderr.strip() or result.stdout.strip())[:1000]
@@ -63,7 +73,9 @@ def main() -> int:
     for t in threads:
         t.start()
     for t in threads:
-        t.join(timeout=400)
+        # ponytail: join must outlast the 960s worker backstop so main() doesn't
+        # return while a review is still in flight (threads are non-daemon anyway).
+        t.join(timeout=1000)
 
     return 0
 
