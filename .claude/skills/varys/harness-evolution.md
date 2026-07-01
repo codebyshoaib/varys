@@ -34,6 +34,25 @@
 - Hook fires on wrong events → add guard condition
 - Same fix applied manually 2+ times → automate as hook
 
+## Safe Auto-Remediation Loops (idempotency & verification first)
+
+Before shipping ANY loop that auto-detects and auto-fixes (self-healing hooks,
+watchers, restart-on-error crons), all four gates must hold — a loop that skips
+them amplifies bugs instead of fixing them (this failure actually happened, 2026-06-01):
+
+- **Detection must not match the observer.** A bare `pgrep -f <name>` matches the
+  watcher's own process → false-positive self-detection. Exclude own PID
+  (`pgrep -f <name> | grep -v $$`) or match on a specific arg the observer lacks.
+- **Verify the error is CURRENT before acting.** Diagnosing off a stale log line
+  re-fixes an issue already resolved. Confirm the failing condition still holds
+  *this run* (re-read the state, re-run the check) before any remediation fires.
+- **No unreviewed auto-edit → auto-commit.** Auto-diagnosis may draft a fix; it
+  must pass a gate (compile + test + review) before commit. Detection → propose,
+  never detection → commit.
+- **Idempotent by construction.** Re-running the loop on an unchanged world must be
+  a no-op. Guard on a durable marker (bead closed, file hash, `INSERT OR IGNORE`),
+  not on transient signal, so a re-poll never re-triggers work already done.
+
 ## What NOT to Touch Without Asking Shoaib
 - harness.db schema changes
 - settings.json hook wiring
