@@ -52,6 +52,8 @@ MIN_NEW_LINES   = 30                  # transcript must have grown this much sin
 MIN_TURNS       = 6                   # ...and yield at least this many conversational turns
 MAX_DIGEST_CH   = 12000               # cap what we feed the model (recent turns matter most)
 GUARD_ENV       = "VARYS_SESSION_REVIEW"
+ENGRAM_BIN      = Path.home() / ".local" / "bin" / "engram"  # Memory v2 archive dual-write (spike varys-c85.1)
+ENGRAM_PROJECT  = "varys"
 
 
 # ── Transcript digest ─────────────────────────────────────────────────────
@@ -130,6 +132,47 @@ def should_review(state: dict, session_id: str, line_count: int, now: datetime) 
     return True
 
 
+# ── Engram archive dual-write (Memory v2 spike, varys-c85.1) ────────────────
+# Mirror each session's summary + any lesson into the engram archive so we can
+# measure recall over a week. Deterministic — python does the writes, not the -p
+# agent — so the spike's recall test isn't skewed by the agent forgetting to save.
+def _engram_save(title: str, msg: str, typ: str) -> None:
+    """Save one observation into engram (non-fatal; skips if binary/msg missing)."""
+    if not msg or not ENGRAM_BIN.exists():
+        return
+    try:
+        subprocess.run([str(ENGRAM_BIN), "save", title[:120], msg[:2000],
+                        "--type", typ, "--project", ENGRAM_PROJECT],
+                       capture_output=True, text=True, timeout=30, cwd=str(VARYS_DIR))
+    except Exception:
+        pass
+
+
+def _parse_summary(stdout: str):
+    """Extract the `SUMMARY_JSON: {...}` trailer the reflection prompt emits (or None)."""
+    for line in reversed(stdout.splitlines()):
+        line = line.strip()
+        if line.startswith("SUMMARY_JSON:"):
+            try:
+                return json.loads(line[len("SUMMARY_JSON:"):].strip())
+            except json.JSONDecodeError:
+                return None
+    return None
+
+
+def _last_learning():
+    """The most-recently appended learnings.jsonl entry (or None)."""
+    if not LEARNINGS.exists():
+        return None
+    lines = [l for l in LEARNINGS.read_text().splitlines() if l.strip()]
+    if not lines:
+        return None
+    try:
+        return json.loads(lines[-1])
+    except json.JSONDecodeError:
+        return None
+
+
 # ── Reflection prompt (transcript-focused; same append discipline as varys-reflect) ──
 def build_prompt(digest: str, session_id: str, wisdom: str) -> str:
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -175,8 +218,12 @@ f.write_text(f.read_text() + json.dumps(entry, ensure_ascii=False) + "\\n")
 print("Appended learning:", entry["title"])
 PYEOF
 
-Do NOT post to Slack. Do NOT edit any other file. Do NOT commit. End by printing either \
-the appended title or "no lesson this session"."""
+Do NOT post to Slack. Do NOT edit any other file. Do NOT commit.
+
+Then print either the appended lesson title or "no lesson this session". FINALLY, on the \
+LAST line of your output, ALWAYS print a machine-readable session summary (whether or not \
+there was a lesson), in exactly this form — one line, valid JSON after the prefix:
+SUMMARY_JSON: {{"title": "<=8-word title", "summary": "2-3 sentences: what happened, what was decided, who was involved, any dates"}}"""
 
 
 # ── Detached worker: the actual model call + append + commit ────────────────
@@ -216,6 +263,19 @@ def run_review(transcript_path: str, session_id: str) -> int:
                         f"session-review: new learning ({started.date()})"],
                        cwd=str(VARYS_DIR), check=False)
         print(f"[session-review] appended + committed {appended} lesson(s)")
+
+    # Dual-write into the engram archive (Memory v2 spike). Always mirror the session
+    # summary; mirror the lesson too if one was produced this run.
+    summary = _parse_summary(r.stdout)
+    if summary:
+        _engram_save(summary.get("title") or f"session {started.date()}",
+                     summary.get("summary", ""), "session")
+    if appended > 0:
+        last = _last_learning()
+        if last:
+            _engram_save(last.get("title") or "lesson",
+                         last.get("takeaway") or last.get("context") or "", "lesson")
+
     dur = (datetime.now(timezone.utc) - started).total_seconds() * 1000
     klog_cron("session-review", status="ok", duration_ms=dur, appended=appended, turns=n_turns)
     return 0
@@ -275,6 +335,10 @@ def _self_check() -> int:
     assert should_review(st, "s", 100 + MIN_NEW_LINES, later)
     # brand-new session with enough lines, cooldown elapsed → review
     assert should_review(st, "new", MIN_NEW_LINES, later)
+    # engram dual-write: summary trailer parses; noise doesn't
+    assert _parse_summary('done\nSUMMARY_JSON: {"title":"t","summary":"s"}') == {"title": "t", "summary": "s"}
+    assert _parse_summary("no lesson this session") is None
+    assert _parse_summary('SUMMARY_JSON: not json') is None
     print("self-check ok")
     return 0
 
