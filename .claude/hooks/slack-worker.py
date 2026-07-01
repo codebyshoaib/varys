@@ -27,7 +27,7 @@ sys.path.insert(0, str(HOOKS))
 
 from varys_harness_db import (
     get_db, mark_slack_processing, mark_slack_done, mark_slack_retry,
-    enqueue_meeting,
+    slack_try_ack, enqueue_meeting,
 )
 from varys_log import klog_error
 from varys_eval import log_to_eval, parse_stream_json
@@ -529,8 +529,11 @@ def main() -> int:
             skill_cmd = None
 
         if skill_cmd:
-            _slack_post(bot_token, channel, thread_ts,
-                        f"On it — running `{skill_cmd.split()[0]}` on {pr_url} 🔍")
+            # Post the ack at most once per job — a retry/re-dispatch must never
+            # re-spam it (this was the visible symptom of the re-run loop).
+            if slack_try_ack(db, row_id):
+                _slack_post(bot_token, channel, thread_ts,
+                            f"On it — running `{skill_cmd.split()[0]}` on {pr_url} 🔍")
             subprocess.run(
                 [_claude_bin(), "--dangerously-skip-permissions", "--print", "-p", skill_cmd],
                 capture_output=True, text=True,
