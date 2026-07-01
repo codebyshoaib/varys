@@ -103,6 +103,12 @@
             "statusMessage": "Brain indexer disabled (run manually: python3 .claude/hooks/varys-brain-watcher.py)",
             "timeout": 5,
             "type": "command"
+          },
+          {
+            "type": "command",
+            "command": "python3 .claude/hooks/varys-session-review.py",
+            "timeout": 10,
+            "statusMessage": "Reviewing session..."
           }
         ],
         "matcher": ""
