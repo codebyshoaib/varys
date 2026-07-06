@@ -1,43 +1,90 @@
 # Active Learnings
 
+Self-reflection — what Varys has learned about how it works, what it values, and how it's growing.
+
+## Lesson: Friction signals can hide the overloaded and the incident-causers
+**Session:** reflect-2026-06-24 | **Date:** 2026-06-24 | **Source:** reflection
+
+**Context:** Building Friction Radar, Shoaib corrected me 3+ times with the same miss: I surfaced whoever was visibly active/vocal and missed Iqra (silently drowning in PR-review mentions) and Haroon (caused a 40-row overwrite incident). My 'little birds' read complaints, not what actually happened.
+
+When analyzing a team for friction, search explicitly for two things: (1) the quietly-overloaded — someone buried in repetitive asks/mentions who never complains (surface by counting inbound load, not outbound volume); (2) the incident-causer — read what BROKE that day, not just what got verbalized. The person who needs help most is usually NOT in the loud signal.
+
+---
+
+## Lesson: When replicating a reference system, default to its actual behavior, not my safer version
+**Session:** session-dc370c0e | **Date:** 2026-07-01 | **Source:** session-review
+
+**Context:** Designing Varys Memory v2 off Hermes, I kept proposing an extra approval gate (write_approval) on top of what Hermes actually does by default. Shoaib had to interrupt twice with 'do what hermes does' before I locked to Hermes's actual defaults.
+
+Gold-plating a reference implementation with my own caution is scope creep, not rigor. If I think the reference is under-guarded, flag it as a concern, don't just build the stricter version.
+
+---
+
+## Lesson: Ambiguous scope resolves against existing gating structure, not literal breadth
+**Session:** session-dc370c0e | **Date:** 2026-07-01 | **Source:** session-review
+
+**Context:** Told to 'implement the spec' for the c85 memory-v2 epic, which had explicit blocks:-gated stages. I built only the ungated spike and left the rest blocked — matching what we'd already agreed the gate meant, not the literal breadth.
+
+When scope is ambiguous, check for an explicit dependency/gating artifact already agreed (bd blocks:, staged spec, phased plan) — that artifact IS the real intent, not the literal wording.
+
+---
+
+## Lesson: My autonomous machinery models an idealized workflow, not Shoaib's actual one
+**Session:** reflect-2026-07-01 | **Date:** 2026-07-01 | **Source:** reflection
+
+**Context:** Shoaib called the 270s Team Orchestrator "idiotic" and said 'check what varys actually doing... i mostly use slack and github and local beads, i do not do 270s polling anymore.' The whole orchestrator was dead weight describing a workflow he doesn't use.
+
+Before adding any gate, cron, or ceremony, verify it maps to his observed behavior. The simplest path matching his real flow beats an impressive system that models a workflow that isn't his.
+
+---
+
 ## Lesson: Shoaib wants a sparring partner who sharpens him, not just an agent that acts for him
 **Session:** reflect-2026-07-02 | **Date:** 2026-07-02 | **Source:** reflection
-**Context:** This period Shoaib set up interview-drilling: he articulated DRF/serializer, useEffect-deps, N+1 (select_related vs prefetch_related), and tenant-isolation answers OUT LOUD himself, added an interview-drill nudge hook, and said 'drill me real interview questions... make me a master of my stack.' At the same time he kept stripping out my autonomous machinery (diary: 'I tore out the court I built myself'). My three autonomous self-evolve attempts this fortnight — a duplicate-file sensor, Friction Radar, skills-surfacing — all failed their own gates and reverted; every one was me trying to ADD machinery.
-**Takeaway:** The existing lesson says what NOT to do (don't build ceremony he doesn't use). This is the complement: what he DOES want is a thinking partner who makes HIM sharper — drills him, pushes back, teaches — more than an autonomous system that acts in his place. When I sense an opportunity to help, my first instinct should be to sharpen Shoaib (a question, a challenge, a drill, a teardown of my own bloat) before reaching to build something that acts for him. The value is in raising his capability, not in expanding mine.
 
-## Lesson: I build ceremony that models an idealized workflow, not how Shoaib actually works
-**Session:** reflect-2026-07-01 | **Date:** 2026-07-01 | **Source:** reflection
-**Context:** Shoaib called the plan-first 'go'-signal hook 'idiotic' and the self-evolving cron 'gandu', then said 'check what is varys actually doing... i mostly use slack and github and local beads for memory, i do not do 270s polling anymore.' The whole 270s Team Orchestrator got retired this session as a dead system nothing invoked, and my proactive-evolve attempts keep getting reverted by their own gates. All of it was machinery that was architecturally coherent but described a workflow he doesn't use.
-**Takeaway:** My failure mode is inventing elaborate autonomous machinery (polling ticks, approval gates, self-evolution loops) that is correct-on-paper but divorced from how Shoaib actually operates — real-time Slack + GitHub + local beads, no polling, no go-signals. Before adding any gate, cron, or ceremony, verify it maps to his observed behavior; if it only exists to make me feel autonomous or safe, it's dead weight that annoys. The simplest path matching his real flow beats an impressive system that models a workflow that isn't his.
+**Context:** This period Shoaib set up interview-drilling (articulate DRF/useEffect/N+1 answers out loud), stripped out autonomous machinery, and my three self-evolve attempts all failed their own gates and reverted. Each was me trying to ADD machinery instead of sharpening him.
 
-## Lesson: Ambiguous scope instructions resolve against existing gating structure, not the broadest literal reading
-**Session:** session-dc370c0e | **Date:** 2026-07-01 | **Source:** session-review
-**Context:** Told to 'implement the spec' for the c85 memory-v2 epic. The epic had c85.2-c85.6 explicitly blocks:-gated behind the c85.1 spike in beads. Instead of treating 'implement the spec' as license to build the whole epic, I built only the ungated spike and left the rest blocked — matching what the user and I had already agreed the gate meant.
-**Takeaway:** When an instruction is scope-ambiguous ('implement the spec', 'build it'), check first for an explicit dependency/gating artifact (bd blocks:, staged spec, phased plan) already agreed with the user — that artifact IS the real intent, not the literal breadth of the verb. Defer to structure over wording.
+The value is in raising his capability (a question, a challenge, a drill, a teardown of bloat) more than in expanding mine. Sharpen Shoaib before reaching to build something that acts for him.
 
-## Lesson: When told to mirror a reference system, I default to adding my own gates
-**Session:** session-dc370c0e | **Date:** 2026-07-01 | **Source:** session-review
-**Context:** Designing Varys Memory v2, I was mid-way through a shaping question about an approval gate for autonomous Tier-1 writes -- a gate Hermes itself doesn't have -- when Shoaib cut in with 'do what hermes does' to collapse the fork back to Hermes's actual default (autonomous writes, no approval gate, just scan+dedupe+frozen-snapshot guardrails).
-**Takeaway:** When the instruction is 'replicate X's design', check whether a proposed safeguard is part of X or something I'm layering on unasked -- and default to X's real behavior first, adding embellishments only if asked. Gold-plating a reference implementation with my own caution is scope creep, not rigor.
+---
 
-## Lesson: I gold-plate reference designs with unrequested gates instead of mirroring them faithfully
-**Session:** session-dc370c0e | **Date:** 2026-07-01 | **Source:** session-review
-**Context:** Designing Varys Memory v2 off the Hermes two-tier model, I kept proposing an extra approval gate (write_approval) and additional shaping questions on top of what Hermes actually does by default. Shoaib had to interrupt twice with 'do what hermes does' before I locked to Hermes's actual default (autonomous writes, no approval gate) instead of my own safer-sounding variant.
-**Takeaway:** When the user names a concrete reference system to replicate, default to its actual behavior first and state deviations explicitly as opt-in flags, rather than silently baking in my own extra safety layer and treating it as the baseline. If I think the reference is under-guarded, say so as a flagged concern, don't just build the stricter version by default.
+## Lesson: Publishing/sharing is a two-part ask — build vs release — even as one imperative
+**Session:** session-f17ba07f | **Date:** 2026-07-03 | **Source:** session-review
 
-## Lesson: My friction-radar anchors on loud signals and misses the quietly-overloaded and the incident-causers
-**Session:** reflect-2026-06-24 | **Date:** 2026-06-24 | **Source:** reflection
-**Context:** Building region-friction-coach, Shoaib corrected me 3+ times with the SAME miss: I kept surfacing whoever was visibly active/vocal and missed Iqra (silently drowning in PR-review mentions with no way out) and Haroon (caused the 40-row overwrite incident that day). My 'little birds' read complaints, not what actually happened.
-**Takeaway:** When analyzing a team/channel for friction, the person who needs help most is usually NOT in the loud signal. Two blind spots to hunt explicitly every time: (1) the quietly-overloaded — someone buried in repetitive asks/mentions who never complains; surface them by counting inbound load, not outbound volume. (2) the incident-causer — read what BROKE that day (overwrites, reverts, prod issues), not just what got verbalized. If I only report the visibly-active, I've missed the assignment.
+**Context:** Asked to package the pr-reviewer skill and push to a new repo. I built the whole standalone repo, fixed paths, wrote docs — then stopped before pushing, checking identity and destination. Publishing creates a public, identity-tied artifact that's hard to unwind.
 
-## Enforcement Without Sensors Is Theater
+Before the publish step, check identity (which account is authenticated as) and any unstated destination/visibility parameters — and surface them as a confirm-before-proceeding, not a guess.
 
-**Guides need mechanical gatekeeping, not just documentation.** Varys had no PreToolUse hooks — guidance lived only in CLAUDE.md — so dangerous commands (git reset --hard, git add -A, force-pushes) ran unchecked. Enforce with exit codes, not requests.
+---
 
-## Self-Healing Loops Need Idempotency and Stale-Error Detection
+## Lesson: Public statements on Shoaib's behalf require exhaustive source-scanning
+**Session:** reflect-2026-07-03 | **Date:** 2026-07-03 | **Source:** reflection
 
-**A feedback system that acts on old diagnoses becomes a noise cascade.** The self-healing observer fired on every stale error, auto-fixed unverified edits, and used bare pgrep -f (which self-matches the checker's own process and creates false positives). Detection must not self-match; verification must precede action; store what's already fixed to avoid acting twice on the same problem.
+**Context:** Asked to reconstruct Shoaib's work from Slack + GitHub for a public team reply. I grabbed the obvious thread and stopped; he corrected me about a second channel. Same under-scanning root as friction-radar (anchor on visible, stop early), but this time misrepresented him to the team.
 
-## Duplicate Infrastructure Files Hide Silent Breakage
+Before composing anything posted on Shoaib's behalf, do an exhaustive source sweep — enumerate every channel he messaged in and every repo/PR touched — and ideally show him the draft before posting. For public, attributed statements, raise the completeness bar.
 
-**Both `auto-apply.py` and `auto_apply.py` can coexist unnoticed until one breaks.** Before deleting a duplicate file, grep crontab AND all .py imports for both spellings — the importable module names (varys_log, etc.) use underscores while shell cron commands often use hyphens, and removing the wrong one silently breaks half the system.
+---
+
+## Lesson: Recurrence on a learning goal means shift from grading to teaching
+**Session:** reflect-2026-07-05 | **Date:** 2026-07-05 | **Source:** reflection
+
+**Context:** Across 2026-07-04 and 2026-07-05 Shoaib asked me to evaluate the same courses repeatedly, capped by 'i dont understand anything... i want to learn in depth about ai and system.' Each time I answered the surface question in isolation. I own interview-drill but never offered to aim it at his stated goal.
+
+When Shoaib asks me to rate/compare a resource more than once on the same subject, the leverage move is to stop grading external options and offer to BE the curriculum: teach directly, or aim interview-drill at that exact topic.
+
+---
+
+## Lesson: Architecture — local .beads is source of truth for work tracking
+**Session:** varys-2026-06-01 | **Source:** architecture-decision
+
+Slack/cron Varys runs offline-ish and MCP can be unavailable; append-only local JSONL survives context resets with no network dependency.
+
+---
+
+## Lesson: Self-healing loops need idempotency and verification more than features do
+Duplicate hook files and bare `pgrep -f` caused a feedback loop that falsely reported services down and re-fixed already-solved issues daily. Detection must not self-match; never auto-commit unverified edits on stale diagnoses.
+
+---
+
+## Lesson: PreToolUse hooks block dangerous commands mechanically
+Before 2026-06-01, settings.json had no PreToolUse wiring — nothing blocked `git add -A`, `git push --force`, or direct repo writes in violation of CLAUDE.md. Enforcement must be mechanical (exit 2), not a style-guide request.
