@@ -2,13 +2,10 @@
 
 What Varys has learned about Shoaib and their working relationship from Slack interactions.
 
-## Dead channels
-- **#skyline** (2026-07-02) — Dead alert channel. Bot fired 17→32 repeated alerts across Jun 24/26/28 with zero human response; multiple engineers (Usman Imtiaz, Mashhood Rastgar, Jalal Khan, Fahad Rao, Abdulrehman Siddiqi) left it. Do NOT rely on #skyline to reach anyone — escalate critical issues via DM or a staffed channel instead.
+- **#skyline is dead** (2026-07-02) — Alert channel has tuned out. 17→32 repeated alerts Jun 24/26/28 with zero human response; several engineers left the channel. Don't rely on it to reach anyone; escalate important automation-queue issues via DM or staffed channel instead.
 
-## Team-specific patterns
+- **Zeest Qureshi owns lead triage** (2026-07-02) — Posts daily digest of stale leads/partnerships (#new-leads). Route any lead/pipeline question to her, but note: she flags staleness, doesn't unblock it — oldest lead aged 38→39 days still stuck on NDA despite daily flagging. Flagging ≠ resolution; blocker owner must be pinged directly.
 
-**Zeest Qureshi** (2026-07-02, #new-leads) — Owns lead triage & pipeline hygiene. Posts daily digests on unaddressed inbound leads (e.g., CEQUE India, Yemen/Core Insights). Route pipeline questions to her, but note: **flagging ≠ resolution**. Oldest lead aged 38→39 days despite daily flagging; if a lead needs to move, the blocker owner (not Zeest) must be pinged directly.
+- **Iqra Zanib is review-blocked on Shoaib** (2026-07-03) — Chronically queued on ComplianceTracker PRs (434, 436, 437, 438 across Jun 24) waiting on him as sole reviewer. He's a single point of failure for her throughput. Proactively run `compliancetracker-pr-reviewer` skill on her PRs for fast first-pass review — this is exactly the "realm gets self-serve tools" case; she should own an auto-reviewer rather than depend on his attention.
 
-**Iqra Zanib** (2026-07-03, ComplianceTracker PRs) — Chronically review-blocked on Shoaib for CT PRs (434, 436, 437, 438 all queued waiting on him as sole reviewer). Shoaib is a single point of failure for her throughput. When an Iqra CT PR appears, proactively run `compliancetracker-pr-reviewer` skill to give fast first-pass review — she should own an auto-reviewer rather than depend on Shoaib's bandwidth.
-
-**Muavia Qureshi & Haroon Ali** (2026-07-04, #regionpunjab-internal) — Punjab-region user-management firefighters handling orphaned roles, lost access, unknown roles, and PD accounts visible in DB but not on frontend. Muavia's recurring blocker: DB-vs-frontend visibility mismatches. Route any Punjab user-access / role-visibility / orphaned-account issue to them. Assume the bug is often stale-frontend/data-sync gap, not missing account. **Critical:** A fix that only clears an orphan without deleting the underlying role can miss the real prod bug (Shoaib's PR #438 note).
+- **Muavia Qureshi & Haroon Ali: Punjab user-mgmt firefighters** (2026-07-04) — Coordinate in #regionpunjab-internal on orphaned roles, lost access, 'Unknown role' users, DB-vs-frontend visibility mismatches. Route any Punjab user-access/role-visibility issue there. Recurring blocker: accounts exist in DB but don't render on frontend. Assume bug is often stale-frontend/data-sync gap, not genuinely missing account. Note: fixes that only clear orphans without deleting underlying roles can miss the real prod bug.
