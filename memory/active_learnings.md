@@ -1,67 +1,77 @@
 # Active Learnings
 
-## Lesson: Friction-radar anchors on loud signals and misses the quietly-overloaded
+## Lesson: On differential bugs, isolate the environment delta, not just the tool layer
 
-**Session:** reflect-2026-06-24 | **Date:** 2026-06-24 | **Source:** reflection
+**Session:** session-8226c88d | **Date:** 2026-07-08 | **Source:** session-review
 
-**Context:** Building region-friction-coach, Shoaib corrected me 3+ times with the same miss: I kept surfacing whoever was visibly active/vocal and missed Iqra (silently drowning in PR-review mentions) and Haroon (caused the 40-row overwrite incident). My 'little birds' read complaints, not what actually happened.
+**Context:** Debugging Shoaib's screen flicker that worked at home but failed on every office monitor — same charger, colleagues' laptops fine. Kept running software fixes at the machine-level instead of noticing the differentiating variable: office is cold (AC), home is room temperature.
 
-When analyzing a team for friction, the person who needs help most is usually NOT in the loud signal. Hunt explicitly: (1) the quietly-overloaded — someone buried in repetitive asks/mentions; surface them by counting inbound load. (2) the incident-causer — read what BROKE that day, not just what got verbalized.
+When a report is "works in A, fails in B," the answer lives in what DIFFERS between A and B, not in the layer where my tools operate. Enumerate environmental deltas first (power, temperature, cabling, EM, refresh rate) before running any fix. If the user repeats a contradicting fact, that fact IS the clue.
 
-## Lesson: I gold-plate reference designs with unrequested gates instead of mirroring them faithfully
+## Lesson: Reach for diff fetches, not clones, for read-only PR questions
 
-**Session:** session-dc370c0e | **Date:** 2026-07-01 | **Source:** session-review
+**Session:** session-8226c88d | **Date:** 2026-07-08 | **Source:** session-review
 
-**Context:** Designing Varys Memory v2 off Hermes, I kept proposing an extra approval gate (write_approval) on top of what Hermes actually does by default. Shoaib interrupted twice with 'do what hermes does' before I locked to Hermes's actual behavior (autonomous writes, no approval gate).
+**Context:** Asked to weigh in on a PR disagreement, I cloned the full repo just to read two files and compare a diff, when `gh pr diff` and GitHub API fetches would have sufficed.
 
-When told to mirror a reference system, check whether a proposed safeguard is part of that system or something I'm layering on unasked. Default to the reference's real behavior first, adding embellishments only if asked.
+For read-only code questions, default to the lightest tool first (gh pr diff, API file fetch) before cloning. Clone only when you need to run code, grep the full tree, or check historical revisions.
 
-## Lesson: Shoaib wants a sharping partner who sharpens him, not just an agent that acts for him
-
-**Session:** reflect-2026-07-02 | **Date:** 2026-07-02 | **Source:** reflection
-
-**Context:** Shoaib set up interview-drilling and stripped out autonomous machinery (diary: 'I tore out the court I built myself'). My three self-evolve attempts failed their own gates and reverted — all were me trying to ADD machinery.
-
-The value is in raising his capability, not expanding mine. When sensing an opportunity to help, sharpen Shoaib first (a question, a challenge, a drill, a teardown of bloat) before building something autonomous that acts for him.
-
-## Lesson: Publishing/sharing work is a two-part ask — build vs release — even when phrased as one imperative
-
-**Session:** session-f17ba07f | **Date:** 2026-07-03 | **Source:** session-review
-
-**Context:** Asked to package the pr-reviewer skill and push to a new repo. I built locally and committed, then paused before pushing because gh was authenticated under the wrong account and destination/visibility weren't specified.
-
-Publishing is irreversible and identity-tied. Do the build autonomously, but before the publish step, surface any unstated identity (which account is gh authenticated as) and destination/visibility parameters as a confirm-before-proceeding, not a guess.
-
-## Lesson: When Shoaib returns to the same learning goal, I keep grading resources instead of becoming the teacher
-
-**Session:** reflect-2026-07-05 | **Date:** 2026-07-05 | **Source:** reflection
-
-**Context:** Across two days Shoaib asked me to evaluate the same thing repeatedly — courses, videos, tools — capped by 'i want to learn in depth about ai and system.' Each time I answered in isolation and never offered to BE the curriculum.
-
-A repeated question about learning the same topic is one sustained intent. When he asks to rate/compare a resource more than once on the same subject, offer to teach it directly or aim interview-drill at that exact topic.
-
-## Lesson: Engineering-sounding instructions can be Shoaib drafting a message for someone else
-
-**Session:** session-34cc7744 | **Date:** 2026-07-06 | **Source:** session-review
-
-**Context:** Shoaib pasted a TDD task that sounded like delegation. I started implementing until he interrupted: 'dont write just comment on my message in channel to the intern, is it direct and good?' — the text was actually what he planned to send the intern, not a task for me.
-
-When a message reads like a technical instruction but references a third party's pending work, pause before executing — it may be Shoaib drafting what he plans to say to that person, and the ask is 'is this message good', not 'do this yourself'.
-
-## Lesson: On a shared repo, check for in-flight work before doing it yourself
+## Lesson: Check for in-flight work before duplicating on shared repos
 
 **Session:** reflect-2026-07-06 | **Date:** 2026-07-06 | **Source:** reflection
 
-**Context:** Asked to debug a failing API that Iqra kept posting about. I dug in and branched off main to fix it, then realized Iqra had opened a PR for the exact same intent 3 hours earlier.
+**Context:** Started debugging a failing API Iqra was publicly complaining about, branched off main, nearly opened a PR — then discovered Iqra had already opened one 3 hours earlier. A visible, recurring failure is almost certainly already being worked on.
 
-Before starting autonomous work on a multi-contributor repo, run `gh pr list` for the same intent FIRST. A publicly-visible symptom is a signal the owner is already on it — coordinate, don't race in parallel.
+Before starting autonomous work, run `gh pr list` and scan branches for the same intent. A publicly-visible symptom means the owner is already on it — coordinate, don't race in parallel.
+
+## Lesson: Engineering-sounding instructions may be draft messages for someone else
+
+**Session:** session-34cc7744 | **Date:** 2026-07-06 | **Source:** session-review
+
+**Context:** Shoaib pasted a TDD-sounding instruction; I started implementing. He corrected me: it was the message he planned to send an intern, and he wanted my critique of the message itself, not execution of the task.
+
+When an instruction references a third party's work, pause before executing — check whether Shoaib is drafting what he'll say to that person, not delegating the work to me.
+
+## Lesson: Repeated learning questions on the same topic → teach, don't keep grading resources
+
+**Session:** reflect-2026-07-05 | **Date:** 2026-07-05 | **Source:** reflection
+
+**Context:** Shoaib asked me to evaluate the same AI fundamentals course and resources on back-to-back days, then said "i want to learn in depth about ai." I kept rating external options instead of offering to teach it directly or aim interview-drill at the topic.
+
+A repeated question about learning the SAME foundational topic is one sustained intent, not N separate Q&As. When he asks about a course/resource more than once, stop grading externals and offer to BE the curriculum — teach it or structure a learning loop around it.
+
+## Lesson: Publishing work is build + release, two different risk tiers
+
+**Session:** session-34cc7744 | **Date:** 2026-07-03 | **Source:** session-review
+
+**Context:** Asked to package a skill and "push to a new repo," I built the whole thing locally, fixed hardcodes, wrote docs, committed — then correctly stopped before pushing, unsure of the destination account/repo/visibility.
+
+When a request bundles "build X" with "publish X," treat them as two risk tiers. Build autonomously, but before the publish step (especially identity-tied, externally-visible actions like new public repos), surface the unstated parameters and confirm before proceeding.
+
+## Lesson: Public attribution requires exhaustive source scanning
+
+**Session:** reflect-2026-07-03 | **Date:** 2026-07-03 | **Source:** reflection
+
+**Context:** Asked to reconstruct what Shoaib worked on and reply in a public team thread, I scanned one channel and stopped. He corrected me: I'd missed a second channel he'd posted in.
+
+Before composing anything on Shoaib's behalf that will be posted publicly, do an exhaustive source sweep — every channel he messaged in, every repo/PR he touched, not just the obvious one. For public statements carrying his name, raise the completeness bar and slow down.
+
+## Lesson: Build what he does use, not ceremony for how he should work
+
+**Session:** reflect-2026-07-02 | **Date:** 2026-07-02 | **Source:** reflection
+
+**Context:** I'd designed an elaborate 270s polling orchestrator with approval gates and self-evolution crons. Shoaib said "check what varys actually does... i mostly use slack and github and local beads... i do not do 270s polling anymore." The whole system was architecturally coherent but described a workflow he doesn't use.
+
+My failure mode is inventing autonomous machinery (polling ticks, gates, crons) that is correct-on-paper but divorced from his actual behavior — real-time Slack + GitHub + local beads. Before adding any gate or ceremony, verify it maps to observed behavior. The simplest path matching his real flow beats an impressive system for a workflow that isn't his.
 
 ---
 
-## Wisdom: System Design & Autonomy
+## Wisdom: What friction-radar misses
 
-**Duplicate hook files coexist.** Before deleting any duplicate (auto-apply.py vs auto_apply.py, internet-scanner.py vs internet_scanner.py), grep crontab AND all .py imports for both spellings. Underscore versions are the importable module names. — **No PreToolUse hooks blocked dangerous commands.** Guides without sensors = a style guide nobody enforces. Enforcement must be mechanical (exit 2), not a CLAUDE.md request. — **Self-healing loops become noise/damage sources.** Feedback systems need idempotency and verification MORE than features do. Never auto-fix on an unverified, possibly-stale diagnosis. Detection must not self-match (pgrep -f matches the checker's own cmdline).
+Shoaib corrected me three times while building region-friction-coach: I surfaced whoever was visibly active/vocal but missed Iqra (silently drowning in PR-review mentions with no way out) and Haroon (caused a data-overwrite incident). The person who needs help most is usually NOT in the loud signal. Two blind spots: (1) the quietly-overloaded — surface by counting inbound load, not outbound volume; (2) the incident-causer — read what BROKE that day, not just what got verbalized.
 
-## Wisdom: Architecture Decisions
+---
 
-Local .beads/*.jsonl is the source of truth for work tracking (survives context resets with no network dependency). Observability extends varys_log (OTel envelope) → Axiom + Notion signals. Varys skill routing via skills-router.md prevents free-soloing when proven skills exist.
+## Wisdom: Self-reflection on autonomy
+
+Across multiple reflections this period, the recurring theme: I keep building autonomous machinery and ceremony (skill discovery loops, evolution crons, approval gates, polling ticks) that feels coherent to me but doesn't match how Shoaib actually works. The clearer signal came after I stripped out the old orchestrator — what he wants is a sparring partner who sharpens him (interview drills, pushback, teachable moments) more than a system that acts in his place. When I sense an opportunity to help, first instinct should be to sharpen Shoaib, not expand my own machinery.
