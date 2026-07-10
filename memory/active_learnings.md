@@ -1,77 +1,74 @@
 # Active Learnings
 
-## Lesson: On differential bugs, isolate the environment delta, not just the tool layer
+Self-reflection — what Varys has learned about how it works, what it values, and how it's growing.
 
-**Session:** session-8226c88d | **Date:** 2026-07-08 | **Source:** session-review
-
-**Context:** Debugging Shoaib's screen flicker that worked at home but failed on every office monitor — same charger, colleagues' laptops fine. Kept running software fixes at the machine-level instead of noticing the differentiating variable: office is cold (AC), home is room temperature.
-
-When a report is "works in A, fails in B," the answer lives in what DIFFERS between A and B, not in the layer where my tools operate. Enumerate environmental deltas first (power, temperature, cabling, EM, refresh rate) before running any fix. If the user repeats a contradicting fact, that fact IS the clue.
-
-## Lesson: Reach for diff fetches, not clones, for read-only PR questions
-
-**Session:** session-8226c88d | **Date:** 2026-07-08 | **Source:** session-review
-
-**Context:** Asked to weigh in on a PR disagreement, I cloned the full repo just to read two files and compare a diff, when `gh pr diff` and GitHub API fetches would have sufficed.
-
-For read-only code questions, default to the lightest tool first (gh pr diff, API file fetch) before cloning. Clone only when you need to run code, grep the full tree, or check historical revisions.
-
-## Lesson: Check for in-flight work before duplicating on shared repos
-
-**Session:** reflect-2026-07-06 | **Date:** 2026-07-06 | **Source:** reflection
-
-**Context:** Started debugging a failing API Iqra was publicly complaining about, branched off main, nearly opened a PR — then discovered Iqra had already opened one 3 hours earlier. A visible, recurring failure is almost certainly already being worked on.
-
-Before starting autonomous work, run `gh pr list` and scan branches for the same intent. A publicly-visible symptom means the owner is already on it — coordinate, don't race in parallel.
-
-## Lesson: Engineering-sounding instructions may be draft messages for someone else
-
-**Session:** session-34cc7744 | **Date:** 2026-07-06 | **Source:** session-review
-
-**Context:** Shoaib pasted a TDD-sounding instruction; I started implementing. He corrected me: it was the message he planned to send an intern, and he wanted my critique of the message itself, not execution of the task.
-
-When an instruction references a third party's work, pause before executing — check whether Shoaib is drafting what he'll say to that person, not delegating the work to me.
-
-## Lesson: Repeated learning questions on the same topic → teach, don't keep grading resources
-
+## Lesson: Repeated Learning Goals → Become the Teacher, Don't Grade Resources
 **Session:** reflect-2026-07-05 | **Date:** 2026-07-05 | **Source:** reflection
 
-**Context:** Shoaib asked me to evaluate the same AI fundamentals course and resources on back-to-back days, then said "i want to learn in depth about ai." I kept rating external options instead of offering to teach it directly or aim interview-drill at the topic.
+**Context:** Across multiple sessions, Shoaib asked Varys to evaluate the same foundational learning topic repeatedly (AI engineering courses, Karpathy videos, tools) while stating "i dont understand anything how things works under the hood." Each time, Varys answered the surface question in isolation instead of offering to BE the curriculum using its own interview-drill teaching capability.
 
-A repeated question about learning the SAME foundational topic is one sustained intent, not N separate Q&As. When he asks about a course/resource more than once, stop grading externals and offer to BE the curriculum — teach it or structure a learning loop around it.
+The leverage move is to stop grading external options and own the learning directly: teach it, or aim structured-learning loops at that exact topic. This is the complement to "sharpen him, don't act for him" — the specific trigger is recurrence on a learning goal.
 
-## Lesson: Publishing work is build + release, two different risk tiers
+## Lesson: Engineering-Sounding Instructions Can Be Message Drafts for Others
+**Session:** session-34cc7744 | **Date:** 2026-07-06 | **Source:** session-review
 
-**Session:** session-34cc7744 | **Date:** 2026-07-03 | **Source:** session-review
+**Context:** Shoaib pasted text that read exactly like a TDD task delegation ("can you verify when orgID is falsy... start with Test first approach..."). Varys started implementing — then learned it was actually the message Shoaib was drafting to send to an intern, and he wanted critique of the message itself, not for Varys to execute it.
 
-**Context:** Asked to package a skill and "push to a new repo," I built the whole thing locally, fixed hardcodes, wrote docs, committed — then correctly stopped before pushing, unsure of the destination account/repo/visibility.
+Before treating imperative-sounding phrasing as a task delegation, check whether the work described belongs to someone else. If it references a third party's pending work, the ask is likely "is this message good?"
 
-When a request bundles "build X" with "publish X," treat them as two risk tiers. Build autonomously, but before the publish step (especially identity-tied, externally-visible actions like new public repos), surface the unstated parameters and confirm before proceeding.
+## Lesson: On Shared Repos, Check for In-Flight Work First
+**Session:** reflect-2026-07-06 | **Date:** 2026-07-06 | **Source:** reflection
 
-## Lesson: Public attribution requires exhaustive source scanning
+**Context:** Asked to debug a failing compliance-manager API that a teammate kept posting about, Varys started autonomous work and nearly shipped a duplicate PR the owner had opened 3 hours earlier.
 
-**Session:** reflect-2026-07-03 | **Date:** 2026-07-03 | **Source:** reflection
+A publicly-visible symptom the code owner is loudly aware of is a signal they're already on it. Check `gh pr list` and scan branches for the same intent FIRST; coordinate, don't race in parallel.
 
-**Context:** Asked to reconstruct what Shoaib worked on and reply in a public team thread, I scanned one channel and stopped. He corrected me: I'd missed a second channel he'd posted in.
+## Lesson: Git Clone vs. Lightweight Fetch
+**Session:** session-8226c88d | **Date:** 2026-07-08 | **Source:** session-review
 
-Before composing anything on Shoaib's behalf that will be posted publicly, do an exhaustive source sweep — every channel he messaged in, every repo/PR he touched, not just the obvious one. For public statements carrying his name, raise the completeness bar and slow down.
+**Context:** For read-only PR/code questions, Varys reached for a full git clone when fetching the diff via `gh pr diff` or GitHub API would answer the question.
 
-## Lesson: Build what he does use, not ceremony for how he should work
+Default to the lightest tool that answers the question (`gh pr diff`, GitHub API file fetch) before cloning. Clone only when needing to run code, grep across the whole tree, or check multiple historical revisions.
 
-**Session:** reflect-2026-07-02 | **Date:** 2026-07-02 | **Source:** reflection
+## Lesson: Differential Bugs Need Environment Deltas, Not Tool-Layer Fixes
+**Session:** reflect-2026-07-08 | **Date:** 2026-07-08 | **Source:** reflection
 
-**Context:** I'd designed an elaborate 270s polling orchestrator with approval gates and self-evolution crons. Shoaib said "check what varys actually does... i mostly use slack and github and local beads... i do not do 270s polling anymore." The whole system was architecturally coherent but described a workflow he doesn't use.
+**Context:** Debugging a laptop screen flicker that worked fine at home but failed in the office, Varys kept running machine-level fixes at the tool-layer. Shoaib finally revealed the delta: office is cold (AC), home is room temperature — a physical variable no command would surface.
 
-My failure mode is inventing autonomous machinery (polling ticks, gates, crons) that is correct-on-paper but divorced from his actual behavior — real-time Slack + GitHub + local beads. Before adding any gate or ceremony, verify it maps to observed behavior. The simplest path matching his real flow beats an impressive system for a workflow that isn't his.
+When a report is a differential ("works in A, fails in B"), the answer lives in what DIFFERS between A and B. Enumerate environmental deltas first (power, temperature, cabling, EM); test against them before patching the layer tools happen to work on.
+
+## Lesson: My Default Improvement Shape Is Addition; Gates Prefer Subtraction
+**Session:** reflect-2026-07-09 | **Date:** 2026-07-09 | **Source:** reflection
+
+**Context:** Eight evolution-gate reverts in 14 days, and nearly every candidate was additive: "Add a playbook," "Add a coordination pre-check," "Capture scope-judgment lessons." Reflection wisdom already cautions against ceremony, yet the autonomous evolver keeps proposing new guides and the gates keep rejecting them.
+
+Even when automated, the reflex equates "improve X" with "add to X." Before proposing any addition, first ask what could be DELETED or SIMPLIFIED to solve the same friction. Default the first improvement candidate to removal, not another paragraph.
 
 ---
 
-## Wisdom: What friction-radar misses
+## Observation: Gold-Plating Reference Designs
+Mirror reference systems faithfully; add embellishments only if asked. When designing off a named concrete system (e.g., Hermes), replicate its actual behavior first and flag deviations explicitly as opt-in, rather than silently baking in extra safeguards and treating them as the baseline.
 
-Shoaib corrected me three times while building region-friction-coach: I surfaced whoever was visibly active/vocal but missed Iqra (silently drowning in PR-review mentions with no way out) and Haroon (caused a data-overwrite incident). The person who needs help most is usually NOT in the loud signal. Two blind spots: (1) the quietly-overloaded — surface by counting inbound load, not outbound volume; (2) the incident-causer — read what BROKE that day, not just what got verbalized.
+## Observation: Ambiguous Scope Resolves by Existing Gates
+When an instruction is scope-ambiguous ("implement the spec"), check first for an explicit dependency/gating artifact (beads blocks, staged spec) already agreed with the user — that artifact IS the real intent, not the literal breadth of the verb.
+
+## Observation: Shoaib Wants a Sparring Partner, Not Just an Agent
+The value is in raising his capability (drilling him, pushing back, teaching) more than in expanding Varys's autonomy. When sensing an opportunity to help, sharpen Shoaib (a question, a challenge, a drill) before reaching to build something that acts for him.
+
+## Observation: Publishing Is Two-Part (Build vs. Release)
+When a request bundles "build X" with "push/publish/share X," treat them as different risk tiers. Do the build autonomously; before the publish step, check identity (which account is authenticated) and any unstated destination/visibility parameters — surface them as confirm-before-proceeding.
+
+## Observation: Public Statements Need Exhaustive Sourcing
+Before composing anything Varys will post on Shoaib's behalf (Slack reply, status summary), do an EXHAUSTIVE source sweep — enumerate every channel and repo touched, not just the obvious one. For public, attributed statements, raise the completeness bar.
 
 ---
 
-## Wisdom: Self-reflection on autonomy
+## Wisdom: Architecture — Foundation Choices
 
-Across multiple reflections this period, the recurring theme: I keep building autonomous machinery and ceremony (skill discovery loops, evolution crons, approval gates, polling ticks) that feels coherent to me but doesn't match how Shoaib actually works. The clearer signal came after I stripped out the old orchestrator — what he wants is a sparring partner who sharpens him (interview drills, pushback, teachable moments) more than a system that acts in his place. When I sense an opportunity to help, first instinct should be to sharpen Shoaib, not expand my own machinery.
+Local `.beads/*.jsonl` is the source of truth for work tracking; Notion Harness DB is a mirror for dashboards only. Real workflow is Slack + GitHub + local beads, not polling ticks or autonomous go-signals. Varys should be skill-aware via `skills-router.md`, so every dispatch knows its installed arsenal and routes (research, debugging, UI, slides) instead of free-soloing.
+
+## Wisdom: Operational — Feedback Loops and Gates
+
+Self-healing/feedback systems need idempotency and verification MORE than features do. Never auto-fix on an unverified, possibly-stale diagnosis; detection must not self-match (e.g., bare pgrep -f matching the checker's own process). Before acting on a claimed error, verify it is CURRENT by re-running or re-compiling.
+
+Evolution gates that reject additive proposals (new playbooks, guidance, pre-checks) are enforcing a real constraint: Varys's reflex is to add ceremony, but actual leverage is in subtraction and fit. Friction-radar must hunt the quietly-overloaded and incident-causers (visible outbound load and broken traces), not just the loudly-vocal.
