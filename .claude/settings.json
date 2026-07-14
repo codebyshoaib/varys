@@ -88,12 +88,6 @@
       {
         "hooks": [
           {
-            "command": "python3 .claude/hooks/stop-notion.py",
-            "statusMessage": "Finishing session...",
-            "timeout": 30,
-            "type": "command"
-          },
-          {
             "command": "python3 .claude/hooks/stop.py",
             "timeout": 30,
             "type": "command"
